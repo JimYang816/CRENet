@@ -18,8 +18,8 @@ from src.evaluation.crenet_budgeted import compare, EVALUATION_CODE
 from src.evaluation.crenet_unified import audit_study
 
 
-LEGACY_ROOT = Path("outputs/runs/icr_budgeted_20261031")
-ROOT = Path("outputs/runs/icr_budgeted_unified_20261031")
+LEGACY_ROOT = Path("outputs/experiment/icr_budgeted_20261031")
+ROOT = Path("outputs/experiment/icr_budgeted_unified_20261031")
 CASES = (
     ("fixed_ncs1", "ncs1", "ncs1_compact_20261026_nmse", "fixed_final", "A", "B"),
     ("fixed_nof1", "nof1", "nof1_compact_20261026_final", "fixed_final", "A", "B"),
@@ -98,7 +98,7 @@ def main():
                     raise ValueError(f"{name}: existing comparison identity differs")
             else:
                 print(f"Starting {args.split}: {name}", flush=True)
-                old = Path("outputs/runs/icr_ad_ablation_20261030")/channel/"seed_20261028"
+                old = Path("outputs/experiment/icr_ad_ablation_20261030")/channel/"seed_20261028"
                 report = compare(Path("data/processed")/dataset/(args.split+".h5"),
                     checkpoints[name], run, backend, split=args.split, batch_size=2,
                     historical={"historical_lmmse": old/linear/"icr_mmse.pt",

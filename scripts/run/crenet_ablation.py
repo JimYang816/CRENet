@@ -123,7 +123,7 @@ def run(args):
         if args.device == "cuda":
             uuid = subprocess.check_output(["nvidia-smi", "-i", "0", "--query-gpu=uuid",
                                              "--format=csv,noheader"], text=True).strip()
-            stack.enter_context(FileLock(Path("outputs/runs/_gpu_leases")/(uuid+".lock")))
+            stack.enter_context(FileLock(Path("outputs/experiment/_gpu_leases")/(uuid+".lock")))
             pids = subprocess.check_output(["nvidia-smi", "-i", "0", "--query-compute-apps=pid",
                                             "--format=csv,noheader"], text=True).strip()
             if pids:

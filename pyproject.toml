@@ -18,5 +18,6 @@ learning = ["torch>=2.2"]
 include = ["data_generation*", "src*"]
 
 [tool.pytest.ini_options]
-testpaths = ["data_generation/tests", "tests"]
+testpaths = ["outputs/smoke/data_generation_tests", "outputs/smoke/tests"]
 pythonpath = ["."]
+cache_dir = "outputs/smoke/.pytest_cache"

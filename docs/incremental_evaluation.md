@@ -1,6 +1,6 @@
 # 独立训练与增量评测
 
-当前七算法报告位于 `outputs/runs/equalizer_comparison_dd_ce_20261102/{nof1,ncs1}/`，包含 BER 和平均 NMSE 图。此前六算法报告保存在 `outputs/runs/equalizer_comparison_six/`。DD-CE 的 BER 和修正 CSI 的逐块线性 NMSE 同步缓存，可用 `--force dd_ce_lmmse` 单独刷新。运行方法见[统一评测](equalizer_comparison.md)。
+当前七算法报告位于 `outputs/experiment/equalizer_comparison_dd_ce_20261102/{nof1,ncs1}/`，包含 BER 和平均 NMSE 图。此前六算法汇总已清理。DD-CE 的 BER 和修正 CSI 的逐块线性 NMSE 同步缓存，可用 `--force dd_ce_lmmse` 单独刷新。运行方法见[统一评测](equalizer_comparison.md)。
 服务器保留 CRENet 的 warmup/fixed/joint 检查点、UDNet 的 best/latest 检查点、原 OAMP-Net2 检查点及逐算法结果缓存。
 本地保存图、指标、训练记录与报告；完整数据、特征缓存及权重仍留服务器。
 
@@ -12,7 +12,7 @@ python -m scripts.evaluate.compare --device cuda --threads 4 --channel NCS1
 python -m scripts.evaluate.compare --plot-only
 ```
 
-默认配置为 `configs/evaluation/ber_comparison.json`，CRENet引用 `outputs/runs/icr_full_20261031_095549/joint/<channel>/icr_mmse.pt`，UDNet引用同一实验的 `udnet/<channel>/best.pt`，OAMP-Net2引用 `outputs/runs/oamp_net2_compensated/<channel>/best.pt`；其中 `<channel>` 为 `nof1` 或 `ncs1`。
+默认配置为 `configs/evaluation/ber_comparison.json`，CRENet引用 `outputs/experiment/icr_full_20261031_095549/joint/<channel>/icr_mmse.pt`，UDNet引用同一实验的 `udnet/<channel>/best.pt`，OAMP-Net2引用 `outputs/experiment/oamp_net2_compensated/<channel>/best.pt`；其中 `<channel>` 为 `nof1` 或 `ncs1`。
 改变某个学习算法时，单独训练该算法到新的实验目录，将对应信道、算法的 checkpoint 路径切到新权重，再执行统一评测。
 缺少或不匹配的检查点会报错，不自动训练其他模型。`scripts.run.crenet_experiment` 是显式的完整训练入口，不用于日常增量评测。
 
@@ -20,7 +20,7 @@ python -m scripts.evaluate.compare --plot-only
 独立修改 UDNet 不使 MMSE/DFE/OAMP/CRENet 的结果失效；独立修改 CRENet 也不重算其他检测器。
 修改公共数据构造或评分逻辑则会使实际受影响的算法重算。文档、输出目录和独立绘图脚本的修改不改变数值结果身份。
 
-传统方法、UDNet、OAMP-Net2 使用已有逐块校验缓存。CRENet 完整报告缓存位于 `outputs/runs/_cache/crenet_reports/`，
+传统方法、UDNet、OAMP-Net2 使用已有逐块校验缓存。CRENet 完整报告缓存位于 `outputs/experiment/_cache/crenet_reports/`，
 同时核验数据、权重摘要、原推理/评分代码、bootstrap 设置和每 SNR 全量比特覆盖。
 首次可直接导入当前检查点所属实验中身份一致的历史报告，无需重放推理；缓存本身保存 SHA256 校验。
 复用记录写入 `crenet.evaluation_cache`；其中耗时保留原测量来源，不能作为新的效率实测。

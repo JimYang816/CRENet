@@ -11,6 +11,7 @@ import torch
 from threadpoolctl import threadpool_limits
 
 from src.common.numerics import DenseBackend
+from src.common.outputs import is_smoke_path, resolve_output_root
 from src.evaluation.oamp_net2 import evaluate
 
 
@@ -30,9 +31,13 @@ def main():
         for channel, directory in config["datasets"].items():
             if args.channel and args.channel != channel:
                 continue
-            run = Path(config["output"])/channel.lower()
+            smoke = is_smoke_path(directory)
+            run = resolve_output_root(config["output"], smoke=smoke)/channel.lower()
+            options = dict(config["evaluation"])
+            if smoke:
+                options.setdefault("cache_dir", Path("outputs/smoke/_cache"))
             evaluate(Path(directory)/"test.h5", run/"best.pt", run/"evaluation", backend,
-                     force=args.force, **config["evaluation"])
+                     force=args.force, **options)
 
 
 if __name__ == "__main__":

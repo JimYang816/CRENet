@@ -186,7 +186,7 @@ def analyze_watermark(out):
     from data_generation.src.channel.watermark.replay import WatermarkArchive
     rows=[]
     for name in ["NOF1","NCS1"]:
-        archive=WatermarkArchive(ROOT/"data/raw/watermark/compact_cpu_smoke.zip",name)
+        archive=WatermarkArchive(ROOT/"outputs/smoke/compact_cpu_smoke.zip",name)
         for number in [1,2,3]:
             r=archive.load(number); power=np.mean(abs(r.h)**2,axis=0); w=power/power.sum()
             delay=np.arange(len(w))/r.fs_delay; mean=float(w@delay)
@@ -209,7 +209,7 @@ def make_reference_scenarios(out):
     reports={}
     sources={}
     for ch in ["nof1","ncs1"]:
-        p=ROOT/f"outputs/runs/equalizer_comparison_mmse_dfe_20261031/{ch}/metrics.json"
+        p=ROOT/f"outputs/experiment/equalizer_comparison_mmse_dfe_20261031/{ch}/metrics.json"
         reports[ch]=normalize_report_labels(json.loads(p.read_text(encoding="utf-8")))
         sources[ch]=dict(path=str(p),sha256=hashlib.sha256(p.read_bytes()).hexdigest())
     snr=np.array(reports["nof1"]["snr_db"],float)
@@ -285,7 +285,7 @@ def make_reference_scenarios(out):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output",type=Path,default=ROOT/"outputs/runs/djk_feasibility_20261101")
+    parser.add_argument("--output",type=Path,default=ROOT/"outputs/experiment/djk_feasibility_20261101")
     args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=True)
     measured=analyze_recordings(args.output)
     reference=analyze_watermark(args.output)

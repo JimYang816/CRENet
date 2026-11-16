@@ -63,10 +63,10 @@ def interpolate_ber(grid, curve, snr_db):
 
 
 def build_scenario(snr_db=None):
-    report, report_source = load_source(ROOT/"outputs/runs/equalizer_comparison_mmse_dfe_20261031/nof1/metrics.json")
+    report, report_source = load_source(ROOT/"outputs/experiment/equalizer_comparison_mmse_dfe_20261031/nof1/metrics.json")
     report = normalize_report_labels(report)
-    comparison, comparison_source = load_source(ROOT/"outputs/runs/djk_common_probe_20261101/comparison.json")
-    recording, recording_source = load_source(ROOT/"outputs/runs/djk_feasibility_20261101/recording_analysis.json")
+    comparison, comparison_source = load_source(ROOT/"outputs/experiment/djk_common_probe_20261101/comparison.json")
+    recording, recording_source = load_source(ROOT/"outputs/experiment/djk_feasibility_20261101/recording_analysis.json")
     snr_estimate = summarize_recording_snr(recording)
     uses_recording_mean = snr_db is None
     snr_db = snr_estimate["mean_db_rounded_2dp"] if uses_recording_mean else float(snr_db)
@@ -190,7 +190,7 @@ def draw(scenario, out):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output",type=Path,default=ROOT/"outputs/runs/djk_expectation_mean_snr_18p09_20261101")
+    parser.add_argument("--output",type=Path,default=ROOT/"outputs/experiment/djk_expectation_mean_snr_18p09_20261101")
     parser.add_argument("--snr-db",type=float,default=None,
                         help="Override the default recording mean SNR proxy rounded to two decimals")
     args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=True)

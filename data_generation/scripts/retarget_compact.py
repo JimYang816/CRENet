@@ -26,7 +26,7 @@ def main(argv=None):
             parser.error("run IDs must be safe single directory names")
     if args.source_run_id == args.run_id or args.threads < 1:
         parser.error("use a new run ID and positive thread count")
-    run = ROOT/"outputs/runs"/args.run_id
+    run = ROOT/"outputs/experiment"/args.run_id
     if run.exists():
         parser.error("output run already exists; use a new run ID")
     code = dict(commit=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),

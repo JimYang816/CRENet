@@ -140,7 +140,7 @@ def plot(reports, root: Path, split: str):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(
-        "outputs/runs/icr_budgeted_unified_20261031/frozen_test_exact_legacy"))
+        "outputs/experiment/icr_budgeted_unified_20261031/frozen_test_exact_legacy"))
     args = parser.parse_args()
     reports, result = summarize(args.root)
     plot(reports, args.root, result["split"])

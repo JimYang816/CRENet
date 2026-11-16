@@ -9,6 +9,7 @@ import torch
 from threadpoolctl import threadpool_limits
 
 from src.common.numerics import DenseBackend
+from src.common.outputs import resolve_output_root
 from src.training.crenet_workflow import DEFAULT_CONFIG, run_channel
 
 
@@ -25,12 +26,14 @@ def main():
     if args.threads < 1:
         parser.error("--threads must be positive")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    channels = json.loads(args.config.read_text(encoding="utf-8"))["datasets"]
+    config = json.loads(args.config.read_text(encoding="utf-8"))
+    channels = config["datasets"]
+    output = resolve_output_root(config["output"], args.output, smoke=args.max_frames is not None)
     torch.set_num_threads(args.threads)
     with threadpool_limits(args.threads):
         for channel in channels:
             if not args.channel or args.channel == channel:
-                run_channel(args.config, channel, DenseBackend(args.device), output=args.output,
+                run_channel(args.config, channel, DenseBackend(args.device), output=output,
                             resume=args.resume, frame_limit=args.max_frames)
 
 

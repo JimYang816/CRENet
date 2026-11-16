@@ -77,13 +77,13 @@ with CompactDataset('data/processed/nof1_compact_20261026_final/test.h5',
 已验收数据直接复用，以下命令仅供复现生成流程。
 
 ```powershell
-python -m pytest -q --basetemp=outputs/runs/pytest_local
+python -m pytest -q --basetemp=outputs/smoke/pytest_local
 python -m data_generation.scripts.fetch_watermark --workers 8
-python -m data_generation.scripts.pdd all --smoke --device cpu --threads 4 --run-id ncs1_compact --watermark data/raw/watermark/compact_cpu_smoke.zip
-python -m data_generation.scripts.pdd all --smoke --config configs/data/nof1/pddp.json --device cpu --threads 4 --run-id nof1_compact --watermark data/raw/watermark/compact_cpu_smoke.zip
+python -m data_generation.scripts.pdd all --smoke --device cpu --threads 4 --run-id ncs1_compact --watermark outputs/smoke/compact_cpu_smoke.zip
+python -m data_generation.scripts.pdd all --smoke --config configs/data/nof1/pddp.json --device cpu --threads 4 --run-id nof1_compact --watermark outputs/smoke/compact_cpu_smoke.zip
 ```
 
-`fetch_watermark`仅从FFI官方WatermarkV1链接下载，分段续传、校验HTTP范围/长度和两信道120个ZIP成员CRC，保存源包SHA256。完整源包放在`data/raw/watermark/WatermarkV1.zip`。本地只用少量记录和CPU；smoke保留正式DPSS及7个SNR，但每集合一个窗口，测试两个重复，结果明确标记smoke。
+`fetch_watermark`仅从FFI官方WatermarkV1链接下载，分段续传、校验HTTP范围/长度和两信道120个ZIP成员CRC，保存源包SHA256。完整源包放在`data/raw/watermark/WatermarkV1.zip`。本地只用少量记录和CPU；smoke保留正式DPSS及7个SNR，但每集合一个窗口，测试两个重复，结果明确标记smoke。smoke 的日志、校准缓存和数据集均写入 `outputs/smoke/<run-id>_smoke/`，其中数据集位于 `data/` 子目录。
 
 本地验证并提交推送后，服务器`ssh lab448`，目录`/home/fay/JimYang/CRENet`。先检查GPU/内存/磁盘，再执行：
 
@@ -104,6 +104,6 @@ git pull --ff-only
 
 验收从落盘系数和完整参考矩阵重算所有D的NMSE，使用精确Fourier/Gram恒等式避免逐个构造大型矩阵，并对每SNR首/末帧额外直接构造完整矩阵核对。每个目标误差≤0.02dB，验证单调和先陡后缓、区间、数量、集合互斥、窗口边界、标签、重复独立性、载波及导频消除。全部训练gamma分子/分母、投影残余和物理残差统计重新计算。测试覆盖小规模显式协方差求解、Hermitian/PSD、模式提取及断点续跑逐数组一致性。
 
-`outputs/runs/<run-id>/`保存`source_manifest.json`、`validation.json`（CSI估计器校验）、`noise_validation.json`、`acceptance.json`、`report.html`、NMSE–SNR图和每个SNR固定测试窗口的参考/估计/误差CSI图。热力图统一`10log10(|H|²/固定参考峰值²)`，色标-80到0dB，D1/D2和各SNR使用相同参考峰值。
+`outputs/experiment/<run-id>/`保存`source_manifest.json`、`validation.json`（CSI估计器校验）、`noise_validation.json`、`acceptance.json`、`report.html`、NMSE–SNR图和每个SNR固定测试窗口的参考/估计/误差CSI图。热力图统一`10log10(|H|²/固定参考峰值²)`，色标-80到0dB，D1/D2和各SNR使用相同参考峰值。
 
 完整数据和原始源包留在服务器；验收报告及图片带回本地。完成验收后可删除本轮可再生的`data/interim/<run-id>_calibration.h5`，保留冻结先验、来源与验收报告。数据、缓存和结果均受.gitignore排除，不提交Git。

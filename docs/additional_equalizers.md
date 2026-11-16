@@ -74,7 +74,7 @@ python -m scripts.train.oamp_net2 --channel NOF1 --device cuda --resume
 python -m scripts.evaluate.oamp_net2 --channel NOF1 --device cuda
 
 # 本地已有数据时的小样本 CPU 检查；单独输出，不能用作正式检查点
-python -m scripts.train.oamp_net2 --channel NOF1 --device cpu --max-frames 2 --epochs 1 --batch-size 2 --output outputs/runs/oamp_net2_smoke
+python -m scripts.train.oamp_net2 --channel NOF1 --device cpu --max-frames 2 --epochs 1 --batch-size 2 --output outputs/smoke/oamp_net2_smoke
 
 # 无需任何学习检查点，运行四种传统方法
 python -m scripts.evaluate.compare --device cuda --baselines-only
@@ -86,19 +86,19 @@ python -m scripts.evaluate.compare --plot-only
 ```
 
 OAMP 配置为 `configs/training/oamp_net2.json`，沿用现有两个数据集目录。
-检查点默认在 `outputs/runs/oamp_net2_compensated/{nof1,ncs1}/best.pt`。
+检查点默认在 `outputs/experiment/oamp_net2_compensated/{nof1,ncs1}/best.pt`。
 `latest.pt` 支持续训；`best.pt` 只由验证损失严格改善更新。
 
 统一配置为 `configs/evaluation/ber_comparison.json`。其中 `checkpoints` 为每个信道的
 UDNet、OAMP-Net2、CRENet 路径；当前CRENet和UDNet分别引用
-`outputs/runs/icr_full_20261031_095549/joint/<channel>/icr_mmse.pt` 和
-`outputs/runs/icr_full_20261031_095549/udnet/<channel>/best.pt`，其中 `<channel>` 为 `nof1` 或 `ncs1`。
+`outputs/experiment/icr_full_20261031_095549/joint/<channel>/icr_mmse.pt` 和
+`outputs/experiment/icr_full_20261031_095549/udnet/<channel>/best.pt`，其中 `<channel>` 为 `nof1` 或 `ncs1`。
 OAMP-Net2仍使用本页所述独立训练目录的 `best.pt`。统一入口在开始计算前校验全部所需检查点；
 缺失或身份不匹配会报错，不会跳过曲线或拿未训练模型替代。
 没有 `checkpoints` 的旧自定义配置仍保留原基线接口行为。
 统一评测默认 batch 8，四种传统方法的参数由 `algorithms` 提供；独立 CRENet 流水线的 batch 2 不会覆盖此值。各入口的算法数量、强制重算和离线绘图规则见 [均衡评测与缓存](equalizer_comparison.md)。
 
-双信道七算法报告在 `outputs/runs/equalizer_comparison_dd_ce_20261102/{nof1,ncs1}/`，包含：
+双信道七算法报告在 `outputs/experiment/equalizer_comparison_dd_ce_20261102/{nof1,ncs1}/`，包含：
 `metrics.json`、`report.html`、七条 BER 曲线的 `ber_snr.png`、输入/修正 CSI 的 `nmse_snr.png`。
 各子评测保留详细来源。正式测试每个算法、每个 SNR 必须恰好评测 600 帧、D1/D2、
 512 个数据槽，即 1,228,800 比特；汇总会再次核对数据哈希、SNR、视图和比特总数。
@@ -116,14 +116,14 @@ OAMP 的逐样本完整谱分解计入预处理时间，
 
 ## 4. 历史 OAMP-Net2 诊断的使用边界
 
-2026-10-30的数值核验及独立续训诊断属于历史验证集分析，专用评测、绘图入口和对应诊断测试已在仓库整理时删除，不作为当前运行命令。已有结果按原目录 `outputs/runs/oamp_net2_diagnostics_20261030/{nof1,ncs1}/` 保留；复现时须使用相应历史源码快照或Git备份，备份位置见 [仓库整理记录](repository_maintenance.md)。
+2026-10-30的数值核验及独立续训诊断属于历史验证集分析，专用评测、绘图入口和对应诊断测试已在仓库整理时删除，不作为当前运行命令。相关诊断结果已清理；复现时须恢复同身份历史产物和相应源码快照。
 
 该诊断仅使用训练、验证划分，包含全SNR低学习率续训及30 dB单点续训，不构成新的测试集结论。标记 `diagnostic_only` 的权重不能填入正式统一评测配置。当前训练、恢复和独立评测使用第3节的入口，正式结果始终引用所选检查点对应的全量测试报告。
 
 ## 5. 验证
 
 ```bash
-python -m pytest tests/algorithms/oamp_net2/test_additional_equalizers.py tests/algorithms/mmse_dfe/test_mmse_dfe.py tests/training/test_oamp_net2_training.py tests/evaluation/test_incremental_comparison.py -q
+python -m pytest outputs/smoke/tests/algorithms/oamp_net2/test_additional_equalizers.py outputs/smoke/tests/algorithms/mmse_dfe/test_mmse_dfe.py outputs/smoke/tests/training/test_oamp_net2_training.py outputs/smoke/tests/evaluation/test_incremental_comparison.py -q
 ```
 
 算法测试以独立的接收空间直接求逆为参考，核对 OAMP-Net2

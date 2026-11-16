@@ -484,12 +484,12 @@ CSI 监督与真实符号不进入推理 forward，测试集不参与选型。�
 | 联合 `lambda_h` | 0.01 | 1.0 |
 
 训练 batch 8、`dense_device`、SNR交错、预取2批、8192 MiB参考缓存，种子20261028。
-新训练输出统一到 `outputs/runs/crenet_current/{warmup,fixed,joint}/<channel>/`。
-已完成的冻结检查点继续保留原位置，不移动旧结果、不改写训练或评测身份。
+新训练输出统一到 `outputs/experiment/crenet_current/{warmup,fixed,joint}/<channel>/`。
+已保留的检查点和结果迁至 `outputs/experiment/`；历史报告中的训练或评测身份不改写。
 
 ### 3.8 历史全参数预算修复的冻结结果
 
-本节保留 `icr_budgeted_unified_20261031` / `icr_budgeted_20261031` 的历史预算修复记录，数值和限制均对应当时冻结的权重。当前七算法主比较使用 `icr_full_20261031_095549` 的正式联合权重；已完成的等深度A–D实验为 `icr_ad_current_20261031_133445`，见 [正式消融定义与结果](crenet.md#5-比较消融与输出)。本节表格不替代这两批正式报告，也不代表其权重的最新效率实测。
+本节保留 `icr_budgeted_unified_20261031` / `icr_budgeted_20261031` 的历史预算修复记录，数值和限制均对应当时冻结的权重；相关历史结果和检查点已清理。当前七算法主比较使用 `icr_full_20261031_095549` 的正式联合权重；已完成的等深度A–D实验为 `icr_ad_current_20261031_133445`，见 [正式消融定义与结果](crenet.md#5-比较消融与输出)。本节表格不替代这两批正式报告，也不代表其权重的最新效率实测。
 
 两信道使用相同的8层残差展开、窗口32、中心16、隐藏维度48、QPSK 软更新及比特损失。
 两者在检测器训练阶段 A/C 都学习全部逐层物理参数、局部隐藏映射和分类头；阶段 B 仍只训练 CSI 修正器。
@@ -503,8 +503,7 @@ NOF1 的 A 阶段物理/局部网络学习率为1e−3/1e−5，C 阶段为1e−
 NCS1 保留先前已经完整训练两类参数的模型及其训练超参数。信道加载初值和学习率可按验证结果不同，
 但算法结构、可训练模块和推理公式一致；这一训练设置不增加推理计算。
 
-该历史预算复核的统一结果目录为 `outputs/runs/icr_budgeted_unified_20261031/`。
-冻结预算复核入口使用该目录和全参数检查点。旧混合训练入口及标量配置已从活动代码删除；历史结果继续保留。
+该历史预算复核原使用 `icr_budgeted_unified_20261031` 目录和全参数检查点，相关产物已清理；使用冻结预算复核入口前须先恢复同身份产物。旧混合训练入口及标量配置已从活动代码删除。
 进入正式评测前，`src.evaluation.crenet_unified` 在服务器相同 Torch 环境中核验每层物理参数、隐藏权重和
 非零分类头的实际变化，拒绝标量模式、仅末层训练、未更新的隐藏层或恒零分类分支。
 同时核对两信道结构以及各信道固定/联合分支共享的全参数预训练检查点。
@@ -556,12 +555,12 @@ NOF1 联合组的七个 SNR 均改善。NOF1 固定组0 dB为0.17148193，对照
 被误计为参数更新。NOF1 两个新检查点分别通过14个真实验证块、全部7个 SNR 的 GPU 部署逐位一致性
 检查；NCS1 推理实现与权重未变，沿用已核验的一致性结果。本地21项训练测试和7项审计测试通过。
 
-该历史实验的检查点及复核文件位置如下，均相对 `outputs/runs/icr_budgeted_unified_20261031/`：
+该历史实验的检查点及复核文件原位置如下，均相对 `icr_budgeted_unified_20261031/`；对应产物现已清理：
 
 - NOF1 共享预训练：`warmup/nof1/warmup.pt`；固定/联合最终权重分别为
   `fixed_final/nof1/icr_mmse.pt`、`joint_training/nof1/icr_mmse.pt`。
 - 全参数审计：`detector_learning_audit.json`；NOF1 部署复核：`equivalence_nof1_fixed_all.json`、
-  `equivalence_nof1_joint_all.json`。NCS1 检查点位于 `outputs/runs/icr_budgeted_20261031/{fixed_final,joint_training}/ncs1/`，由审计文件记录摘要。
+  `equivalence_nof1_joint_all.json`。NCS1 检查点位于 `outputs/experiment/icr_budgeted_20261031/{fixed_final,joint_training}/ncs1/`，由审计文件记录摘要。
 - 验证/测试：`frozen_validation_exact_legacy/`、`frozen_test_exact_legacy/`；后者含完整对照 JSON、
   汇总 `results_digest.json`、BER–SNR、平均 NMSE–SNR 和30 dB逐层曲线。
 

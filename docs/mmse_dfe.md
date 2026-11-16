@@ -63,5 +63,5 @@ python -m scripts.evaluate.compare --plot-only
 30 dB 时相对 Full-matrix LMMSE 的实测 BER 分别下降 16.16% 和 19.46%。
 原六算法的误码计数、BER、输入/修正 CSI 平均 NMSE 与原统一报告逐项一致，未重新训练模型。
 两信道七曲线 BER 图和平均 NMSE 图已通过目视检查及 SHA256 校验，并通过 SSH 带回本地。
-上述历史结果及其核验记录保存在 `outputs/runs/equalizer_comparison_mmse_dfe_20261031/` 的信道报告和 `verification.json` 中。
+上述历史结果及其核验记录保存在 `outputs/experiment/equalizer_comparison_mmse_dfe_20261031/` 的信道报告和 `verification.json` 中。
 生成数据、数值结果、检查点和指标图均不提交到 Git。

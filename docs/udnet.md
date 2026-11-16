@@ -69,11 +69,11 @@ s_(m+1) = [Re(E_constellation[p_m]), Im(E_constellation[p_m])]
 
 默认配置 `configs/training/udnet.json` 固定 Adam、学习率 0.001、种子 20261027、最多 200 epoch；验证损失严格改善才更新最佳模型，连续 20 轮未改善即早停。每轮用独立的、可恢复的随机生成器对本信道**所有 SNR、D1/D2 和训练帧的全部窗口**统一洗牌。测试集文件不在训练阶段打开，也不参与身份计算或模型选择。
 
-训练 `batch_size=null` 表示由资源探测选择窗口批大小；`frame_batch_size=8` 控制特征准备的帧批次。独立评测为 `batch_size=8`、`window_batch_size=2000`。CRENet 主流水线内嵌的 UDNet 配置另用种子 20261028；当前主比较配置引用已完成的完整实验权重 `outputs/runs/icr_full_20261031_095549/udnet/<channel>/best.pt`，其中 `<channel>` 为 `nof1` 或 `ncs1`。本页独立训练入口仍默认输出到 `outputs/runs/udnet_compensated/`，该默认输出不等于主比较当前选用的权重。
+训练 `batch_size=null` 表示由资源探测选择窗口批大小；`frame_batch_size=8` 控制特征准备的帧批次。独立评测为 `batch_size=8`、`window_batch_size=2000`。CRENet 主流水线内嵌的 UDNet 配置另用种子 20261028；当前主比较配置引用已完成的完整实验权重 `outputs/experiment/icr_full_20261031_095549/udnet/<channel>/best.pt`，其中 `<channel>` 为 `nof1` 或 `ncs1`。本页独立训练入口仍默认输出到 `outputs/experiment/udnet_compensated/`，该默认输出不等于主比较当前选用的权重。
 
 每轮在完整验证窗口上记录分 SNR 的逐层交叉熵、最后一层交叉熵和中心输出 BER。第 1 轮、每 10 轮以及训练结束时，从训练缓存均匀选取至多 256 个固定窗口，记录每层 Tanh 的饱和比例（激活前绝对值大于 3）、平均导数和隐藏层权重梯度范数；探测不更新参数、优化器、梯度缓冲或随机状态。
 
-2026-10-27 的输入归一化修复将检查点及特征缓存版本升级为 v2。此前未归一化输入在 NOF1 上的 Gram 可达百万量级，使 Tanh 饱和；NCS1 的信道统计量则约为万分之一量级。归一化对 H、y 的共同接收增益缩放保持不变，只作用于 UDNet 派生特征，不改写已验收的数据与划分。当前主实验仍使用该归一化方法，全部特征及训练统计均由默认估计 CSI 生成。旧预处理或不同输入视图的检查点不得混用，须重新训练；默认目录为 `outputs/runs/udnet_compensated`。历史产物可从服务器或本地清理备份读取。
+2026-10-27 的输入归一化修复将检查点及特征缓存版本升级为 v2。此前未归一化输入在 NOF1 上的 Gram 可达百万量级，使 Tanh 饱和；NCS1 的信道统计量则约为万分之一量级。归一化对 H、y 的共同接收增益缩放保持不变，只作用于 UDNet 派生特征，不改写已验收的数据与划分。当前主实验仍使用该归一化方法，全部特征及训练统计均由默认估计 CSI 生成。旧预处理或不同输入视图的检查点不得混用，须重新训练；默认目录为 `outputs/experiment/udnet_compensated`。
 
 正式训练 525 帧、验证 75 帧，每个信道共 411,600 个训练窗口和 58,800 个验证窗口。一次性缓存 `gram/matched/zf/data_mask/labels` 为独立 NPY 文件，避免反复重建信道及求伪逆。特征键绑定输入视图、原始数据 SHA256、预处理参数、实现及依赖代码指纹、计算设备、物理窗口和可选 smoke 帧上限；各缓存文件也有 SHA256，损坏或依赖变化则重建。训练缓存约 7 GB，验证约 1 GB，逐信道加载主存；测试数据流式处理，不缓存局部特征。
 
@@ -105,19 +105,19 @@ python -m scripts.train.udnet --channel NOF1 --device cuda --resume
 python -m scripts.evaluate.udnet --channel NOF1 --device cuda
 
 # 从现有数据执行无标签推理，输出物理数据槽的硬判决
-python -m scripts.infer.udnet --checkpoint outputs/runs/udnet_compensated/nof1/best.pt \
+python -m scripts.infer.udnet --checkpoint outputs/experiment/udnet_compensated/nof1/best.pt \
   --dataset data/processed/nof1_compact_20261026_final/test.h5 \
-  --snr 10 --frames 0,1 --d 1 --device cuda --output outputs/runs/udnet_inference.npz
+  --snr 10 --frames 0,1 --d 1 --device cuda --output outputs/experiment/udnet_inference.npz
 
 # 也可输入无标签充分统计量，输出逐层概率和最终类别
-python -m scripts.infer.udnet --checkpoint outputs/runs/udnet_compensated/nof1/best.pt \
-  --features inputs.npz --output outputs/runs/udnet_probabilities.npz
+python -m scripts.infer.udnet --checkpoint outputs/experiment/udnet_compensated/nof1/best.pt \
+  --features inputs.npz --output outputs/experiment/udnet_probabilities.npz
 
 # 正式完整流程：NOF1 训练和评测完成后，再进行 NCS1
 python -m scripts.run.udnet --device cuda --threads 4
 ```
 
-充分统计量 NPZ 仅要求 `gram`、`matched`、`zf`、`data_mask`。统一入口 `python -m scripts.evaluate.compare --device cuda` 按当前配置汇总 Single-tap LMMSE、Full-matrix LMMSE、MMSE-DFE、DD-CE + Full-matrix LMMSE、UDNet、OAMP-Net2 和 CRENet 七种算法；添加 `--baselines-only` 运行四种传统方法。双信道七算法报告位于 `outputs/runs/equalizer_comparison_dd_ce_20261102/`，所需检查点与缓存控制见 [均衡算法对比](equalizer_comparison.md)。本页独立评测仍按 `configs/training/udnet.json` 输出下述三算法结果。
+充分统计量 NPZ 仅要求 `gram`、`matched`、`zf`、`data_mask`。统一入口 `python -m scripts.evaluate.compare --device cuda` 按当前配置汇总 Single-tap LMMSE、Full-matrix LMMSE、MMSE-DFE、DD-CE + Full-matrix LMMSE、UDNet、OAMP-Net2 和 CRENet 七种算法；添加 `--baselines-only` 运行四种传统方法。双信道七算法报告位于 `outputs/experiment/equalizer_comparison_dd_ce_20261102/`，所需检查点与缓存控制见 [均衡算法对比](equalizer_comparison.md)。本页独立评测仍按 `configs/training/udnet.json` 输出下述三算法结果。
 
 独立评测调用相同输入视图下的两种 MMSE 基线评测器，由该评测器重新校验数据、输入构造、算法、评分、环境及 NMSE 依赖，检查每个缓存块的校验和；不再运行 EP、Robust EP 或读取其训练协方差。仅视图及依赖匹配的部分复用，不根据旧报告中的曲线直接认定缓存可用。UDNet 结果单独按输入视图、最佳模型 SHA256、输入/模型/评分代码和测试数据身份缓存，检查点也须通过输入视图校验。正式评测强制完整测试集全部 SNR、600 帧、D1/D2 和 512 数据槽，每 SNR 每算法 1,228,800 比特、UDNet 614,400 符号。
 
@@ -128,7 +128,7 @@ python -m scripts.run.udnet --device cuda --threads 4
 ## 验证
 
 ```bash
-python -m pytest tests/algorithms/udnet/test_udnet.py tests/training/test_udnet_training.py -q
+python -m pytest outputs/smoke/tests/algorithms/udnet/test_udnet.py outputs/smoke/tests/training/test_udnet_training.py -q
 ```
 
 测试覆盖真实物理载波槽、首尾零填充、中心无遗漏无重复覆盖、非数据槽隔离、双精度白化与缩减数据列伪逆、无 SNR 缩放、功率归一化、零信道和跨八个数量级接收增益的特征一致性与有效梯度、既有 QPSK 类别、首层与后续层残差公式、概率和与概率期望反馈、全部 22 层梯度、损失分母与分 SNR 指标权重、缓存损坏重建、恢复前后逐参数和验证指标精确一致、旧预处理检查点拒绝、数据/配置身份拒绝、HDF5 标签访问拦截，以及合成数据上的独立三算法评测与缓存复用。

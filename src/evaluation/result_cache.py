@@ -13,7 +13,7 @@ import numpy as np
 
 from src.evaluation.fingerprints import ROOT, canonical, digest
 
-DEFAULT_CACHE = ROOT/"outputs"/"runs"/"_cache"
+DEFAULT_CACHE = ROOT/"outputs"/"experiment"/"_cache"
 CACHE_SCHEMA = "equalizer-block-cache-v1"
 
 

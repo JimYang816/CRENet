@@ -328,8 +328,8 @@ def compare(out):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode",choices=["djk","watermark","compare"])
-    parser.add_argument("--output",type=Path,default=ROOT/"outputs/runs/djk_common_probe_20261101")
-    parser.add_argument("--archive",type=Path,default=ROOT/"data/raw/watermark/compact_cpu_smoke.zip")
+    parser.add_argument("--output",type=Path,default=ROOT/"outputs/experiment/djk_common_probe_20261101")
+    parser.add_argument("--archive",type=Path,default=ROOT/"outputs/smoke/compact_cpu_smoke.zip")
     parser.add_argument("--records",default="1,2,3,51,56")
     parser.add_argument("--starts",type=float,nargs="+",default=[2.,12.,22.])
     args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=True)

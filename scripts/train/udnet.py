@@ -11,6 +11,7 @@ import torch
 from threadpoolctl import threadpool_limits
 
 from src.common.numerics import DenseBackend
+from src.common.outputs import resolve_output_root
 from src.training.udnet import train
 
 
@@ -28,6 +29,7 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     config = json.loads(args.config.read_text(encoding="utf-8"))
+    output = resolve_output_root(config["output"], args.output, smoke=args.max_frames is not None)
     options = dict(config["training"])
     if args.batch_size is not None:
         options["batch_size"] = args.batch_size
@@ -40,7 +42,7 @@ def main():
         for channel, directory in config["datasets"].items():
             if args.channel and channel != args.channel:
                 continue
-            train(directory, (args.output or Path(config["output"]))/channel.lower(), DenseBackend(args.device),
+            train(directory, output/channel.lower(), DenseBackend(args.device),
                   model_config=config["model"], resume=args.resume, **options)
 
 

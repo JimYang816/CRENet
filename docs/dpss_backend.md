@@ -34,7 +34,7 @@ H0^H r = sum_q [conj(Gq) * F(conj(vq) * F^H r)]
 
 ```bash
 python -m scripts.train.crenet --channel NOF1 --device cuda --operator-backend dense_device
-python -m scripts.evaluate.crenet --channel NOF1 --checkpoint <checkpoint> --run outputs/runs/<evaluation> --device cuda --operator-backend dense
+python -m scripts.evaluate.crenet --channel NOF1 --checkpoint <checkpoint> --run outputs/experiment/<evaluation> --device cuda --operator-backend dense
 ```
 
 DPSS 对照通过独立的 `scripts.evaluate.crenet_operator` 入口运行。该入口固定读取 `raw` 系数视图，要求同一视图且源码、结构和数据身份均匹配的诊断检查点；默认正式模型检查点不适用于此入口。
@@ -42,10 +42,10 @@ DPSS 对照通过独立的 `scripts.evaluate.crenet_operator` 入口运行。该
 ```bash
 # 先在独立 validation 集做 A/B/C 数值及参数梯度核对，失败即停止。
 # 随后在 test 集的均匀抽样帧上做同检查点、全部 SNR、D1/D2 配对比较。
-python -m scripts.evaluate.crenet_operator --dataset <dataset>/test.h5 --checkpoint <raw-checkpoint> --run outputs/runs/<comparison> --device cuda --max-frames 16 --timing-repeats 3
+python -m scripts.evaluate.crenet_operator --dataset <dataset>/test.h5 --checkpoint <raw-checkpoint> --run outputs/experiment/<comparison> --device cuda --max-frames 16 --timing-repeats 3
 
 # 全部测试帧：
-python -m scripts.evaluate.crenet_operator --dataset <dataset>/test.h5 --checkpoint <raw-checkpoint> --run outputs/runs/<full_comparison> --device cuda --full-test
+python -m scripts.evaluate.crenet_operator --dataset <dataset>/test.h5 --checkpoint <raw-checkpoint> --run outputs/experiment/<full_comparison> --device cuda --full-test
 ```
 
 同一诊断检查点严格加载后同时用于两后端，不分别训练、调整噪声模式或修改精度。后端间比较要求输入视图一致，并保留完整的源码和数据校验；不能据此跨输入视图复用检查点。旧结构（例如原 564 通道修正网络）不能直接冒充当前 467 通道权重。严格续训还要求原训练后端、batch、预取、参考缓存及代码等训练身份一致。
@@ -63,7 +63,7 @@ GPU 稠密核与 FFT 的舍入顺序不同，数学等价不要求逐比特浮�
 ## 验证
 
 ```
-python -m pytest tests/algorithms/crenet/test_dpss_backend.py tests/evaluation/test_crenet_operator.py tests/algorithms/crenet/test_crenet.py tests/data/test_raw_csi.py tests/training/test_crenet_training.py
+python -m pytest outputs/smoke/tests/algorithms/crenet/test_dpss_backend.py outputs/smoke/tests/evaluation/test_crenet_operator.py outputs/smoke/tests/algorithms/crenet/test_crenet.py outputs/smoke/tests/data/test_raw_csi.py outputs/smoke/tests/training/test_crenet_training.py
 ```
 
-产物只保存在 outputs/runs，Git 仅同步源码、测试与本文档。
+产物只保存在 outputs/experiment，Git 仅同步源码、测试与本文档。

@@ -38,7 +38,8 @@ def main(argv=None):
         if not args.run_id.endswith('_smoke'):
             args.run_id += '_smoke'
     counts = validate_plan(c)
-    run, directory = ROOT/'outputs/runs'/args.run_id, ROOT/'data/processed'/args.run_id
+    run = ROOT/'outputs'/('smoke' if args.smoke else 'experiment')/args.run_id
+    directory = run/'data' if args.smoke else ROOT/'data/processed'/args.run_id
     run.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s',
                         handlers=[logging.StreamHandler(), logging.FileHandler(run/'run.log', encoding='utf-8')])
@@ -90,7 +91,8 @@ def main(argv=None):
                 if args.stage == 'generate':
                     prior = load_pdd_prior(run/'frozen_prior.h5', c, manifest)
                 else:
-                    prior = calibrate(ROOT/'data/interim'/(args.run_id+'_calibration.h5'), run, c, archive, chain, backend, manifest)
+                    calibration = run/'calibration.h5' if args.smoke else ROOT/'data/interim'/(args.run_id+'_calibration.h5')
+                    prior = calibrate(calibration, run, c, archive, chain, backend, manifest)
                 if args.stage == 'calibrate':
                     attempt['complete'] = True
                     return

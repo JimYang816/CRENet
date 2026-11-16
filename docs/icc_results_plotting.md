@@ -18,7 +18,7 @@ addpath('scripts/visualize');
 
 图窗默认宽度为 3.5 inch；两个 BER 图的尺寸可在脚本的 `style.berSizes` 中分别调整，不要求一致。使用 Times New Roman，刻度、图例及表格为 9 pt，坐标标签为 10 pt。颜色、线型与标记共同区分曲线；消融表按各指标独立加粗最低值，包括并列值。图例中的 CRENet 对应报告中的 `crenet`，与当前论文名称一致。
 
-默认主对比从 `configs/evaluation/ber_comparison.json` 的 `output` 读取，当前包含六种算法。正式消融从 `outputs/runs/icr_ad_current_20261031_133445/test/{nof1,ncs1}/comparison.json` 读取，不混用旧消融。也可显式指定两个结果根目录：
+默认主对比从 `configs/evaluation/ber_comparison.json` 的 `output` 读取，当前包含七种算法。正式消融从 `outputs/experiment/icr_ad_current_20261031_133445/test/{nof1,ncs1}/comparison.json` 读取，不混用旧消融。也可显式指定两个结果根目录：
 
 ```matlab
 [figures, summary] = plot_icc_results(mainRun, ablationRun);

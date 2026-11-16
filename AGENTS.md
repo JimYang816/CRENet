@@ -17,11 +17,11 @@
 
 - 按功能将代码及相关文件放入对应目录，命名清晰恰当，不随意散放文件。
 - 整个项目统一使用 **Python** 实现，包括数据生成、信道均衡算法、学习型算法训练、评测指标计算与性能对比。
-- 数据生成部分独立放在根目录 `data_generation/`，保留 `scripts/`、`src/` 和 `tests/` 布局。数据生成代码放在 `data_generation/src/`，包括发射信号生成、WATERMARK 信道仿真、接收机处理、CSI 估计及数据整理与导出；运行入口和测试分别放在 `data_generation/scripts/` 与 `data_generation/tests/`。
+- 数据生成部分独立放在根目录 `data_generation/`，数据生成代码放在 `data_generation/src/`，包括发射信号生成、WATERMARK 信道仿真、接收机处理、CSI 估计及数据整理与导出；运行入口放在 `data_generation/scripts/`，测试源码放在 `outputs/smoke/data_generation_tests/`。
 - 数据读取与预处理代码放在 `src/data/`，算法、训练及评测代码分别放在 `src/algorithms/`、`src/training/` 和 `src/evaluation/`；对应运行入口放在根目录 `scripts/`。
-- 每种均衡算法使用 `src/algorithms/` 下独立的同名目录，相应算法测试放在 `tests/algorithms/` 下的同名目录；NCS1、NOF1 数据配置分别放在 `configs/data/ncs1/`、`configs/data/nof1/`。
+- 每种均衡算法使用 `src/algorithms/` 下独立的同名目录，相应算法测试放在 `outputs/smoke/tests/algorithms/` 下的同名目录；NCS1、NOF1 数据配置分别放在 `configs/data/ncs1/`、`configs/data/nof1/`。
 - `data/processed/` 保存真实接收机链路数据及估计得到的不完美 CSI，供训练与评测使用。
-- 实验结果存放在 `outputs/runs/`；旧实验与消融结果必须保留，清理仅针对确认无用的临时文件和测试缓存。
+- 正式实验、消融及相关缓存放在 `outputs/experiment/`，测试源码、小样本数据、临时文件及测试结果放在 `outputs/smoke/`；测试源码纳入 Git，数据、缓存和结果不提交。每次实验完成后清理项目中确认无用的文件和结果，保留论文所需结果、模型及可复核来源。
 - 论文主稿与相关 TeX 材料统一存放在 `outputs/paper/`；论文中使用的所有图片必须直接放在 `main.tex` 同目录下，不放入图片子目录。
 - 每次实验结果指标图至少包括BER-SNR、平均NMSE-SNR。
 

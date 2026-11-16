@@ -3,7 +3,7 @@
     "NOF1": "data/processed/nof1_compact_20261026_final",
     "NCS1": "data/processed/ncs1_compact_20261026_nmse"
   },
-  "output": "outputs/runs/crenet_current",
+  "output": "outputs/experiment/crenet_current",
   "input_view": "compensated",
   "model": {
     "layers": 8,

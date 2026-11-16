@@ -11,6 +11,7 @@ import torch
 from threadpoolctl import threadpool_limits
 
 from src.common.numerics import DenseBackend
+from src.common.outputs import resolve_output_root
 from src.training.crenet import train
 from src.training.crenet_workflow import resolve_config, STAGES
 
@@ -39,12 +40,13 @@ def main():
         parser.error("Default CRENet training is fixed to the accepted compensated CSI")
     if args.threads < 1:
         parser.error("--threads must be positive")
+    output = resolve_output_root(configuration["output"], args.output, smoke=args.max_frames is not None)
     torch.set_num_threads(args.threads)
     with threadpool_limits(args.threads):
         for channel, directory in configuration["datasets"].items():
             if args.channel and channel != args.channel:
                 continue
-            resolved = resolve_config(args.config, channel=channel, stage=args.stage, output=args.output)
+            resolved = resolve_config(args.config, channel=channel, stage=args.stage, output=output)
             for name in ("precision", "noise_mode"):
                 if getattr(args, name) is not None:
                     resolved["model"][name] = getattr(args, name)

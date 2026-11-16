@@ -3,7 +3,7 @@
     "NOF1": "data/processed/nof1_compact_20261026_final/test.h5",
     "NCS1": "data/processed/ncs1_compact_20261026_nmse/test.h5"
   },
-  "output": "outputs/runs/equalizer_comparison_dd_ce_20261102",
+  "output": "outputs/experiment/equalizer_comparison_dd_ce_20261102",
   "input_view": "compensated",
   "batch_size": 8,
   "algorithms": {
@@ -14,14 +14,14 @@
   },
   "checkpoints": {
     "NOF1": {
-      "udnet": "outputs/runs/icr_full_20261031_095549/udnet/nof1/best.pt",
-      "oamp_net2": "outputs/runs/oamp_net2_compensated/nof1/best.pt",
-      "crenet": "outputs/runs/icr_full_20261031_095549/joint/nof1/icr_mmse.pt"
+      "udnet": "outputs/experiment/icr_full_20261031_095549/udnet/nof1/best.pt",
+      "oamp_net2": "outputs/experiment/oamp_net2_compensated/nof1/best.pt",
+      "crenet": "outputs/experiment/icr_full_20261031_095549/joint/nof1/icr_mmse.pt"
     },
     "NCS1": {
-      "udnet": "outputs/runs/icr_full_20261031_095549/udnet/ncs1/best.pt",
-      "oamp_net2": "outputs/runs/oamp_net2_compensated/ncs1/best.pt",
-      "crenet": "outputs/runs/icr_full_20261031_095549/joint/ncs1/icr_mmse.pt"
+      "udnet": "outputs/experiment/icr_full_20261031_095549/udnet/ncs1/best.pt",
+      "oamp_net2": "outputs/experiment/oamp_net2_compensated/ncs1/best.pt",
+      "crenet": "outputs/experiment/icr_full_20261031_095549/joint/ncs1/icr_mmse.pt"
     }
   }
 }

@@ -34,32 +34,24 @@ python -m scripts.train.crenet --channel NCS1 --stage warmup --device cuda
 python -m scripts.train.crenet --channel NCS1 --stage joint --device cuda
 ```
 
-新训练目录为 `outputs/runs/crenet_current/{warmup,fixed,joint}/<channel>/`。`--output` 指定新的实验根目录，所有分支及共享预训练路径共同切换。续训校验实际训练、数据和源码身份；不能用整理后的新配置直接续接历史身份不同的目录。
+新训练目录为 `outputs/experiment/crenet_current/{warmup,fixed,joint}/<channel>/`。`--output` 指定新的实验根目录，所有分支及共享预训练路径共同切换。续训校验实际训练、数据和源码身份；不能用整理后的新配置直接续接历史身份不同的目录。
 
 本地仅运行CPU小样本验证；完整训练仍在服务器进行。性能测量入口为 `scripts.evaluate.crenet_training_perf`，它会解析对应信道的实际模型设置，计时和缓存参数由自己的CLI控制。
 
 ## 3. 当前正式检查点与历史预算复核
 
-当前正式训练已在 `outputs/runs/icr_full_20261031_095549/` 完成，两信道均包含共同预训练、固定CSI分支和联合分支，`progress.json` 标记 `completed`。当前主比较配置引用下表的联合模型，UDNet也使用该实验的独立训练权重：
+当前正式训练已在 `outputs/experiment/icr_full_20261031_095549/` 完成，两信道均包含共同预训练、固定CSI分支和联合分支，`progress.json` 标记 `completed`。当前主比较配置引用下表的联合模型，UDNet也使用该实验的独立训练权重：
 
 | 信道 | 固定CSI | 完整模型 |
 |---|---|---|
 | NOF1 | `icr_full_20261031_095549/fixed/nof1/icr_mmse.pt` | `icr_full_20261031_095549/joint/nof1/icr_mmse.pt` |
 | NCS1 | `icr_full_20261031_095549/fixed/ncs1/icr_mmse.pt` | `icr_full_20261031_095549/joint/ncs1/icr_mmse.pt` |
 
-路径均相对 `outputs/runs/`。共同预训练位于该实验的 `warmup/<channel>/warmup.pt`，正式主比较结果见第4节，等深度A–D结果见第5节。推理通过 `prepare_frozen_inference` 缓存固定参数变换和窗口几何；数值等价检查不修改推理公式或训练权重。
+路径均相对 `outputs/experiment/`。共同预训练位于该实验的 `warmup/<channel>/warmup.pt`，正式主比较结果见第4节，等深度A–D结果见第5节。推理通过 `prepare_frozen_inference` 缓存固定参数变换和窗口几何；数值等价检查不修改推理公式或训练权重。
 
-历史路径和文件名保持原样。旧检查点只有在迁移前源码身份与当前重命名实现均严格匹配时才可用于推理，并继续校验 CSI 视图和数据身份；其他版本不会因改名而自动通过校验。历史报告可以离线按 CRENet 标签重画，但训练续接、消融及计算缓存仍需满足各自的完整源码与数据身份校验。完整权重位于服务器，本次重命名没有重新训练或验证服务器检查点。
+历史实验目录已迁至 `outputs/experiment/`，报告内记录的原生成路径保留不变。旧检查点只有在迁移前源码身份与当前重命名实现均严格匹配时才可用于推理，并继续校验 CSI 视图和数据身份；其他版本不会因改名而自动通过校验。历史报告可以离线按 CRENet 标签重画，但训练续接、消融及计算缓存仍需满足各自的完整源码与数据身份校验。完整权重位于服务器，本次迁移没有重新训练模型。
 
-历史预算修复使用 `icr_budgeted_unified_20261031` 的NOF1权重和 `icr_budgeted_20261031` 的NCS1权重，固定/联合分支目录为 `fixed_final`、`joint_training`。这些检查点、训练记录与权重摘要继续保留，详细数值见 [算法设计第3.8节](crenet_algorithm_design.md#38-历史全参数预算修复的冻结结果)。以下命令仅复核该历史实验：
-
-```bash
-# 读取既有四组冻结报告，生成BER/NMSE与逐层图
-python -m scripts.evaluate.crenet_budgeted_report
-# 核验并复用同身份的已完成预算评测
-python -m scripts.run.crenet_budgeted_study --split validation --device cuda --resume
-python -m scripts.run.crenet_budgeted_study --split test --device cuda --resume
-```
+历史预算修复使用 `icr_budgeted_unified_20261031` 的NOF1权重和 `icr_budgeted_20261031` 的NCS1权重。相关历史结果和检查点已清理，保留的数值记录见 [算法设计第3.8节](crenet_algorithm_design.md#38-历史全参数预算修复的冻结结果)；复核需要先恢复同身份的历史产物。
 
 该历史复核的四组平均BER均优于历史和同修正器权重LMMSE，实测总耗时不超过原Unfolding预算。全部展开层及CSI修正计入稳态耗时，一次性加载/准备单列。历史NOF1为22层、修复版8层，NCS1均8层，因此这批预算修复结果不替代相同深度的正式A–D消融，也不是当前正式权重的耗时实测。
 
@@ -67,13 +59,13 @@ python -m scripts.run.crenet_budgeted_study --split test --device cuda --resume
 
 ## 4. 七算法主比较
 
-比较 Single-tap LMMSE、Full-matrix LMMSE、MMSE-DFE、DD-CE + Full-matrix LMMSE、UDNet、OAMP-Net2 和当前 CRENet，配置为 `configs/evaluation/ber_comparison.json`。双信道报告默认输出到 `outputs/runs/equalizer_comparison_dd_ce_20261102/{nof1,ncs1}/`，运行方法见 [统一评测](equalizer_comparison.md)。
+比较 Single-tap LMMSE、Full-matrix LMMSE、MMSE-DFE、DD-CE + Full-matrix LMMSE、UDNet、OAMP-Net2 和当前 CRENet，配置为 `configs/evaluation/ber_comparison.json`。双信道报告默认输出到 `outputs/experiment/equalizer_comparison_dd_ce_20261102/{nof1,ncs1}/`，运行方法见 [统一评测](equalizer_comparison.md)。
 
 ```bash
 python -m scripts.evaluate.compare --device cuda --threads 4
 ```
 
-六算法报告沿用 2026-10-31 全量测试的误码计数及输入/修正 CSI NMSE，原始报告保存在 `outputs/runs/equalizer_comparison_mmse_dfe_20261031/`。后续更新检查点时，必须重新校验计算身份并完成所需评测，才能引用新结果。
+六算法报告沿用 2026-10-31 全量测试的误码计数及输入/修正 CSI NMSE，原始报告保存在 `outputs/experiment/equalizer_comparison_mmse_dfe_20261031/`。后续更新检查点时，必须重新校验计算身份并完成所需评测，才能引用新结果。
 
 ## 5. 比较、消融与输出
 
@@ -88,19 +80,19 @@ python -m scripts.evaluate.compare --device cuda --threads 4
 
 B/A检查固定CSI下的检测器替换，C/A检查传统检测器下的修正收益，D/B检查展开检测器下的修正收益，D/C检查已有修正时的检测器作用。C保留多轮CSI修正与软反馈，A只做一次有效求解。B/D使用同一展开深度及共同预训练，C/D修正结构及轮数一致。参数和检查点只由训练/验证确定，不预设每个SNR均改善。
 
-旧 `icr_ad_ablation_20261030` 检测器初始化审计显示最终B/D未实际学习，结果仍保留，但不能将其差异归因于参数学习。单次修正、去不确定度、去门控及等预算一次修正属于补充诊断；已有产物保留，旧自动搜索/细项训练流水线已移除。
+旧 `icr_ad_ablation_20261030` 检测器初始化审计显示最终B/D未实际学习，不能将其差异归因于参数学习。旧消融及单次修正、去不确定度、去门控和等预算一次修正等非论文核心诊断产物已清理。
 
 正式A–D自动运行入口如下。`--trained-root` 指向当前配置完成的共同预训练及固定/联合分支，入口核验训练源码、数据、配置和逐层参数学习后复用B/D；A没有待学习检测器，C独立训练具有LMMSE软反馈的CSI修正器，沿用D的8轮修正及B/C阶段预算。所有模型先冻结，再运行验证集和测试集，测试结果不参与选型，也不要求预设的性能排序。
 
 ```bash
-python -m scripts.run.crenet_ablation --trained-root outputs/runs/crenet_current --output outputs/runs/crenet_ad_current_<run_id> --device cuda --threads 4
+python -m scripts.run.crenet_ablation --trained-root outputs/experiment/crenet_current --output outputs/experiment/crenet_ad_current_<run_id> --device cuda --threads 4
 # 中断后按同一代码、配置、数据和权重恢复
-python -m scripts.run.crenet_ablation --trained-root outputs/runs/crenet_current --output outputs/runs/crenet_ad_current_<run_id> --device cuda --threads 4 --resume
+python -m scripts.run.crenet_ablation --trained-root outputs/experiment/crenet_current --output outputs/experiment/crenet_ad_current_<run_id> --device cuda --threads 4 --resume
 ```
 
 输出包含 `progress.json`、冻结权重清单、检测器学习审计、每信道/划分/组别的逐层指标、A–D汇总JSON/CSV、BER/NMSE对比图、四项物理记录配对BER差异区间及可传回本地的 `reports.zip`。失败时进度记录异常，既有检查点和历史实验均保留。
 
-当前正式A–D实验 `outputs/runs/icr_ad_current_20261031_133445/` 已完成两信道的验证集和全量测试，根目录 `progress.json` 标记 `completed`。B/D复用第3节的固定/联合检查点，C单独训练；冻结权重和实际参数学习记录分别见 `frozen_checkpoints.json`、`detector_learning_audit.json`。每信道测试覆盖7个SNR、8,400个D块，每SNR为1,228,800比特。下表平均BER为7个SNR的算术平均，数值来自 `results_digest.json`：
+当前正式A–D实验 `outputs/experiment/icr_ad_current_20261031_133445/` 已完成两信道的验证集和全量测试，根目录 `progress.json` 标记 `completed`。B/D复用第3节的固定/联合检查点，C单独训练；冻结权重和实际参数学习记录分别见 `frozen_checkpoints.json`、`detector_learning_audit.json`。每信道测试覆盖7个SNR、8,400个D块，每SNR为1,228,800比特。下表平均BER为7个SNR的算术平均，数值来自 `results_digest.json`：
 
 | 信道 | 组别 | 平均BER | 30 dB BER | 30 dB CSI NMSE / dB |
 |---|---|---:|---:|---:|
@@ -128,11 +120,11 @@ A–D内部统一使用冻结配置的 `complex64` 和对角噪声权重；七�
 ```bash
 python -m scripts.evaluate.crenet_efficiency \
   --dataset data/processed/nof1_compact_20261026_final/test.h5 \
-  --comparison-report outputs/runs/equalizer_comparison_dd_ce_20261102/nof1/metrics.json \
-  --checkpoint outputs/runs/icr_full_20261031_095549/joint/nof1/icr_mmse.pt \
-  --udnet-checkpoint outputs/runs/icr_full_20261031_095549/udnet/nof1/best.pt \
-  --oamp-net2-checkpoint outputs/runs/oamp_net2_compensated/nof1/best.pt \
-  --output outputs/runs/crenet_efficiency_<run_id>/nof1.json \
+  --comparison-report outputs/experiment/equalizer_comparison_dd_ce_20261102/nof1/metrics.json \
+  --checkpoint outputs/experiment/icr_full_20261031_095549/joint/nof1/icr_mmse.pt \
+  --udnet-checkpoint outputs/experiment/icr_full_20261031_095549/udnet/nof1/best.pt \
+  --oamp-net2-checkpoint outputs/experiment/oamp_net2_compensated/nof1/best.pt \
+  --output outputs/experiment/crenet_efficiency_<run_id>/nof1.json \
   --device cuda --batch-size 2 --threads 4
 ```
 

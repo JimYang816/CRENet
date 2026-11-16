@@ -3,7 +3,7 @@
     "NOF1": "data/processed/nof1_compact_20261026_final",
     "NCS1": "data/processed/ncs1_compact_20261026_nmse"
   },
-  "output": "outputs/runs/udnet_compensated",
+  "output": "outputs/experiment/udnet_compensated",
   "model": {"layers": 22, "window_size": 32, "hidden_size": 48},
   "training": {
     "input_view": "compensated",

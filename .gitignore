@@ -26,12 +26,17 @@ venv/
 !/data/**/
 !/data/**/.gitkeep
 
-# Experiment outputs: retain the directory structure
+# Experiment outputs: keep directories and version-controlled test source only
 /outputs/**
 !/outputs/**/
 !/outputs/**/.gitkeep
+!/outputs/__init__.py
+!/outputs/smoke/__init__.py
+!/outputs/smoke/conftest.py
+!/outputs/smoke/tests/**/*.py
+!/outputs/smoke/data_generation_tests/**/*.py
 
 # Preserve local historical snapshots without traversing nested worktrees/caches
-/outputs/runs/archive/
-/outputs/runs/_control/
-/outputs/runs/_worktrees/
+/outputs/experiment/archive/
+/outputs/experiment/_control/
+/outputs/experiment/_worktrees/

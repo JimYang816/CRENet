@@ -1,6 +1,6 @@
 # 当前 CRENet 训练和推理性能口径
 
-当前统一设计及运行入口见 [CRENet说明](crenet.md)，公式和历史冻结预算结果见 [算法设计](crenet_algorithm_design.md#38-历史全参数预算修复的冻结结果)。当前正式权重来自 `outputs/runs/icr_full_20261031_095549/`；下方保留的预算表属于更早的预算修复实验，不能直接当作这些正式权重的实测耗时。历史batch扫描、缓存迁移和旧门控实验仅保留在结果目录及Git完整备份中，不再作为当前默认配置。
+当前统一设计及运行入口见 [CRENet说明](crenet.md)，公式和历史冻结预算结果见 [算法设计](crenet_algorithm_design.md#38-历史全参数预算修复的冻结结果)。当前正式权重来自 `outputs/experiment/icr_full_20261031_095549/`；下方保留的预算表属于更早的预算修复实验，不能直接当作这些正式权重的实测耗时。历史batch扫描、缓存迁移和旧门控结果已清理，不再作为当前默认配置。
 
 两信道均8层、完整物理信道作用、修正半带宽16、窗口32/中心16/隐藏48，均学习全部物理参数和局部网络。训练为 `complex64`、`dense_device`、batch 8、SNR交错、预取2批、8192 MiB有界RAM缓存；不启用AMP或缩减物理基。`dense_device`在设备上准备完整矩阵后转为模型精度，正式输入不投影回DPSS系数空间。
 
@@ -8,14 +8,14 @@
 
 ```bash
 python -m scripts.evaluate.crenet_training_perf --channel NOF1 --device cuda \
-  --output outputs/runs/crenet_training_performance_current/nof1 \
+  --output outputs/experiment/crenet_training_performance_current/nof1 \
   --frames 128 --validation-frames 4 --repeats 3 --threads 4 \
   --reference-cache-mib 4096 --batch-sizes 2 4 8 16
 ```
 
 入口从唯一配置解析对应信道的模型；测量后端、预取和缓存由该CLI参数决定。batch选择只读train/validation，不使用test选型。历史8层旧模型的吞吐量不可当作当前残差展开训练的实测速度。
 
-历史预算复核采用RTX4080、complex64、batch2、4个CPU线程，计入输入重建、全部展开层及CSI修正；一次性加载和冻结准备不计入稳态逐块预算。另以11次轮换模型计时的中位数复核，不以训练吞吐量替代推理延迟。来源为 `outputs/runs/icr_budgeted_unified_20261031/` 及其核验复用的NCS1历史报告。
+历史预算复核采用RTX4080、complex64、batch2、4个CPU线程，计入输入重建、全部展开层及CSI修正；一次性加载和冻结准备不计入稳态逐块预算。另以11次轮换模型计时的中位数复核，不以训练吞吐量替代推理延迟。来源为已清理的 `icr_budgeted_unified_20261031` 及其核验复用的NCS1历史报告。
 
 | 设置 | 原展开→预算修复版总耗时 ms/块 | 修复版/原预算 |
 |---|---:|---:|

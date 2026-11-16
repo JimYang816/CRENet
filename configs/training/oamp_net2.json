@@ -3,7 +3,7 @@
     "NOF1": "data/processed/nof1_compact_20261026_final",
     "NCS1": "data/processed/ncs1_compact_20261026_nmse"
   },
-  "output": "outputs/runs/oamp_net2_compensated",
+  "output": "outputs/experiment/oamp_net2_compensated",
   "model": {"layers": 10, "variance_floor": 5e-13},
   "training": {
     "input_view": "compensated",

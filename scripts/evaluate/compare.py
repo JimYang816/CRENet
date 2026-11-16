@@ -10,6 +10,7 @@ from pathlib import Path
 from threadpoolctl import threadpool_limits
 
 from src.common.numerics import DenseBackend
+from src.common.outputs import is_smoke_path, resolve_output_root
 from src.evaluation.comparison import evaluate, replot
 from src.evaluation.registry import IDENTIFIERS
 
@@ -55,6 +56,9 @@ def main():
         for channel, dataset in config["datasets"].items():
             if args.channel and channel != args.channel:
                 continue
+            smoke = is_smoke_path(dataset)
+            output = resolve_output_root(config["output"], smoke=smoke)
+            cache_dir = config.get("cache_dir") or (Path("outputs/smoke/_cache") if smoke else None)
             checkpoints = {} if args.baselines_only else config.get("checkpoints", {}).get(channel, {})
             evaluator = evaluate
             extra = {}
@@ -62,10 +66,10 @@ def main():
                 from src.evaluation.unified import evaluate as evaluate_unified
                 evaluator = evaluate_unified
                 extra["checkpoints"] = checkpoints
-            evaluator(dataset, Path(config["output"])/channel.lower(), backend,
+            evaluator(dataset, output/channel.lower(), backend,
                      batch_size=args.batch_size if args.batch_size is not None else config["batch_size"],
                      algorithm_parameters=config.get("algorithms"), force=args.force,
-                     cache_dir=config.get("cache_dir"), input_view=args.input_view or config.get("input_view", "compensated"), **extra)
+                     cache_dir=cache_dir, input_view=args.input_view or config.get("input_view", "compensated"), **extra)
 
 
 if __name__ == "__main__":

@@ -14,8 +14,7 @@ CRENet/
 │   └── evaluation/           # 统一评测配置
 ├── data_generation/
 │   ├── scripts/              # 数据生成与物理链路检查入口
-│   ├── src/                  # 发射、WATERMARK 信道回放、接收机及数据集
-│   └── tests/                # 数据生成测试
+│   └── src/                  # 发射、WATERMARK 信道回放、接收机及数据集
 ├── src/
 │   ├── algorithms/           # 每种均衡算法独立目录
 │   │   ├── single_tap_mmse/  # 单抽头 LMMSE
@@ -35,14 +34,16 @@ CRENet/
 │   ├── evaluate/             # 统一评测与必要诊断入口
 │   ├── infer/                # 推理入口
 │   └── visualize/            # 论文算法图生成入口
-├── tests/                    # 算法测试按算法分目录；另含数据、训练和评测测试
 ├── docs/                     # 设计与运行说明
 ├── data/
 │   ├── raw/watermark/        # 原始 WATERMARK 源包
 │   ├── interim/              # 可再生成的校准缓存
 │   └── processed/            # 接收机数据与估计 CSI
 ├── outputs/
-│   ├── runs/                 # 正式实验、消融及保留的历史结果
+│   ├── experiment/           # 正式实验、消融及相关结果
+│   ├── smoke/                # 测试源码、小样本数据、临时文件及测试结果
+│   │   ├── data_generation_tests/ # 数据生成测试源码
+│   │   └── tests/            # 算法、数据、训练和评测测试源码
 │   └── paper/                # 论文主稿 main.tex、图片及历史稿 archive/
 ├── AGENTS.md                 # 项目开发约定
 └── pyproject.toml            # Python 依赖与测试配置

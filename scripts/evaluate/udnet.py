@@ -11,6 +11,7 @@ import torch
 from threadpoolctl import threadpool_limits
 
 from src.common.numerics import DenseBackend
+from src.common.outputs import is_smoke_path, resolve_output_root
 from src.evaluation.udnet import evaluate
 
 
@@ -30,9 +31,15 @@ def main():
         for channel, directory in config["datasets"].items():
             if args.channel and channel != args.channel:
                 continue
-            run = (args.run_root or Path(config["output"]))/channel.lower()
+            smoke = is_smoke_path(directory)
+            run = resolve_output_root(config["output"], args.run_root, smoke=smoke)/channel.lower()
+            options = dict(config["evaluation"])
+            if args.cache_dir is not None:
+                options["cache_dir"] = args.cache_dir
+            elif smoke:
+                options.setdefault("cache_dir", Path("outputs/smoke/_cache"))
             evaluate(Path(directory)/"test.h5", run/"best.pt", run/"evaluation", DenseBackend(args.device),
-                     cache_dir=args.cache_dir, **config["evaluation"])
+                     **options)
 
 
 if __name__ == "__main__":
