@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "epnet"
+name = "crenet"
 version = "0.1.0"
 description = "WATERMARK NCS1/NOF1 P-D-D-P receiver with fixed shared DPSS, joint CSI, MMSE and learned equalization"
 requires-python = ">=3.10"

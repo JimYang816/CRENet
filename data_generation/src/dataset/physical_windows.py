@@ -13,7 +13,7 @@ _CONTEXT = None
 
 def initialize_worker(c, path, threads):
     global _CONTEXT
-    from data_generation.src.channel.watermark import WatermarkArchive
+    from data_generation.src.channel.watermark.replay import WatermarkArchive
     from data_generation.src.receiver.chain import ReceiverChain
     limits = threadpool_limits(threads)
     _CONTEXT = (c, WatermarkArchive(path, c["channel"]), ReceiverChain(c), limits)

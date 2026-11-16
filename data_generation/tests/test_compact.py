@@ -289,7 +289,7 @@ def test_spawn_workers_match_serial_real_receiver(tmp_path):
     from io import BytesIO
     import zipfile
     from scipy.io import savemat
-    from data_generation.src.channel.watermark import WatermarkArchive
+    from data_generation.src.channel.watermark.replay import WatermarkArchive
     from data_generation.src.receiver.chain import ReceiverChain
     c, prior, _, _ = fixture()
     c["learning_dataset"]["starts_seconds"] = [.01, .03]

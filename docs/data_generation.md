@@ -4,7 +4,7 @@
 
 ## 划分与协议
 
-当前协议为 `watermark-pddp-compact-v2`，旧版全CSI导出、读取与均衡流程已移除。两份 `configs/data/*_pddp.json` 除信道名外相同，沿用已验收版本。`learning_dataset` 是学习数据的唯一划分来源；根层 `prior_records`、`validation_records` 和 `starts_seconds` 用于CSI先验及估计器校验。旧 `test_records`、奇偶窗口和旧EP字段作为原始配置来源记录保留，当前入口不使用；保留这些字段维持数据配置身份。
+当前协议为 `watermark-pddp-compact-v2`，旧版全CSI导出、读取与均衡流程已移除。两份 `configs/data/{ncs1,nof1}/pddp.json` 除信道名外相同，沿用已验收版本。`learning_dataset` 是学习数据的唯一划分来源；根层 `prior_records`、`validation_records` 和 `starts_seconds` 用于CSI先验及估计器校验。旧 `test_records`、奇偶窗口和旧EP字段作为原始配置来源记录保留，当前入口不使用；保留这些字段维持数据配置身份。
 
 - 先验：051–055；CSI估计器校验：056–060，窗口沿用2/8/14/20/26秒。后者不是学习验证集。
 - 学习测试：011/015/019/023/027/031/035/039/043/047；学习验证：013/021/029/037/045。
@@ -70,7 +70,7 @@ with CompactDataset('data/processed/nof1_compact_20261026_final/test.h5',
 
 默认读取器通过 `csi` 返回完整已验收的估计 CSI。`model_input(si,fi)` 与 `labels(fi)` 可分别调用；无标签推理单独读取前者，`audit` 仅供显式监督/核查，提供参考 CSI、原始系数、来源元数据、身份/种子及物理残差。模型 forward 不接收 `audit` 内容或标签。
 
-读取器另提供 `inputs['uncertainty']['coefficient_covariance']`，支持 `matmul()` 与 `modes(count=...)`。该不确定性接口同时给出D1/D2采样DPSS基、系数形状与q优先/延迟次之的展开顺序，供调用方把任意系数模式准确变换为CSI模式。每个worker自行打开读取器，协方差接口只在读取器打开时有效。compact-v2读取器拒绝其他协议、未完成数据和共享模型身份不匹配的数据。当前训练与比较设置见 [ICR-MMSE-Net](icr_mmse.md) 和 [均衡算法对比](equalizer_comparison.md)。
+读取器另提供 `inputs['uncertainty']['coefficient_covariance']`，支持 `matmul()` 与 `modes(count=...)`。该不确定性接口同时给出D1/D2采样DPSS基、系数形状与q优先/延迟次之的展开顺序，供调用方把任意系数模式准确变换为CSI模式。每个worker自行打开读取器，协方差接口只在读取器打开时有效。compact-v2读取器拒绝其他协议、未完成数据和共享模型身份不匹配的数据。当前训练与比较设置见 [CRENet](crenet.md) 和 [均衡算法对比](equalizer_comparison.md)。
 
 ## 运行与断点
 
@@ -80,7 +80,7 @@ with CompactDataset('data/processed/nof1_compact_20261026_final/test.h5',
 python -m pytest -q --basetemp=outputs/runs/pytest_local
 python -m data_generation.scripts.fetch_watermark --workers 8
 python -m data_generation.scripts.pdd all --smoke --device cpu --threads 4 --run-id ncs1_compact --watermark data/raw/watermark/compact_cpu_smoke.zip
-python -m data_generation.scripts.pdd all --smoke --config configs/data/nof1_pddp.json --device cpu --threads 4 --run-id nof1_compact --watermark data/raw/watermark/compact_cpu_smoke.zip
+python -m data_generation.scripts.pdd all --smoke --config configs/data/nof1/pddp.json --device cpu --threads 4 --run-id nof1_compact --watermark data/raw/watermark/compact_cpu_smoke.zip
 ```
 
 `fetch_watermark`仅从FFI官方WatermarkV1链接下载，分段续传、校验HTTP范围/长度和两信道120个ZIP成员CRC，保存源包SHA256。完整源包放在`data/raw/watermark/WatermarkV1.zip`。本地只用少量记录和CPU；smoke保留正式DPSS及7个SNR，但每集合一个窗口，测试两个重复，结果明确标记smoke。
@@ -90,8 +90,8 @@ python -m data_generation.scripts.pdd all --smoke --config configs/data/nof1_pdd
 ```bash
 git pull --ff-only
 .venv/bin/python -m data_generation.scripts.fetch_watermark --workers 8
-.venv/bin/python -m data_generation.scripts.pdd all --config configs/data/ncs1_pddp.json --device cuda --threads 2 --workers 4 --run-id ncs1_compact_YYYYMMDD
-.venv/bin/python -m data_generation.scripts.pdd all --config configs/data/nof1_pddp.json --device cuda --threads 2 --workers 4 --run-id nof1_compact_YYYYMMDD
+.venv/bin/python -m data_generation.scripts.pdd all --config configs/data/ncs1/pddp.json --device cuda --threads 2 --workers 4 --run-id ncs1_compact_YYYYMMDD
+.venv/bin/python -m data_generation.scripts.pdd all --config configs/data/nof1/pddp.json --device cuda --threads 2 --workers 4 --run-id nof1_compact_YYYYMMDD
 ```
 
 阶段为`audit`、`calibrate`、`generate`、`accept`、`all`。`all`包含验收，`generate`使用已有冻结先验并包含验收。新入口没有均衡评测阶段。相同run ID必须匹配协议、提交、配置和源包；逐窗口及逐样本先flush再写完成标记，公共谱、训练统计和CSI整理阶段也有提交标记。重复运行原命令会继续未完成部分，完成部分保持不变。

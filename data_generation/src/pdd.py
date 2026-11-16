@@ -16,7 +16,7 @@ ESTIMATION_MODE = "full_frame_joint_no_feedback_v1"
 
 
 def load_pdd_config(path=None):
-    c = load_config(path or ROOT/"configs/data/ncs1_pddp.json")
+    c = load_config(path or ROOT/"configs/data/ncs1/pddp.json")
     if c.get("channel", "NCS1") not in ("NCS1", "NOF1"):
         raise ValueError("PDDP supports WATERMARK NCS1 and NOF1")
     if c.get("model_mismatch_policy", "reject") not in ("reject", "diagnose"):

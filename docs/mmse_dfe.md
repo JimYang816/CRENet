@@ -47,7 +47,7 @@ python -m scripts.evaluate.compare --plot-only
 
 正式测试仍为每信道、每 SNR 600 帧、D1/D2、512 个数据槽，共 1,228,800 比特。
 新增结果单独缓存；已有其他算法及 NMSE 的有效缓存继续复用。
-统一 BER 图包含七条曲线。NMSE 图中 MMSE-DFE 共用固定输入 CSI，DD-CE 和 ICR-MMSE-Net 各自报告修正后的平均 NMSE。当前输出目录和运行方式见[统一评测](equalizer_comparison.md)。
+统一 BER 图包含七条曲线。NMSE 图中 MMSE-DFE 共用固定输入 CSI，DD-CE 和 CRENet 各自报告修正后的平均 NMSE。当前输出目录和运行方式见[统一评测](equalizer_comparison.md)。
 
 ## 正式结果（2026-10-31）
 

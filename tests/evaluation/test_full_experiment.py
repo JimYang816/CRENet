@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from scripts.run.icr_experiment import LABELS, SNR, comparison_config, execute, validate_report
+from scripts.run.crenet_experiment import LABELS, SNR, comparison_config, execute, validate_report
 
 
 def test_new_joint_checkpoints_replace_historical_weights_and_missing_udnet(tmp_path):
-    training = json.loads(Path("configs/training/icr_mmse.json").read_text())
+    training = json.loads(Path("configs/training/crenet.json").read_text())
     comparison = json.loads(Path("configs/evaluation/ber_comparison.json").read_text())
     baseline = tmp_path/"existing.pt"
     baseline.touch()
@@ -19,7 +19,7 @@ def test_new_joint_checkpoints_replace_historical_weights_and_missing_udnet(tmp_
     assert result["checkpoints"]["NOF1"]["udnet"] == str(baseline)
     assert result["checkpoints"]["NCS1"]["udnet"] == str(tmp_path/"udnet/ncs1/best.pt")
     for ch in training["datasets"]:
-        assert result["checkpoints"][ch]["icr_mmse"] == str(tmp_path/"joint"/ch.lower()/"icr_mmse.pt")
+        assert result["checkpoints"][ch]["crenet"] == str(tmp_path/"joint"/ch.lower()/"crenet.pt")
     training["input_view"] = "raw"
     with pytest.raises(ValueError, match="compensated"):
         comparison_config(training, comparison, tmp_path)

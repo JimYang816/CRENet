@@ -8,7 +8,7 @@ import numpy as np
 
 from src.algorithms.interface import EqualizerBatch, EqualizerResult
 from src.algorithms.likelihood import batch_likelihood
-from src.algorithms.MMSE.full_matrix import equalize_batch as full_lmmse
+from src.algorithms.full_matrix_lmmse.equalizer import equalize_batch as full_lmmse
 
 
 def controls(rank=32, prior_scale=0.03):

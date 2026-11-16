@@ -8,7 +8,7 @@ from data_generation.src.dataset.compact_export import generate
 from src.common.numerics import DenseBackend
 from src.data.compact import CompactDataset, data_system
 from src.evaluation.comparison import evaluate, test_batch as prepare_test_batch
-from src.algorithms.MMSE.single_tap import mmse
+from src.algorithms.single_tap_mmse.equalizer import mmse
 
 
 def test_cpu_end_to_end_mmse_full_test_counts_and_resume(tmp_path):

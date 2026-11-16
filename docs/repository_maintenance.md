@@ -1,8 +1,8 @@
 # 2026-10-31 算法与仓库整理
 
-本页记录当天仓库整理发生时的操作和验证，不作为实时实验状态。后续已完成 `icr_full_20261031_095549` 正式训练、`icr_ad_current_20261031_133445` 等深度A–D消融及加入MMSE-DFE的七算法正式汇总；当前检查点、结果与运行方法分别见 [ICR说明](icr_mmse.md) 和 [统一评测](equalizer_comparison.md)。
+本页记录当天仓库整理发生时的操作和验证，不作为实时实验状态。后续已完成 `icr_full_20261031_095549` 正式训练、`icr_ad_current_20261031_133445` 等深度A–D消融及加入MMSE-DFE的七算法正式汇总；当前检查点、结果与运行方法分别见 [CRENet说明](crenet.md) 和 [统一评测](equalizer_comparison.md)。
 
-当前算法以 [统一设计](icr_mmse_algorithm_design.md) 和 `configs/training/icr_mmse.json` 为准。
+当前算法以 [统一设计](crenet_algorithm_design.md) 和 `configs/training/crenet.json` 为准。
 NOF1、NCS1 共用8层残差展开结构，均学习逐层物理参数和局部神经网络；各信道独立训练权重，
 加载初值、分组学习率及监督权重保留已验收设置。新流水线在同一实验根目录生成共同预训练及固定/联合分支。
 
@@ -15,7 +15,7 @@ NOF1、NCS1 共用8层残差展开结构，均学习逐层物理参数和局部�
 
 1. 双信道数据生成与固定划分。
 2. 传统均衡与UDNet基线。
-3. ICR-MMSE初版及compensated CSI训练评测。
+3. CRENet初版及compensated CSI训练评测。
 4. 缓存、恢复训练和论文图示。
 5. 传统检测器、OAMP-Net2 与训练控制诊断。
 6. CSI修正与MMSE展开的A–D消融。

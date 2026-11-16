@@ -164,7 +164,7 @@ def prepare_djk(out):
 
 
 def prepare_watermark(out, archive_path, records, starts):
-    from data_generation.src.channel.watermark import WatermarkArchive
+    from data_generation.src.channel.watermark.replay import WatermarkArchive
     _,preamble=probe()
     for ch in ["NOF1","NCS1"]:
         archive=WatermarkArchive(archive_path,ch)

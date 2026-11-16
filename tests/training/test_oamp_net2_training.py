@@ -126,8 +126,8 @@ def test_label_free_inference_complete_evaluation_and_cache_reuse(experiment, mo
 
 
 def test_unified_algorithms_equal_test_counts_and_offline_replot(experiment, monkeypatch):
-    from src.algorithms.icr_mmse.checkpoint import SCHEMA, FEEDBACK_LAYOUT, INFERENCE_CODE, atomic_save, cpu_state
-    from src.algorithms.icr_mmse.model import ICRMMSEnet
+    from src.algorithms.crenet.checkpoint import SCHEMA, FEEDBACK_LAYOUT, INFERENCE_CODE, atomic_save, cpu_state
+    from src.algorithms.crenet.model import CRENet
     from src.training.udnet import train as train_udnet
     from src.evaluation.unified import evaluate as unified, ORDER
     from src.evaluation.comparison_plots import replot
@@ -135,15 +135,15 @@ def test_unified_algorithms_equal_test_counts_and_offline_replot(experiment, mon
     backend = DenseBackend()
     oamp = train(directory, root/"oamp", backend, epochs=1, batch_size=4, frame_limit=2, model_config={"layers": 3})
     udnet = train_udnet(directory, root/"udnet", backend, epochs=1, batch_size=4, frame_limit=2)
-    model = ICRMMSEnet(layers=2, bandwidth=2, window_size=6, center_size=3, hidden_size=4, precision="complex128")
-    icr = root/"icr.pt"
+    model = CRENet(layers=2, bandwidth=2, window_size=6, center_size=3, hidden_size=4, precision="complex128")
+    crenet = root/"crenet.pt"
     with CompactDataset(directory/"train.h5") as dataset:
-        atomic_save(icr, dict(schema=SCHEMA, input_view="compensated", model_config=model.config,
+        atomic_save(crenet, dict(schema=SCHEMA, input_view="compensated", model_config=model.config,
             feedback_layout=FEEDBACK_LAYOUT, inference_code=source_fingerprint(INFERENCE_CODE),
             model=cpu_state(model), training_scope="one_channel_all_snr_D1_D2", channel=dataset.channel,
             data_schema=str(dataset._h.attrs["schema"]), model_identity=str(dataset._h.attrs["model_identity"]),
             data_indices=dataset._indices.tolist(), snr_db=dataset.snr_db.tolist()))
-    checkpoints = dict(udnet=udnet, oamp_net2=oamp, icr_mmse=icr)
+    checkpoints = dict(udnet=udnet, oamp_net2=oamp, crenet=crenet)
     report = unified(directory/"test.h5", root/"unified", backend, checkpoints=checkpoints,
         batch_size=2, cache_dir=root/"cache", algorithm_parameters={"mmse_dfe": {}, "dd_ce_lmmse": {}}, bootstrap_samples=16)
     assert tuple(report["curves"]) == ORDER
@@ -154,21 +154,21 @@ def test_unified_algorithms_equal_test_counts_and_offline_replot(experiment, mon
     assert (root/"unified/report.html").is_file()
     assert replot(root/"unified")["curves"] == report["curves"]
     with monkeypatch.context() as scope:
-        scope.setattr("src.evaluation.icr_mmse.evaluate", lambda *a, **kw: pytest.fail("Unchanged ICR recomputed"))
+        scope.setattr("src.evaluation.crenet.evaluate", lambda *a, **kw: pytest.fail("Unchanged CRENet recomputed"))
         scope.setattr("src.evaluation.udnet.equalize_batch", lambda *a, **kw: pytest.fail("Unchanged UDNet recomputed"))
         scope.setattr("src.evaluation.oamp_net2.equalize_batch", lambda *a, **kw: pytest.fail("Unchanged OAMP recomputed"))
         changed = unified(directory/"test.h5", root/"without-dfe", backend, checkpoints=checkpoints,
             batch_size=1, cache_dir=root/"cache", bootstrap_samples=16)
     assert "MMSE-DFE" not in changed["curves"]
-    assert changed["icr_mmse"]["evaluation_cache"]["reused"]
+    assert changed["crenet"]["evaluation_cache"]["reused"]
     for name in ("Single-tap LMMSE", "Full-matrix LMMSE", "UDNet", "OAMP-Net2"):
         assert changed["curves"][name]["provenance"]["reused"]
         assert changed["curves"][name]["errors"] == report["curves"][name]["errors"]
     with h5py.File(directory/"test.h5", "r+") as test:
         test["samples/bits"][:] = 1-test["samples/bits"][:]
     (directory/"train.h5").rename(directory/"unavailable-training.h5")
-    from src.evaluation.icr_efficiency import benchmark, AVAILABLE_IDENTIFIERS
-    efficiency = benchmark(directory/"test.h5", root/"unified/metrics.json", icr, udnet,
+    from src.evaluation.crenet_efficiency import benchmark, AVAILABLE_IDENTIFIERS
+    efficiency = benchmark(directory/"test.h5", root/"unified/metrics.json", crenet, udnet,
         oamp_net2_checkpoint=oamp, batch_size=2, frame_limit=1, threads=2, output=root/"efficiency.json")
     rows = efficiency["algorithms"]
     assert {row["algorithm"] for row in rows} == set(AVAILABLE_IDENTIFIERS)
@@ -177,7 +177,7 @@ def test_unified_algorithms_equal_test_counts_and_offline_replot(experiment, mon
     assert all(row["setup_seconds"] > 0 and row["reconstruction_and_all_iterations_seconds"] > 0
                and row["peak_process_rss_bytes"] > 0 for row in rows)
     assert {row["algorithm"] for row in rows if row["parameters"] == 0} == {"single_tap_mmse", "full_matrix_lmmse", "mmse_dfe", "dd_ce_lmmse"}
-    assert {row["algorithm"] for row in rows if row["parameters"] > 0} == {"udnet", "oamp_net2", "icr_mmse"}
+    assert {row["algorithm"] for row in rows if row["parameters"] > 0} == {"udnet", "oamp_net2", "crenet"}
     assert efficiency["reference_assisted_csi_construction"]
     assert efficiency["initial_provenance_validation_seconds"] > 0
     assert "train.h5" not in efficiency["data_identity"]
@@ -192,7 +192,7 @@ def test_unified_algorithms_equal_test_counts_and_offline_replot(experiment, mon
     wrong = dict(report, input_view="raw")
     (root/"wrong.json").write_text(json.dumps(wrong), encoding="utf-8")
     with pytest.raises(ValueError, match="compensated CSI comparison report"):
-        benchmark(directory/"test.h5", root/"wrong.json", icr, udnet, algorithms=("full_matrix_lmmse",))
+        benchmark(directory/"test.h5", root/"wrong.json", crenet, udnet, algorithms=("full_matrix_lmmse",))
 
 
 def test_record_leakage_and_smoke_checkpoint_are_rejected(experiment):

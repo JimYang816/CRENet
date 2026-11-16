@@ -19,7 +19,7 @@ from src.common.numerics import DenseBackend
 
 
 def test_channel_configurations_share_the_exact_fixed_time_basis():
-    cs = [load_pdd_config(ROOT/"configs/data"/(ch+"_pddp.json")) for ch in ("ncs1", "nof1")]
+    cs = [load_pdd_config(ROOT/"configs/data"/ch/"pddp.json") for ch in ("ncs1", "nof1")]
     assert {k: v for k, v in cs[0].items() if k != "channel"} == {k: v for k, v in cs[1].items() if k != "channel"}
     models = [build_model(c) for c in cs]
     assert all(m.count == 34 and m.length == 736 for m in models)

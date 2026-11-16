@@ -1,8 +1,8 @@
 # DPSS 实验算子与完整矩阵后端
 
-当前正式实验使用默认读取器 `input_view="compensated"` 返回的完整估计 CSI：训练采用 `dense_device`，评测采用 `dense`。本页另记录原始系数视图（`raw`）下的 DPSS 算子诊断；该诊断保留 ICR-MMSE-Net 的参数、完整信道耦合、带状修正、门控、阻尼、软反馈、归一化、噪声模式与三阶段损失，不重新拟合 DPSS 或截断基函数频谱。只有显式要求 raw 诊断时才使用该路径，其检查点、特征及评测缓存不用于正式主对比。
+当前正式实验使用默认读取器 `input_view="compensated"` 返回的完整估计 CSI：训练采用 `dense_device`，评测采用 `dense`。本页另记录原始系数视图（`raw`）下的 DPSS 算子诊断；该诊断保留 CRENet 的参数、完整信道耦合、带状修正、门控、阻尼、软反馈、归一化、噪声模式与三阶段损失，不重新拟合 DPSS 或截断基函数频谱。只有显式要求 raw 诊断时才使用该路径，其检查点、特征及评测缓存不用于正式主对比。
 
-统一配置 `configs/training/icr_mmse.json` 的 `training.operator_backend="dense_device"` 是完整矩阵训练数据准备路径：双精度计算移到设备，随后转为模型精度；均衡时保留稠密算子。默认估计 CSI 不受原始 DPSS 系数子空间限制，单独的 `dpss` 算子不能表示其完整输入，因此正式训练应使用 `dense` 或 `dense_device`，正式评测使用 `dense`。解析器保留的 `dpss` 选项不代表默认输入支持该后端。当前batch 8、预取2批与8192 MiB主存参考缓存见 [训练性能说明](icr_mmse_training_performance.md)；运行命令见 [ICR-MMSE-Net](icr_mmse.md#6-验证与运行)。
+统一配置 `configs/training/crenet.json` 的 `training.operator_backend="dense_device"` 是完整矩阵训练数据准备路径：双精度计算移到设备，随后转为模型精度；均衡时保留稠密算子。默认估计 CSI 不受原始 DPSS 系数子空间限制，单独的 `dpss` 算子不能表示其完整输入，因此正式训练应使用 `dense` 或 `dense_device`，正式评测使用 `dense`。解析器保留的 `dpss` 选项不代表默认输入支持该后端。当前batch 8、预取2批与8192 MiB主存参考缓存见 [训练性能说明](crenet_training_performance.md)；运行命令见 [CRENet](crenet.md#6-验证与运行)。
 
 ## 诊断表示与等价边界
 
@@ -33,19 +33,19 @@ H0^H r = sum_q [conj(Gq) * F(conj(vq) * F^H r)]
 正式训练与评测使用完整矩阵路径：
 
 ```bash
-python -m scripts.train.icr_mmse --channel NOF1 --device cuda --operator-backend dense_device
-python -m scripts.evaluate.icr_mmse --channel NOF1 --checkpoint <checkpoint> --run outputs/runs/<evaluation> --device cuda --operator-backend dense
+python -m scripts.train.crenet --channel NOF1 --device cuda --operator-backend dense_device
+python -m scripts.evaluate.crenet --channel NOF1 --checkpoint <checkpoint> --run outputs/runs/<evaluation> --device cuda --operator-backend dense
 ```
 
-DPSS 对照通过独立的 `scripts.evaluate.icr_operator` 入口运行。该入口固定读取 `raw` 系数视图，要求同一视图且源码、结构和数据身份均匹配的诊断检查点；默认正式模型检查点不适用于此入口。
+DPSS 对照通过独立的 `scripts.evaluate.crenet_operator` 入口运行。该入口固定读取 `raw` 系数视图，要求同一视图且源码、结构和数据身份均匹配的诊断检查点；默认正式模型检查点不适用于此入口。
 
 ```bash
 # 先在独立 validation 集做 A/B/C 数值及参数梯度核对，失败即停止。
 # 随后在 test 集的均匀抽样帧上做同检查点、全部 SNR、D1/D2 配对比较。
-python -m scripts.evaluate.icr_operator --dataset <dataset>/test.h5 --checkpoint <raw-checkpoint> --run outputs/runs/<comparison> --device cuda --max-frames 16 --timing-repeats 3
+python -m scripts.evaluate.crenet_operator --dataset <dataset>/test.h5 --checkpoint <raw-checkpoint> --run outputs/runs/<comparison> --device cuda --max-frames 16 --timing-repeats 3
 
 # 全部测试帧：
-python -m scripts.evaluate.icr_operator --dataset <dataset>/test.h5 --checkpoint <raw-checkpoint> --run outputs/runs/<full_comparison> --device cuda --full-test
+python -m scripts.evaluate.crenet_operator --dataset <dataset>/test.h5 --checkpoint <raw-checkpoint> --run outputs/runs/<full_comparison> --device cuda --full-test
 ```
 
 同一诊断检查点严格加载后同时用于两后端，不分别训练、调整噪声模式或修改精度。后端间比较要求输入视图一致，并保留完整的源码和数据校验；不能据此跨输入视图复用检查点。旧结构（例如原 564 通道修正网络）不能直接冒充当前 467 通道权重。严格续训还要求原训练后端、batch、预取、参考缓存及代码等训练身份一致。
@@ -63,7 +63,7 @@ GPU 稠密核与 FFT 的舍入顺序不同，数学等价不要求逐比特浮�
 ## 验证
 
 ```
-python -m pytest tests/algorithms/test_dpss_backend.py tests/evaluation/test_icr_operator.py tests/algorithms/test_icr_mmse.py tests/data/test_raw_csi.py tests/training/test_icr_mmse_training.py
+python -m pytest tests/algorithms/crenet/test_dpss_backend.py tests/evaluation/test_crenet_operator.py tests/algorithms/crenet/test_crenet.py tests/data/test_raw_csi.py tests/training/test_crenet_training.py
 ```
 
 产物只保存在 outputs/runs，Git 仅同步源码、测试与本文档。

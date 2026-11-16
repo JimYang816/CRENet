@@ -16,12 +16,12 @@
     "NOF1": {
       "udnet": "outputs/runs/icr_full_20261031_095549/udnet/nof1/best.pt",
       "oamp_net2": "outputs/runs/oamp_net2_compensated/nof1/best.pt",
-      "icr_mmse": "outputs/runs/icr_full_20261031_095549/joint/nof1/icr_mmse.pt"
+      "crenet": "outputs/runs/icr_full_20261031_095549/joint/nof1/icr_mmse.pt"
     },
     "NCS1": {
       "udnet": "outputs/runs/icr_full_20261031_095549/udnet/ncs1/best.pt",
       "oamp_net2": "outputs/runs/oamp_net2_compensated/ncs1/best.pt",
-      "icr_mmse": "outputs/runs/icr_full_20261031_095549/joint/ncs1/icr_mmse.pt"
+      "crenet": "outputs/runs/icr_full_20261031_095549/joint/ncs1/icr_mmse.pt"
     }
   }
 }

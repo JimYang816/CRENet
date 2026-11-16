@@ -159,8 +159,7 @@ def test_ber_figure_draws_all_curves_with_stable_styles(tmp_path, monkeypatch):
     captured = []
 
     def capture(figure, *args, **kwargs):
-        aliases = {"CRU-Net": "ICR-MMSE-Net"}
-        captured.append({aliases.get(line.get_label(), line.get_label()): (line.get_color(), line.get_marker())
+        captured.append({line.get_label(): (line.get_color(), line.get_marker())
                          for line in figure.axes[0].lines})
 
     monkeypatch.setattr(Figure, "savefig", capture)
@@ -200,7 +199,7 @@ def test_shared_computation_invalidates_only_actual_dependents(experiment, monke
 def test_comments_docstrings_and_formatting_do_not_invalidate(experiment, monkeypatch):
     experiment.run()
     calls = watch(monkeypatch)
-    source_edit(monkeypatch, experiment, "src.algorithms.MMSE.full_matrix", "import numpy as np",
+    source_edit(monkeypatch, experiment, "src.algorithms.full_matrix_lmmse.equalizer", "import numpy as np",
                 "# Revised explanation only.\n\nimport numpy    as    np")
     experiment.run("comment-edit")
     assert not changed(calls)
@@ -263,7 +262,7 @@ def test_force_still_publishes_both_mmse_curves(experiment, monkeypatch, forced)
 def test_failed_forced_attempt_preserves_report_and_resumes_only_missing_blocks(experiment, monkeypatch):
     original = experiment.run()
     saved = {name: (experiment.root/"run"/name).read_bytes() for name in ("metrics.json", "ber_snr.png", "nmse_snr.png")}
-    matrix_module = importlib.import_module("src.algorithms.MMSE.full_matrix")
+    matrix_module = importlib.import_module("src.algorithms.full_matrix_lmmse.equalizer")
     equalize = matrix_module.equalize_batch
     attempts = []
 

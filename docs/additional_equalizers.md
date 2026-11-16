@@ -1,7 +1,7 @@
 # OAMP-Net2 与七算法统一评测
 
 主对比为 Single-tap LMMSE、Full-matrix LMMSE、
-MMSE-DFE、DD-CE + Full-matrix LMMSE、UDNet、OAMP-Net2、ICR-MMSE-Net。MMSE-DFE 的计算与固定检测顺序见 [说明](mmse_dfe.md)。保持已验收数据文件、物理记录划分、
+MMSE-DFE、DD-CE + Full-matrix LMMSE、UDNet、OAMP-Net2、CRENet。MMSE-DFE 的计算与固定检测顺序见 [说明](mmse_dfe.md)。保持已验收数据文件、物理记录划分、
 compensated CSI、导频、接收观测、QPSK 映射及 BER 定义不变。
 NOF1 的输入平均 NMSE 为 −12.70→−18.30 dB，NCS1 为 −6.20→−10.67 dB，SNR 0→30 dB。
 
@@ -18,7 +18,7 @@ OAMP-Net2 调用 `src/evaluation/inputs.py:prepare_batch`：先在完整物理�
 而非数据载波数；复数方差不额外乘除 2。
 
 OAMP-Net2 固定输入 CSI，仅改善检测。它与两种 LMMSE、MMSE-DFE 和 UDNet 共用输入 NMSE 曲线；
-ICR-MMSE-Net 另画修正后的全矩阵 NMSE。NMSE 始终先按帧、D 块计算完整矩阵
+CRENet 另画修正后的全矩阵 NMSE。NMSE 始终先按帧、D 块计算完整矩阵
 线性相对平方误差、取算术平均，再转 dB。
 
 ## 2. OAMP-Net2
@@ -90,13 +90,13 @@ OAMP 配置为 `configs/training/oamp_net2.json`，沿用现有两个数据集�
 `latest.pt` 支持续训；`best.pt` 只由验证损失严格改善更新。
 
 统一配置为 `configs/evaluation/ber_comparison.json`。其中 `checkpoints` 为每个信道的
-UDNet、OAMP-Net2、ICR-MMSE-Net 路径；当前ICR和UDNet分别引用
+UDNet、OAMP-Net2、CRENet 路径；当前CRENet和UDNet分别引用
 `outputs/runs/icr_full_20261031_095549/joint/<channel>/icr_mmse.pt` 和
 `outputs/runs/icr_full_20261031_095549/udnet/<channel>/best.pt`，其中 `<channel>` 为 `nof1` 或 `ncs1`。
 OAMP-Net2仍使用本页所述独立训练目录的 `best.pt`。统一入口在开始计算前校验全部所需检查点；
 缺失或身份不匹配会报错，不会跳过曲线或拿未训练模型替代。
 没有 `checkpoints` 的旧自定义配置仍保留原基线接口行为。
-统一评测默认 batch 8，四种传统方法的参数由 `algorithms` 提供；独立 ICR 流水线的 batch 2 不会覆盖此值。各入口的算法数量、强制重算和离线绘图规则见 [均衡评测与缓存](equalizer_comparison.md)。
+统一评测默认 batch 8，四种传统方法的参数由 `algorithms` 提供；独立 CRENet 流水线的 batch 2 不会覆盖此值。各入口的算法数量、强制重算和离线绘图规则见 [均衡评测与缓存](equalizer_comparison.md)。
 
 双信道七算法报告在 `outputs/runs/equalizer_comparison_dd_ce_20261102/{nof1,ncs1}/`，包含：
 `metrics.json`、`report.html`、七条 BER 曲线的 `ber_snr.png`、输入/修正 CSI 的 `nmse_snr.png`。
@@ -105,11 +105,11 @@ OAMP-Net2仍使用本页所述独立训练目录的 `best.pt`。统一入口在�
 
 两种 LMMSE 的计算身份保持原样。OAMP 检查点的 SHA256 和计算依赖进入其结果缓存身份。
 OAMP 逐 SNR/帧/D 块缓存，可跨 batch 大小复用并校验损坏；`--force all` 同时刷新 OAMP。
-UDNet按数据、权重和实现身份复用逐块缓存；ICR按同样的实际身份复用完整报告缓存，
-可从当前检查点所属实验导入匹配的正式报告。`--force icr_mmse` 显式重算ICR，`--force all` 同时刷新传统算法、OAMP和ICR；具体边界见 [增量评测](incremental_evaluation.md)。
+UDNet按数据、权重和实现身份复用逐块缓存；CRENet按同样的实际身份复用完整报告缓存，
+可从当前检查点所属实验导入匹配的正式报告。`--force crenet` 显式重算CRENet，`--force all` 同时刷新传统算法、OAMP和CRENet；具体边界见 [增量评测](incremental_evaluation.md)。
 离线绘图使用保存数值，不需要数据、检查点或 GPU。
 
-效率入口 `scripts.evaluate.icr_efficiency` 默认在各自独立的进程中测量七种方法，
+效率入口 `scripts.evaluate.crenet_efficiency` 默认在各自独立的进程中测量七种方法，
 必须提供 `--checkpoint`、`--udnet-checkpoint` 和 `--oamp-net2-checkpoint`。
 OAMP 的逐样本完整谱分解计入预处理时间，
 不复用训练谱特征或 BER 结果缓存；计时进程禁止读取测试标签。
@@ -123,7 +123,7 @@ OAMP 的逐样本完整谱分解计入预处理时间，
 ## 5. 验证
 
 ```bash
-python -m pytest tests/algorithms/test_additional_equalizers.py tests/algorithms/test_mmse_dfe.py tests/training/test_oamp_net2_training.py tests/evaluation/test_incremental_comparison.py -q
+python -m pytest tests/algorithms/oamp_net2/test_additional_equalizers.py tests/algorithms/mmse_dfe/test_mmse_dfe.py tests/training/test_oamp_net2_training.py tests/evaluation/test_incremental_comparison.py -q
 ```
 
 算法测试以独立的接收空间直接求逆为参考，核对 OAMP-Net2

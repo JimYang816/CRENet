@@ -12,8 +12,8 @@ from data_generation.src.dataset.compact_export import generate
 from src.common.numerics import DenseBackend
 from src.data.compact import CompactDataset
 from src.data.contract import DEFAULT_INPUT_VIEW, target_nmse_db, validate_compensated_contract
-from src.data.icr_mmse import input_batches
-from src.data.icr_training import ReferenceCache, training_batches
+from src.data.crenet import input_batches
+from src.data.crenet_training import ReferenceCache, training_batches
 
 
 @pytest.mark.parametrize("channel", ("NOF1", "NCS1"))
@@ -61,9 +61,9 @@ def test_default_csi_nmse_matches_fixed_targets_on_both_dense_paths(tmp_path, ch
 
 def test_default_configs_are_pinned_to_compensated_single_seed():
     root = Path(__file__).resolve().parents[2]
-    icr = json.loads((root/"configs/training/icr_mmse.json").read_text())
+    crenet = json.loads((root/"configs/training/crenet.json").read_text())
     udnet = json.loads((root/"configs/training/udnet.json").read_text())
     comparison = json.loads((root/"configs/evaluation/ber_comparison.json").read_text())
-    assert icr["input_view"] == comparison["input_view"] == "compensated"
+    assert crenet["input_view"] == comparison["input_view"] == "compensated"
     assert udnet["training"]["input_view"] == udnet["evaluation"]["input_view"] == "compensated"
-    assert icr["selection"]["seeds"] == [20261028]
+    assert crenet["selection"]["seeds"] == [20261028]

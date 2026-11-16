@@ -8,7 +8,7 @@ import time
 
 import numpy as np
 
-from src.algorithms.MMSE.single_tap import equalize_batch as single_tap_batch
+from src.algorithms.single_tap_mmse.equalizer import equalize_batch as single_tap_batch
 from src.algorithms.likelihood import make_whitener
 from src.common.experiment import write_json
 from src.data.compact import CompactDataset

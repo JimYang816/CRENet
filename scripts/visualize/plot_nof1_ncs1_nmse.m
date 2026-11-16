@@ -1,4 +1,4 @@
-% Plot NOF1/NCS1 initial, DD-DPSS and CRU-Net CSI NMSE in one MATLAB figure.
+% Plot NOF1/NCS1 initial, DD-DPSS and CRENet CSI NMSE in one MATLAB figure.
 % Run from any working directory. No figures or data are exported.
 % Report values are already 10*log10(mean(linear NMSE)): use a linear dB axis.
 
@@ -56,12 +56,12 @@ for channelIndex = 1:numel(channels)
         'Color', color, 'LineStyle', '-.', 'LineWidth', 1.0, ...
         'Marker', style.ddMarkers{channelIndex}, 'MarkerSize', 6, ...
         'DisplayName', [channels{channelIndex} ' - DD-DPSS']);
-    % CRU-Net is the paper label for the icr_mmse corrected CSI in the report.
+    % Plot the corrected CSI values from the retained report.
     curveHandles(3, channelIndex) = plot(ax, data.snrDb, data.correctedDb, ...
         'Color', color, 'LineStyle', '-', 'LineWidth', 1.0, ...
         'Marker', style.correctedMarkers{channelIndex}, 'MarkerSize', 4.5, ...
         'MarkerFaceColor', color, ...
-        'DisplayName', [channels{channelIndex} ' - CRU-Net']);
+        'DisplayName', [channels{channelIndex} ' - CRENet']);
     allNmseDb = [allNmseDb data.initialDb data.ddDb data.correctedDb]; %#ok<AGROW>
 end
 

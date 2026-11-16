@@ -10,9 +10,9 @@ resultsRoot = fullfile(projectRoot, comparisonConfig.output);
 
 channels = {'NOF1', 'NCS1'};
 algorithmIds = {'single_tap_mmse', 'full_matrix_lmmse', 'mmse_dfe', ...
-    'dd_ce_lmmse', 'udnet', 'oamp_net2', 'icr_mmse'};
+    'dd_ce_lmmse', 'udnet', 'oamp_net2', 'crenet'};
 algorithmLabels = {'Single-tap LMMSE', 'Full-matrix LMMSE', 'MMSE-DFE', ...
-    'DD-DPSS', 'UDNet', 'OAMP-Net2', 'CRU-Net'};
+    'DD-DPSS', 'UDNet', 'OAMP-Net2', 'CRENet'};
 
 % A dashed line and larger plus signs distinguish DD-DPSS where BER curves overlap.
 style.colors = [0.40 0.44 0.53; 0.12 0.47 0.71; 0.00 0.62 0.68; ...
@@ -151,7 +151,8 @@ function data = load_ber_report(reportPath, channel, algorithmIds)
         if strcmp(algorithmIds{algorithmIndex}, 'dd_ce_lmmse')
             curve = load_soft_dd_dpss(report, reportPath);
         else
-            matches = find(strcmp(identifiers, algorithmIds{algorithmIndex}));
+            matches = find(strcmp(identifiers, algorithmIds{algorithmIndex}) | ...
+                (strcmp(algorithmIds{algorithmIndex}, 'crenet') & strcmp(identifiers, 'icr_mmse')));
             assert(isscalar(matches), 'BERPlot:MissingAlgorithm', ...
                 'Expected one %s curve in %s.', algorithmIds{algorithmIndex}, reportPath);
             curve = curves{matches};

@@ -34,7 +34,7 @@ def plot_ber(report, path):
                 line.update(linestyle="--", markersize=8, markerfacecolor="none", zorder=3)
             ax.semilogy(report["snr_db"], np.where(ber > 0, ber, np.nan), color=color,
                         marker=marker, linewidth=1.8, **line,
-                        label="CRU-Net" if name == "ICR-MMSE-Net" else name)
+                        label=name)
             zero = ber == 0
             if np.any(zero):
                 zero_seen = True
@@ -63,7 +63,7 @@ def plot_nmse(report, path):
         ax.plot(report["snr_db"], report["nmse"]["dd_mean_nmse_db"], "P--", color="#8052aa", label="DD-DPSS corrected CSI")
     if "corrected_mean_nmse_db" in report["nmse"]:
         ax.plot(report["snr_db"], report["nmse"]["corrected_mean_nmse_db"], "s-",
-                color="#b42a55", label="CRU-Net corrected CSI")
+                color="#b42a55", label="CRENet corrected CSI")
     ax.set(xlabel="SNR (dB)", ylabel="Mean NMSE (dB)",
            title=f'{report["channel"]} | Test set | mean(linear per-D NMSE)')
     ax.set_xticks(report["snr_db"])

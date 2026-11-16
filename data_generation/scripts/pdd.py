@@ -49,7 +49,7 @@ def main(argv=None):
         raise ValueError('Run ID belongs to another protocol/code/config; use a new run ID')
     write_json(state_path, identity)
     from src.common.numerics import DenseBackend
-    from data_generation.src.channel.watermark import WatermarkArchive
+    from data_generation.src.channel.watermark.replay import WatermarkArchive
     from data_generation.src.receiver.chain import ReceiverChain
     from data_generation.src.dataset.pdd_calibration import calibrate, load_pdd_prior
     from data_generation.src.dataset.compact_export import generate

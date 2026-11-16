@@ -13,7 +13,7 @@ from src.evaluation.fingerprints import DataIdentity
 from src.evaluation.registry import SUPPORTED_CURVES
 from src.evaluation.result_cache import FileLock
 
-LEARNED = ("udnet", "oamp_net2", "icr_mmse")
+LEARNED = ("udnet", "oamp_net2", "crenet")
 ORDER = SUPPORTED_CURVES
 
 
@@ -34,7 +34,7 @@ def _preflight(dataset_path, checkpoints, backend):
             elif name == "oamp_net2":
                 from src.algorithms.oamp_net2.checkpoint import load_model, validate_dataset
             else:
-                from src.algorithms.icr_mmse.checkpoint import load_model, validate_dataset
+                from src.algorithms.crenet.checkpoint import load_model, validate_dataset
             model, payload = load_model(path, backend.device)
             validate_dataset(payload, ds)
             del model, payload
@@ -53,7 +53,7 @@ def evaluate(dataset_path, run, backend, *, checkpoints=None, batch_size=8, cach
     with FileLock(run/".unified_evaluation.lock"):
         guard = DataIdentity({name: Path(dataset_path).parent/name for name in ("test.h5", "model.h5")})
         baseline = comparison.evaluate(dataset_path, run/"baselines", backend, batch_size=batch_size,
-            cache_dir=cache_dir, algorithm_parameters=algorithm_parameters, force=forced-{"icr_mmse"}, input_view=input_view)
+            cache_dir=cache_dir, algorithm_parameters=algorithm_parameters, force=forced-{"crenet"}, input_view=input_view)
         report = dict(baseline, schema="watermark-unified-comparison-v1", smoke=smoke, curves=dict(baseline["curves"]))
         components = {}
         if "udnet" in checkpoints:
@@ -69,17 +69,17 @@ def evaluate(dataset_path, run, backend, *, checkpoints=None, batch_size=8, cach
                 force="all" in forced)
             report["curves"]["OAMP-Net2"] = components["oamp_net2"]["curves"]["OAMP-Net2"]
             report["oamp_net2"] = components["oamp_net2"]["oamp_net2"]
-        if "icr_mmse" in checkpoints:
-            from src.evaluation.icr_cache import evaluate as evaluate_icr
-            components["icr_mmse"] = evaluate_icr(dataset_path, checkpoints["icr_mmse"], run/"icr_mmse", backend,
+        if "crenet" in checkpoints:
+            from src.evaluation.crenet_cache import evaluate as evaluate_crenet
+            components["crenet"] = evaluate_crenet(dataset_path, checkpoints["crenet"], run/"crenet", backend,
                 batch_size=batch_size, cache_dir=cache_dir, bootstrap_samples=bootstrap_samples,
-                force=bool(forced.intersection(("icr_mmse", "all"))))
-            icr = components["icr_mmse"]
-            report["curves"]["ICR-MMSE-Net"] = icr["curves"]["ICR-MMSE-Net"]
-            report["nmse"] = dict(baseline["nmse"], corrected_mean_nmse_db=[r["mean_nmse_db"][-1] for r in icr["per_snr"]])
-            report["icr_mmse"] = dict(checkpoint=icr["checkpoint"], sha256=icr["checkpoint_sha256"],
-                model_config=icr["model_config"], comparison_report=str((run/"icr_mmse/metrics.json").resolve()),
-                evaluation_cache=icr["evaluation_cache"])
+                force=bool(forced.intersection(("crenet", "all"))))
+            crenet = components["crenet"]
+            report["curves"]["CRENet"] = crenet["curves"]["CRENet"]
+            report["nmse"] = dict(baseline["nmse"], corrected_mean_nmse_db=[r["mean_nmse_db"][-1] for r in crenet["per_snr"]])
+            report["crenet"] = dict(checkpoint=crenet["checkpoint"], sha256=crenet["checkpoint_sha256"],
+                model_config=crenet["model_config"], comparison_report=str((run/"crenet/metrics.json").resolve()),
+                evaluation_cache=crenet["evaluation_cache"])
         for name, component in components.items():
             component_data = {key: component["data_identity"].get(key) for key in guard.files}
             if (component_data != guard.files or component["snr_db"] != baseline["snr_db"]
@@ -93,15 +93,15 @@ def evaluate(dataset_path, run, backend, *, checkpoints=None, batch_size=8, cach
         expected_bits = [baseline["bits_per_snr"]]*len(baseline["snr_db"])
         if any(curve["total_bits"] != expected_bits for curve in report["curves"].values()):
             raise RuntimeError("Unified comparison requires equal complete-test bit counts")
-        if "icr_mmse" in components:
-            initial = [row["mean_nmse_db"][0] for row in components["icr_mmse"]["per_snr"]]
+        if "crenet" in components:
+            initial = [row["mean_nmse_db"][0] for row in components["crenet"]["per_snr"]]
             if not np.allclose(initial, report["nmse"]["mean_nmse_db"], rtol=0, atol=2e-5):
-                raise ValueError("ICR input NMSE disagrees with the shared full-matrix CSI definition")
+                raise ValueError("CRENet input NMSE disagrees with the shared full-matrix CSI definition")
         report["curves"] = {name: report["curves"][name] for name in ORDER if name in report["curves"]}
         report["comparison_algorithms"] = list(report["curves"])
         report["checkpoint_paths"] = {name: str(Path(path).resolve()) for name, path in checkpoints.items()}
         report["nmse"]["semantics"] = ("Shared input CSI. dd_mean_nmse_db and corrected_mean_nmse_db, "
-            "when present, score the full corrected CSI of DD-DPSS and ICR-MMSE-Net respectively.")
+            "when present, score the full corrected CSI of DD-DPSS and CRENet respectively.")
         guard.assert_unchanged()
         publish_report(run, report)
         _write_html(run, report)
@@ -113,7 +113,7 @@ def _write_html(run, report):
     rows = "".join("<tr><th>"+html.escape(name)+"</th>"+"".join(f"<td>{v:.6g}</td>" for v in curve["ber"])+"</tr>"
                    for name, curve in report["curves"].items())
     nmse_fields = (("输入 CSI", "mean_nmse_db"), ("DD-DPSS", "dd_mean_nmse_db"),
-                   ("CRU-Net", "corrected_mean_nmse_db"))
+                   ("CRENet", "corrected_mean_nmse_db"))
     nmse_rows = "".join(f"<tr><th>{label}</th>"+"".join(f"<td>{v:.3f}</td>" for v in report["nmse"][field])+"</tr>"
                         for label, field in nmse_fields if field in report["nmse"])
     body = f'''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>{report['channel']} 均衡算法对比</title>

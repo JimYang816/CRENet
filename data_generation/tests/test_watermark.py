@@ -9,13 +9,13 @@ from scipy.io import savemat
 from data_generation.src.config import ROOT
 from data_generation.src.pdd import load_pdd_config
 from data_generation.src.dataset.compact_protocol import physical_identities
-from data_generation.src.channel.watermark import WatermarkArchive
+from data_generation.src.channel.watermark.replay import WatermarkArchive
 
 
 def test_nof1_changes_only_channel_configuration():
     original = load_pdd_config()
     assert original.pop("channel") == "NCS1"
-    nof1 = load_pdd_config(ROOT/"configs/data/nof1_pddp.json")
+    nof1 = load_pdd_config(ROOT/"configs/data/nof1/pddp.json")
     assert nof1.pop("channel") == "NOF1"
     assert nof1 == original
     assert len(physical_identities(nof1, "test"))*2 == 300

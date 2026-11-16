@@ -19,30 +19,35 @@ class Algorithm:
 MATRIX = ("src.algorithms.likelihood:make_whitener", "src.algorithms.likelihood:likelihood_batch",
           "src.algorithms.likelihood:batch_likelihood")
 ALGORITHMS = (
-    Algorithm("single_tap_mmse", "Single-tap LMMSE", "src.algorithms.MMSE.single_tap"),
-    Algorithm("full_matrix_lmmse", "Full-matrix LMMSE", "src.algorithms.MMSE.full_matrix", MATRIX),
+    Algorithm("single_tap_mmse", "Single-tap LMMSE", "src.algorithms.single_tap_mmse.equalizer"),
+    Algorithm("full_matrix_lmmse", "Full-matrix LMMSE", "src.algorithms.full_matrix_lmmse.equalizer", MATRIX),
 )
 # Keep the original defaults for callers producing the historical two-MMSE
 # report. The unified experiment explicitly enables the other baselines.
 OPTIONAL_ALGORITHMS = (
     Algorithm("mmse_dfe", "MMSE-DFE", "src.algorithms.mmse_dfe.detector", MATRIX),
     Algorithm("dd_ce_lmmse", "DD-DPSS", "src.algorithms.dd_ce_lmmse.detector",
-              MATRIX+("src.algorithms.MMSE.full_matrix", "src.evaluation.dd_ce")),
+              MATRIX+("src.algorithms.full_matrix_lmmse.equalizer", "src.evaluation.dd_ce")),
 )
 AVAILABLE_ALGORITHMS = ALGORITHMS+OPTIONAL_ALGORITHMS
 CURVES = tuple(a.label for a in ALGORITHMS)
 IDENTIFIERS = tuple(a.identifier for a in AVAILABLE_ALGORITHMS)
-SUPPORTED_CURVES = tuple(a.label for a in AVAILABLE_ALGORITHMS)+("UDNet", "OAMP-Net2", "ICR-MMSE-Net")
+SUPPORTED_CURVES = tuple(a.label for a in AVAILABLE_ALGORITHMS)+("UDNet", "OAMP-Net2", "CRENet")
 
 
 def normalize_report_labels(report):
     """Translate historical display names without changing numerical provenance."""
-    aliases = {"Single-tap MMSE": ALGORITHMS[0].label}
+    aliases = {"Single-tap MMSE": ALGORITHMS[0].label,
+               "ICR-MMSE-Net": "CRENet", "ICR-MMSE": "CRENet", "CRU-Net": "CRENet"}
     curves = {}
     for name, curve in report.get("curves", {}).items():
         label = aliases.get(name, name)
         if label in curves:
             raise ValueError(f"Duplicate report curve after label normalization: {label}")
+        # Historical reports retain their original numerical provenance. Only
+        # normalize the display label and public detector identifier on read.
+        if curve.get("identifier") == "icr_mmse":
+            curve = dict(curve, identifier="crenet")
         curves[label] = curve
     normalized = dict(report, curves=curves)
     if "comparison_algorithms" in report:

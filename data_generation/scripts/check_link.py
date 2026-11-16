@@ -6,7 +6,7 @@ import numpy as np
 from threadpoolctl import threadpool_limits
 
 from data_generation.src.pdd import load_pdd_config
-from data_generation.src.channel.watermark import WatermarkArchive
+from data_generation.src.channel.watermark.replay import WatermarkArchive
 from data_generation.src.receiver.chain import ReceiverChain
 from data_generation.src.transmitter.ofdm import make_frame, overhead
 
