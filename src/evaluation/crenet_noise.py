@@ -21,19 +21,6 @@ from src.evaluation.crenet import RecordMetrics, _initial_nmse, _record_disjoint
 from src.evaluation.result_cache import FileLock
 
 
-class _FrameSubset:
-    """Read-only input view; exported batch keys are mapped back before scoring."""
-    def __init__(self, source, indices):
-        self.source, self.indices = source, indices
-        self.frame_count = len(indices)
-
-    def __getattr__(self, name):
-        return getattr(self.source, name)
-
-    def model_input(self, snr_index, frame_index):
-        return self.source.model_input(snr_index, self.indices[frame_index])
-
-
 def _sample_batches(dataset, indices, **options):
     yield from input_batches(dataset, frame_indices=indices, **options)
 
