@@ -37,6 +37,8 @@ python -m scripts.evaluate.crenet_training_perf --channel NOF1 --device cuda \
 
 两项运算重排允许浮点舍入差异，不能声称逐位相同。调用 `prepare_frozen_inference(model, cache_static_correction=False, reuse_correction_residual=False)` 可保留优化前的冻结部署路径；切换选项须重新加载同一检查点。旧训练源码身份检查继续生效。
 
+正式2026-10-31检查点还早于提交 `027ae0e`：该提交只向 `numerics.py` 新增自动选择设备的函数，未改变数值算子。兼容校验明确列举该版本的完整源码指纹及改名后指纹，不忽略不匹配项，也不改写历史检查点。
+
 ```bash
 python -m scripts.evaluate.crenet_inference_optimization \
   --output outputs/experiment/crenet_inference_optimization_<run_id> \

@@ -36,8 +36,15 @@ RENAMED_INFERENCE_CODE = {
     "src.evaluation.inputs": "f63f75dbbc2c69324d9828bb31f57291c959acb04526f9e18e6447d5b1fe3bc8",
 }
 
+# The formal 2026-10-31 weights predate 027ae0e, whose only numerics.py
+# change adds default_device(). DenseBackend and all numerical operators are
+# identical. Bind this second complete historical identity explicitly; never
+# ignore a mismatched hash or rewrite the checkpoint on disk.
+FORMAL_INFERENCE_CODE = dict(LEGACY_INFERENCE_CODE, **{
+    "src.common.numerics": "c43dc2516064c33be1b209c3edf521e33ce51116465fdfafbbcea2b26cf04690"})
+
 
 def matches_renamed_checkpoint(payload, current_code):
     return (payload.get("schema") == LEGACY_SCHEMA
-            and payload.get("inference_code") == LEGACY_INFERENCE_CODE
+            and payload.get("inference_code") in (LEGACY_INFERENCE_CODE, FORMAL_INFERENCE_CODE)
             and current_code == RENAMED_INFERENCE_CODE)

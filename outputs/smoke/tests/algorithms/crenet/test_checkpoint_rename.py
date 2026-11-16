@@ -7,14 +7,15 @@ torch = pytest.importorskip("torch")
 from src.algorithms.crenet import CRENet, FEEDBACK_LAYOUT
 from src.algorithms.crenet import checkpoint
 from src.algorithms.crenet.legacy_identity import (
-    LEGACY_INFERENCE_CODE, LEGACY_SCHEMA, RENAMED_INFERENCE_CODE,
+    LEGACY_INFERENCE_CODE, FORMAL_INFERENCE_CODE, LEGACY_SCHEMA, RENAMED_INFERENCE_CODE,
 )
 
 
-def test_legacy_checkpoint_requires_both_exact_code_identities_and_view(tmp_path, monkeypatch):
+@pytest.mark.parametrize("historical_code", [LEGACY_INFERENCE_CODE, FORMAL_INFERENCE_CODE])
+def test_legacy_checkpoint_requires_both_exact_code_identities_and_view(tmp_path, monkeypatch, historical_code):
     assert checkpoint.source_fingerprint(checkpoint.INFERENCE_CODE) == RENAMED_INFERENCE_CODE
     model = CRENet(layers=1)
-    payload = dict(schema=LEGACY_SCHEMA, inference_code=LEGACY_INFERENCE_CODE.copy(),
+    payload = dict(schema=LEGACY_SCHEMA, inference_code=historical_code.copy(),
                    input_view="compensated", feedback_layout=FEEDBACK_LAYOUT,
                    training_scope="one_channel_all_snr_D1_D2",
                    model_config=model.config, model=model.state_dict())
@@ -28,12 +29,12 @@ def test_legacy_checkpoint_requires_both_exact_code_identities_and_view(tmp_path
     with pytest.raises(ValueError, match="identity mismatch"):
         checkpoint.load_model(path)
     payload["input_view"] = "compensated"
-    payload["inference_code"] = dict(LEGACY_INFERENCE_CODE, **{"src.common.numerics": "different"})
+    payload["inference_code"] = dict(historical_code, **{"src.common.numerics": "different"})
     torch.save(payload, path)
     with pytest.raises(ValueError, match="identity mismatch"):
         checkpoint.load_model(path)
 
-    payload["inference_code"] = LEGACY_INFERENCE_CODE.copy()
+    payload["inference_code"] = historical_code.copy()
     torch.save(payload, path)
     monkeypatch.setattr(checkpoint, "source_fingerprint", lambda _: {"modified": "source"})
     with pytest.raises(ValueError, match="identity mismatch"):
