@@ -1,16 +1,77 @@
 """Exact inference preparation for frozen residual-unfolding parameters.
 
-Training/checkpoint modules stay unchanged. The prepared model is for inference
-only: activated scalar parameters are cached and exactly zero classifier heads
-are omitted. No input-dependent computation or learned weight is approximated.
+Training/checkpoint modules stay unchanged. Static correction convolutions are
+cached only within one forward, and corrected residuals reuse the previous
+residual plus the exact band increment. These algebraic rearrangements can
+change floating-point rounding; the two switches retain the old deployment
+path for numerical and timing comparisons. No learned weight is approximated.
 """
 from __future__ import annotations
+
+import math
+from types import MethodType
 
 import torch
 from torch import nn
 from torch.nn import functional
 
-from src.algorithms.crenet.model import BudgetedMMSELayer, _real_pair
+from src.algorithms.crenet.model import (BudgetedMMSELayer, CRENet, CRENetOutput, CSIFeedback, _real_pair)
+from src.algorithms.crenet.operators import BandChannel, band_indices
+from src.algorithms.crenet.dpss import DPSSChannel, base_local
+
+
+def _feedback_from_residual(initial_channel, channel, residual, mean, variance,
+                            data_mask, pilot_mask, *, use_uncertainty):
+    """Same 14 physical features, accepting an already normalized residual.
+
+    Form the shared residual in original channel units before normalization.
+    This avoids amplifying rounding by scaling a subtracted residual back up.
+    """
+    batch, size, _ = initial_channel.shape
+    columns, valid = band_indices(size, channel.bandwidth, initial_channel.device)
+    h0, ht = base_local(initial_channel, channel.bandwidth), channel.local_entries()
+    xj = mean[:, columns]
+    vj = variance[:, columns] if use_uncertainty else torch.zeros_like(variance[:, columns])
+    masks = [mask[columns].to(variance.dtype)[None].expand(batch, -1, -1)[..., None]
+             for mask in (data_mask, pilot_mask)]
+    features = torch.cat((_real_pair(h0), _real_pair(ht), _real_pair(xj), vj[..., None],
+        _real_pair(residual[..., None]*xj.conj()), _real_pair(ht*vj), *masks,
+        valid.to(variance.dtype)[None, ..., None].expand(batch, -1, -1, -1)), -1)
+    return CSIFeedback(features*valid[None, ..., None], _real_pair(residual))
+
+
+class FrozenCSICorrector(nn.Module):
+    """Split conv1 before its nonlinearity, retaining all original parameters."""
+
+    def __init__(self, corrector, forward_cache):
+        super().__init__()
+        self.width = corrector.width
+        self.conv1, self.conv2, self.head = corrector.conv1, corrector.conv2, corrector.head
+        self._forward_cache = forward_cache
+        # Flattening is offset-major: initial CSI (2), masks (3), then noise (3).
+        static = [14*k+j for k in range(self.width) for j in (0, 1, 11, 12, 13)]
+        static += list(range(14*self.width+2, 14*self.width+5))
+        dynamic = [i for i in range(14*self.width+5) if i not in static]
+        for name, indices in (("static", static), ("dynamic", dynamic)):
+            index = torch.tensor(indices, device=self.conv1.weight.device)
+            self.register_buffer(name+"_indices", index, persistent=False)
+            self.register_buffer(name+"_weight", self.conv1.weight.index_select(1, index), persistent=False)
+
+    def forward(self, feedback, noise_features):
+        if self.training:
+            raise RuntimeError("Prepared correction layers cannot be trained")
+        features = torch.cat((feedback.offsets.flatten(-2), feedback.residual, noise_features), -1)
+        features = features.transpose(1, 2).to(self.conv1.weight.dtype)
+        shared = self._forward_cache
+        if "correction_static" not in shared:
+            shared["correction_static"] = functional.conv1d(
+                features.index_select(1, self.static_indices), self.static_weight, self.conv1.bias, padding=1)
+        dynamic = functional.conv1d(features.index_select(1, self.dynamic_indices),
+                                    self.dynamic_weight, padding=1)
+        hidden = functional.silu(shared["correction_static"]+dynamic)
+        output = self.head(functional.silu(self.conv2(hidden))).transpose(1, 2)
+        real, imaginary, gate = output.split(self.width, dim=-1)
+        return torch.complex(real, imaginary), gate.sigmoid()
 
 
 class FrozenBudgetedMMSELayer(nn.Module):
@@ -54,7 +115,8 @@ class FrozenBudgetedMMSELayer(nn.Module):
                 null_mask, positions, rf_variance, covariance_factor, constellation,
                 use_uncertainty=True, covariance_diagonal=None, column_weights=None,
                 base_column_energy=None, return_diagnostics=True,
-                previous_log_probabilities=None, return_log_probabilities=False):
+                previous_log_probabilities=None, return_log_probabilities=False,
+                precomputed_residual=None):
         if self.training:
             raise RuntimeError("Prepared unfolding layers cannot be trained")
         if covariance_diagonal is None:
@@ -74,7 +136,8 @@ class FrozenBudgetedMMSELayer(nn.Module):
         regularizer = rf_variance+loading
         denominator = diagonal+regularizer[:, None]
         data_mean = mean*data_mask
-        residual = observations-channel.matvec(data_mean+known)
+        residual = (observations-channel.matvec(data_mean+known)
+                    if precomputed_residual is None else precomputed_residual)
         weighted_residual = solve_cov(residual)
         matched_residual = channel.adjoint(weighted_residual)*data_mask
         gradient = matched_residual-regularizer[:, None]*data_mean
@@ -122,7 +185,118 @@ class FrozenBudgetedMMSELayer(nn.Module):
         return (*result, logp) if return_log_probabilities else result
 
 
-def prepare_frozen_inference(model):
+def _residual_reuse_forward(self, observations, initial_channel, known, data_mask, pilot_mask, null_mask,
+                           carrier_positions, rf_variance, unit_covariance, *, correction_enabled=True,
+                           detach_feedback=False, return_diagnostics=True, reuse_base_energy=True):
+    """Frozen dense orchestration; keep CRENet.forward as the checkpoint oracle.
+
+    The input checks, normalizations and state updates mirror that oracle. Only
+    the post-correction residual is passed explicitly to the prepared detector.
+    Non-correcting and DPSS paths retain the original implementation.
+    """
+    if self.training:
+        raise RuntimeError("Prepared unfolding layers cannot be trained")
+    if (not correction_enabled or self.config["correction_mode"] == "fixed"
+            or isinstance(initial_channel, DPSSChannel)):
+        return CRENet.forward(self, observations, initial_channel, known, data_mask, pilot_mask, null_mask,
+            carrier_positions, rf_variance, unit_covariance, correction_enabled=correction_enabled,
+            detach_feedback=detach_feedback, return_diagnostics=return_diagnostics,
+            reuse_base_energy=reuse_base_energy)
+    if (initial_channel.ndim != 3 or initial_channel.shape[-1] != initial_channel.shape[-2]
+            or observations.shape != initial_channel.shape[:2] or not initial_channel.is_complex()
+            or observations.dtype != initial_channel.dtype or observations.device != initial_channel.device):
+        raise ValueError("Expected matching complex batched observations and full square initial CSI")
+    initial_channel = initial_channel.to(dtype=self.constellation.dtype)
+    observations = observations.to(dtype=self.constellation.dtype)
+    rf_variance = rf_variance.to(device=initial_channel.device, dtype=observations.real.dtype)
+    batch, size = observations.shape
+    for mask in (data_mask, pilot_mask, null_mask):
+        if mask.shape != (size,) or mask.dtype != torch.bool or mask.device != observations.device:
+            raise ValueError("Masks must be boolean vectors on the input device")
+    if not torch.all(data_mask.to(torch.int8)+pilot_mask+null_mask == 1):
+        raise ValueError("Data, pilot and null masks must form a disjoint full physical grid")
+    if (carrier_positions.shape != (size,) or unit_covariance.shape != (size, size)
+            or rf_variance.shape != (batch,) or not torch.isfinite(rf_variance).all()
+            or torch.any(rf_variance < 0) or not torch.isfinite(initial_channel).all()
+            or not torch.isfinite(observations).all()):
+        raise ValueError("Invalid physical carrier/noise/channel inputs")
+    if known.shape == (size,):
+        known = known[None].expand(batch, -1)
+    if known.shape != observations.shape or not torch.isfinite(known).all():
+        raise ValueError("Known symbols must have shape [N] or [batch,N]")
+    known = known.to(device=initial_channel.device, dtype=initial_channel.dtype)*pilot_mask
+    real_dtype = observations.real.dtype
+    diagonal = unit_covariance.diagonal().real.to(device=initial_channel.device, dtype=real_dtype).clamp_min(1e-20)
+    column_weights = diagonal.reciprocal()
+    shared_energy = ((initial_channel.abs().square()*column_weights[..., None]).sum(-2)
+                     if reuse_base_energy else None)
+    covariance_factor = None
+    if self.config["noise_mode"] == "full":
+        covariance = unit_covariance.to(device=initial_channel.device, dtype=initial_channel.dtype)
+        covariance_factor = self._noise_factor(covariance, initial_channel.dtype, initial_channel.device)
+        covariance_factor = covariance_factor[None].expand(batch, -1, -1)
+    scale = initial_channel.abs().square().sum(-1).mean(-1).sqrt().clamp_min(1e-12)
+    entry_scale = scale/math.sqrt(size)
+    normalized_initial = initial_channel/scale[:, None, None]
+    normalized_noise = rf_variance/scale.square()
+    noise_features = torch.stack((torch.log1p(normalized_noise)[:, None].expand(-1, size),
+        torch.log(diagonal)[None].expand(batch, -1),
+        (carrier_positions.to(real_dtype)/max(size, 1))[None].expand(batch, -1)), -1)
+    bands = torch.zeros(batch, size, 2*self.config["bandwidth"]+1,
+                        dtype=initial_channel.dtype, device=initial_channel.device)
+    columns, valid = band_indices(size, self.config["bandwidth"], initial_channel.device)
+    mean = known
+    variance = data_mask.to(real_dtype)[None].expand(batch, -1)
+    probabilities, states, variances, channels, diagnostics, log_states = [], [], [], [], [], []
+    previous_log = observations.real.new_full((*observations.shape, 4), -math.log(4))
+    for index, equalizer in enumerate(self.equalizers):
+        # Preparation requires frozen weights; detach still preserves the API.
+        feedback_mean = mean.detach() if detach_feedback else mean
+        feedback_variance = variance.detach() if detach_feedback else variance
+        should_correct = self.config["correction_mode"] == "iterative" or index == 0
+        residual = None
+        passes = self.config["correction_passes"] if index == 0 else 1
+        if should_correct:
+            for correction_pass in range(passes):
+                normalized_channel = BandChannel(normalized_initial, bands/scale[:, None, None])
+                raw_residual = observations-BandChannel(initial_channel, bands).matvec(feedback_mean)
+                feedback = _feedback_from_residual(normalized_initial, normalized_channel, raw_residual/scale[:, None],
+                    feedback_mean, feedback_variance, data_mask, pilot_mask,
+                    use_uncertainty=self.config["use_uncertainty"])
+                increment, gate = self.corrector(feedback, noise_features)
+                if not self.config["use_gate"]:
+                    gate = torch.ones_like(gate)
+                eta_index = min(index+correction_pass, len(self.equalizers)-1)
+                old_bands = bands
+                bands = bands+self.damping[eta_index]*(increment*gate).to(initial_channel.dtype)*entry_scale[:, None, None]*valid
+                # Use the actual stored difference, including addition rounding.
+                delta_prediction = ((bands-old_bands)*feedback_mean[:, columns]*valid).sum(-1)
+                residual = raw_residual-delta_prediction
+        channel = BandChannel(initial_channel, bands)
+        for repeat in range(self.config["equalizer_repeats"]):
+            if repeat:
+                feedback_mean = mean.detach() if detach_feedback else mean
+                feedback_variance = variance.detach() if detach_feedback else variance
+                residual = None  # A changed soft state needs a new channel action.
+            p, mean, variance, detail, previous_log = equalizer(channel, observations, known, feedback_mean,
+                feedback_variance, data_mask, pilot_mask, null_mask, carrier_positions, rf_variance,
+                covariance_factor, self.constellation.to(initial_channel.dtype),
+                use_uncertainty=self.config["use_uncertainty"], covariance_diagonal=diagonal,
+                column_weights=column_weights, base_column_energy=shared_energy,
+                return_diagnostics=return_diagnostics,
+                previous_log_probabilities=previous_log.detach() if detach_feedback else previous_log,
+                return_log_probabilities=True, precomputed_residual=residual)
+        probabilities.append(p)
+        states.append(mean)
+        variances.append(variance)
+        channels.append(channel)
+        diagnostics.append(detail)
+        log_states.append(previous_log)
+    return CRENetOutput(torch.stack(probabilities, 1), torch.stack(states, 1), torch.stack(variances, 1),
+                        tuple(channels), tuple(diagnostics), log_probabilities=torch.stack(log_states, 1))
+
+
+def prepare_frozen_inference(model, *, cache_static_correction=True, reuse_correction_residual=True):
     """Prepare an already frozen model in place; do not save it as a checkpoint.
 
     Call after load_model and device/dtype selection. Loading the original
@@ -131,9 +305,19 @@ def prepare_frozen_inference(model):
     if model.training or any(p.requires_grad for p in model.parameters()):
         raise ValueError("Inference preparation requires eval mode and frozen weights")
     if model.config["detector_mode"] == "budgeted":
+        options = (cache_static_correction, reuse_correction_residual)
+        if hasattr(model, "_frozen_options"):
+            if model._frozen_options != options:
+                raise ValueError("Load a fresh model to change frozen inference options")
+            return model
+        model._frozen_options = options
         if not hasattr(model, "_budgeted_forward_cache"):
             model._budgeted_forward_cache = {}
             model.register_forward_pre_hook(lambda owner, args: owner._budgeted_forward_cache.clear())
         model.equalizers = nn.ModuleList(FrozenBudgetedMMSELayer(layer, model._budgeted_forward_cache).eval()
             if type(layer) is BudgetedMMSELayer else layer for layer in model.equalizers)
+        if cache_static_correction:
+            model.corrector = FrozenCSICorrector(model.corrector, model._budgeted_forward_cache).eval()
+        if reuse_correction_residual:
+            model.forward = MethodType(_residual_reuse_forward, model)
     return model

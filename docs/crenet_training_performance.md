@@ -27,3 +27,22 @@ python -m scripts.evaluate.crenet_training_perf --channel NOF1 --device cuda \
 该历史复核中的NOF1与NCS1均执行局部神经网络。NCS1预算余量较小，其他设备或配置应重新测量；固定CSI的单次完整矩阵LMMSE仍快于8层展开。预算基准是原Unfolding。NOF1原22层、修复版8层，不能把该表当作等深度的正式A–D消融。
 
 完整效率入口 `scripts.evaluate.crenet_efficiency` 默认测量七种算法，接受明确的数据、正式比较报告及三个学习检查点，每算法独立进程测量，并记录初始化、稳态、参数量和峰值内存；当前正式路径的完整命令见 [CRENet说明第6节](crenet.md#6-验证与运行)。性能实验至少输出BER–SNR及平均NMSE–SNR，原始报告和不满足预期的指标均保留。
+
+## 冻结推理的等价优化
+
+`prepare_frozen_inference` 默认在既有标量/窗口缓存上增加两项优化，训练模型、配置及检查点权重不变：
+
+- 共享 CSI 修正器第一层卷积的 467 个通道中，168 个通道在单次 forward 内不变。其卷积贡献只计算一次，与每轮动态贡献相加后再激活。缓存每次 forward 都清空，不跨样本、SNR 或 D 块复用。
+- CSI 修正后的残差由修正前残差减去实际带状增量作用得到。仍保留全部初始 CSI 耦合；均衡器重复执行且软状态已变时重新计算残差。
+
+两项运算重排允许浮点舍入差异，不能声称逐位相同。调用 `prepare_frozen_inference(model, cache_static_correction=False, reuse_correction_residual=False)` 可保留优化前的冻结部署路径；切换选项须重新加载同一检查点。旧训练源码身份检查继续生效。
+
+```bash
+python -m scripts.evaluate.crenet_inference_optimization \
+  --output outputs/experiment/crenet_inference_optimization_<run_id> \
+  --device cuda --batch-size 2 --threads 4 --repeats 11
+```
+
+该入口默认比较两信道当前正式联合权重。先在完整验证集检查所有层的概率、log概率、软符号、方差和 CSI 增量，再在完整测试集逐 SNR 比较 BER、完整矩阵平均 NMSE 与硬判决差异，输出 BER–SNR 和 NMSE–SNR 图。数值容限在评测前固定为 `atol=rtol=2e-5`，同时保存实际最大误差，不以容限替代精度指标。
+
+计时另用各 SNR、D1/D2 的真实验证输入，预热3轮、轮换实现顺序并取11轮中位数，分别报告原路径、仅静态缓存、仅残差复用和两者启用。纯前向包含八层全部计算与每次样本缓存准备；重建加前向另计主机到设备传输及既有完整 CSI 重建。两者均排除磁盘读取、模型加载与监督评分，不能与包含磁盘读取的旧报告混用。结果记录检查点、数据、源码身份、数值精度和设备设置。

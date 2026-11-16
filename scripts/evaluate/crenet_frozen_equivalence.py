@@ -40,6 +40,8 @@ def main():
         validate_dataset(payload, ds)
         optimized = prepare_frozen_inference(copy.deepcopy(model))
         batches, blocks = 0, 0
+        maximum_errors = {key: 0. for key in ("probabilities", "log_probabilities", "symbols", "variances", "bands")}
+        atol, rtol = (2e-5, 2e-5) if model.config["precision"] == "complex64" else (1e-12, 1e-12)
         for cpu, keys in dense_input_batches(ds, batch_size=2, frame_indices=[0],
             precision=model.config["precision"], reference_cache=ReferenceCache(64*2**20)):
             source = cpu.pop("initial_channel")
@@ -49,16 +51,20 @@ def main():
             expected = model(**inputs, return_diagnostics=False)
             actual = optimized(**inputs, return_diagnostics=False)
             for key in ("probabilities", "log_probabilities", "symbols", "variances", "bands"):
-                torch.testing.assert_close(getattr(actual, key), getattr(expected, key), rtol=0, atol=0)
+                left, right = getattr(actual, key), getattr(expected, key)
+                torch.testing.assert_close(left, right, rtol=rtol, atol=atol)
+                maximum_errors[key] = max(maximum_errors[key], float((left-right).abs().max()))
             batches += 1
             blocks += len(keys)
         guard.assert_unchanged()
-        report = dict(complete=True, bitwise_equal=True, test_access=False, batches=batches, blocks=blocks,
+        report = dict(complete=True, bitwise_equal=all(value == 0 for value in maximum_errors.values()),
+            allclose=True, atol=atol, rtol=rtol, max_absolute_errors=maximum_errors,
+            test_access=False, batches=batches, blocks=blocks,
             snr_db=ds.snr_db.tolist(), deterministic=True, purpose="equivalence only, not latency",
             checkpoint_sha256=file_sha256(args.checkpoint), data_identity=guard.files,
             source=source_fingerprint(EVALUATION_CODE), torch=str(torch.__version__), device=args.device)
         write_json(args.output, report)
-        print(f"{ds.channel}: {blocks} real validation blocks, all SNRs, bitwise equal", flush=True)
+        print(f"{ds.channel}: {blocks} real validation blocks, all SNRs, numerically equivalent; {maximum_errors}", flush=True)
 
 
 if __name__ == "__main__":
