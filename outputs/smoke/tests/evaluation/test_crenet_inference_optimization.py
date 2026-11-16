@@ -38,6 +38,7 @@ def test_paired_pipeline_preserves_checkpoint_and_writes_both_curves(tmp_path):
         assert result["complete"] and all(result["validation_allclose"].values()) and all(result["test_allclose"].values())
         assert checkpoint.read_bytes() == original
         assert result["learned_weights_unchanged"]
+        assert result["default_variant"] == "before"
         assert all(value == 0 for value in result["final_decision_disagreements"].values())
         assert result["mean_ber"]["before"] == result["mean_ber"]["both"]
         for split in ("validation", "test"):

@@ -42,10 +42,10 @@ def main():
                     args.trained_root/"joint"/channel.lower()/"icr_mmse.pt", args.output/channel.lower(),
                     device=args.device, batch_size=args.batch_size, repeats=args.repeats,
                     validation_frames=args.validation_frames, test_frames=args.test_frames)
-            passed = all(report["default_numerical_checks_passed"] for report in reports.values())
-            write_json(args.output/"summary.json", dict(complete=True, default_numerical_checks_passed=passed, channels=reports))
+            passed = all(report["candidate_numerical_checks_passed"] for report in reports.values())
+            write_json(args.output/"summary.json", dict(complete=True, candidate_numerical_checks_passed=passed, channels=reports))
             write_json(args.output/"status.json", dict(phase="completed", channels=args.channels,
-                                                       default_numerical_checks_passed=passed))
+                                                       candidate_numerical_checks_passed=passed))
         except Exception as error:
             write_json(args.output/"status.json", dict(phase="failed", error=repr(error)))
             raise

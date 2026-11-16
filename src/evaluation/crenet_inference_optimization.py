@@ -305,8 +305,9 @@ def run_channel(directory, checkpoint, output, *, device="cpu", batch_size=2, re
     if source_fingerprint(CODE) != code:
         raise RuntimeError("Source changed during paired evaluation")
     selected = "residual_only"
-    result = dict(complete=True, channel=test["channel"], learned_weights_unchanged=True, default_variant=selected,
-        default_numerical_checks_passed=validation["numerical"]["allclose"][selected] and test["numerical"]["allclose"][selected],
+    result = dict(complete=True, channel=test["channel"], learned_weights_unchanged=True,
+        default_variant="before", candidate_variant=selected,
+        candidate_numerical_checks_passed=validation["numerical"]["allclose"][selected] and test["numerical"]["allclose"][selected],
         validation_allclose=validation["numerical"]["allclose"], test_allclose=test["numerical"]["allclose"],
         test_blocks=test["blocks"], final_decision_disagreements={name: sum(r["final_decision_disagreements"] for r in rows)
                                                                for name, rows in test["differences"].items()},

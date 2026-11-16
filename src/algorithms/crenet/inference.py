@@ -311,11 +311,13 @@ def _residual_reuse_forward(self, observations, initial_channel, known, data_mas
                         tuple(channels), tuple(diagnostics), log_probabilities=torch.stack(log_states, 1))
 
 
-def prepare_frozen_inference(model, *, cache_static_correction=False, reuse_correction_residual=True):
+def prepare_frozen_inference(model, *, cache_static_correction=False, reuse_correction_residual=False):
     """Prepare an already frozen model in place; do not save it as a checkpoint.
 
     Call after load_model and device/dtype selection. Loading the original
     checkpoint afresh always restores the trainable representation.
+    Both rearrangements remain opt-in: full-data FP32 soft-state checks exceed
+    the preset tolerance for rare samples even when BER is unchanged.
     """
     if model.training or any(p.requires_grad for p in model.parameters()):
         raise ValueError("Inference preparation requires eval mode and frozen weights")

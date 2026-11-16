@@ -30,8 +30,8 @@ def test_preparation_preserves_predictions_on_distinct_inputs(noise_mode, learne
     batches[1]["observations"] *= .7
     with torch.inference_mode():
         expected = [model(**batch) for batch in batches]
-        prepare_frozen_inference(model, cache_static_correction=False, reuse_correction_residual=False)
-        prepare_frozen_inference(model, cache_static_correction=False, reuse_correction_residual=False)
+        prepare_frozen_inference(model)
+        prepare_frozen_inference(model)  # The production default remains bitwise equivalent.
         for batch, ref in zip(batches, expected):
             actual = model(**batch)
             for name in ("probabilities", "log_probabilities", "symbols", "variances", "bands"):
@@ -111,7 +111,7 @@ def test_residual_reuse_counts_and_control_paths(monkeypatch, mode, passes, repe
         expected = model(**item, correction_enabled=enabled)
         before = count[0]
         count[0] = 0
-        prepare_frozen_inference(model)
+        prepare_frozen_inference(model, cache_static_correction=True, reuse_correction_residual=True)
         actual = model(**item, correction_enabled=enabled)
         savings = 3 if mode == "iterative" and enabled else 1 if mode == "once" and enabled else 0
         assert count[0] == before-savings

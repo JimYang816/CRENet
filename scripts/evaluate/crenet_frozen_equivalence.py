@@ -46,7 +46,8 @@ def main():
             model = CRENet(**dict(model.config, precision="complex128")).to(args.device)
             model.load_state_dict(payload["model"], strict=True)
             model.eval().requires_grad_(False)
-        optimized = prepare_frozen_inference(copy.deepcopy(model), cache_static_correction=args.static)
+        optimized = prepare_frozen_inference(copy.deepcopy(model), cache_static_correction=args.static,
+                                             reuse_correction_residual=True)
         batches, blocks = 0, 0
         maximum_errors = {key: 0. for key in ("probabilities", "log_probabilities", "symbols", "variances", "bands")}
         atol, rtol = (1e-4, 1e-4) if model.config["precision"] == "complex64" else (1e-12, 1e-12)
