@@ -85,7 +85,7 @@ python -m data_generation.scripts.pdd all --smoke --config configs/data/nof1/pdd
 
 `fetch_watermark`仅从FFI官方WatermarkV1链接下载，分段续传、校验HTTP范围/长度和两信道120个ZIP成员CRC，保存源包SHA256。完整源包放在`data/raw/watermark/WatermarkV1.zip`。本地只用少量记录和CPU；smoke保留正式DPSS及7个SNR，但每集合一个窗口，测试两个重复，结果明确标记smoke。
 
-本地验证并提交推送后，服务器`ssh lab448`，目录`/home/fay/JimYang/EPNet`。先检查GPU/内存/磁盘，再执行：
+本地验证并提交推送后，服务器`ssh lab448`，目录`/home/fay/JimYang/CRENet`。先检查GPU/内存/磁盘，再执行：
 
 ```bash
 git pull --ff-only

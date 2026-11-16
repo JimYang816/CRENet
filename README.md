@@ -7,7 +7,7 @@ DD-DPSS、UDNet、OAMP-Net2 和 CRENet；CRENet 默认采用 8 层联合 CSI 修
 ## 文件目录结构
 
 ```text
-EPNet/
+CRENet/
 ├── configs/
 │   ├── data/                 # ncs1/、nof1/ 固定数据生成配置
 │   ├── training/             # CRENet、UDNet、OAMP-Net2 训练配置

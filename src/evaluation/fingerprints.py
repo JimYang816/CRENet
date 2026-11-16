@@ -112,7 +112,7 @@ def generation_origin(run, backend, batch_size):
             return subprocess.check_output(["git", *args], cwd=ROOT, text=True, stderr=subprocess.DEVNULL).strip()
         except (OSError, subprocess.CalledProcessError):
             return None
-    frozen_commit = os.environ.get("EPNET_FROZEN_COMMIT")
+    frozen_commit = os.environ.get("CRENET_FROZEN_COMMIT") or os.environ.get("EPNET_FROZEN_COMMIT")
     return dict(id=uuid.uuid4().hex, created_at=datetime.now(timezone.utc).isoformat(),
                 commit=frozen_commit or git("rev-parse", "HEAD"), dirty=False if frozen_commit else bool(git("status", "--porcelain")),
                 run=str(Path(run).resolve()), batch_size=batch_size, device=backend.device,

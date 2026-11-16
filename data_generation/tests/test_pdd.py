@@ -194,7 +194,8 @@ def test_pddp_config_rejects_old_frame_contract(tmp_path):
         load_pdd_config(path)
 
 
-@pytest.mark.skipif(os.environ.get("EPNET_TEST_CUDA") != "1", reason="Enable explicitly on the GPU server")
+@pytest.mark.skipif(os.environ.get("CRENET_TEST_CUDA", os.environ.get("EPNET_TEST_CUDA")) != "1",
+                    reason="Enable explicitly on the GPU server")
 def test_pdd_cuda_matches_independent_cpu_estimator():
     outputs = []
     for device in ("cpu", "cuda"):

@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import ast
 import sys
+from types import SimpleNamespace
 
 import pytest
 
 from src.evaluation.fingerprints import normalized_source
+from src.evaluation import fingerprints
 
 
 def test_python310_function_identity_on_newer_python():
@@ -24,6 +26,16 @@ def test_python310_class_identity_on_newer_python():
 def test_computation_changes_still_invalidate_source():
     assert normalized_source("x = 1") != normalized_source("x = 2")
     assert normalized_source("def x(a):\n return a") != normalized_source("def x(a):\n return -a")
+
+
+def test_renamed_frozen_commit_environment_keeps_legacy_compatibility(monkeypatch, tmp_path):
+    monkeypatch.setattr(fingerprints, "threadpool_info", lambda: [])
+    monkeypatch.setenv("EPNET_FROZEN_COMMIT", "legacy")
+    monkeypatch.delenv("CRENET_FROZEN_COMMIT", raising=False)
+    backend = SimpleNamespace(device="cpu")
+    assert fingerprints.generation_origin(tmp_path, backend, 1)["commit"] == "legacy"
+    monkeypatch.setenv("CRENET_FROZEN_COMMIT", "current")
+    assert fingerprints.generation_origin(tmp_path, backend, 1)["commit"] == "current"
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="Generic functions require Python 3.12")
