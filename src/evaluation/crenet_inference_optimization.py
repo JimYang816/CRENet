@@ -31,6 +31,7 @@ from src.evaluation.fingerprints import DataIdentity, numerical_environment, sou
 VARIANTS = {"before": (False, False), "legacy_tf32": (False, False), "static_only": (True, False),
             "residual_only": (False, True), "both": (True, True)}
 FIELDS = ("probabilities", "log_probabilities", "symbols", "variances", "bands")
+CANDIDATES = ("residual_only", "both")
 # Fixed before full validation/test. NCS1's FP32 oracle itself differs from
 # identical promoted FP64 weights by ~2.5e-5 in probability on validation probes.
 ATOL, RTOL = 1e-4, 1e-4
@@ -116,10 +117,10 @@ def evaluate_pair(dataset_path, checkpoint, output, *, device="cpu", batch_size=
         if dataset.split not in ("validation", "test"):
             raise ValueError("Only fixed validation/test splits may be compared")
         _record_disjoint(dataset)
-        models, payload = _models(checkpoint, dataset, device, ("before", "both", "legacy_tf32"))
+        models, payload = _models(checkpoint, dataset, device, ("before", *CANDIDATES, "legacy_tf32"))
         accumulators = {name: RecordMetrics(8) for name in models}
-        statistics_by_field = {}
-        disagreements = np.zeros((len(dataset.snr_db), 8), dtype=np.int64)
+        statistics_by_field = {name: {} for name in CANDIDATES}
+        disagreements = {name: np.zeros((len(dataset.snr_db), 8), dtype=np.int64) for name in CANDIDATES}
         blocks, batches = 0, 0
         predictions_seconds = {name: 0. for name in models}
         cache = ReferenceCache(512*2**20)
@@ -127,7 +128,7 @@ def evaluate_pair(dataset_path, checkpoint, output, *, device="cpu", batch_size=
                                              precision=models["before"].config["precision"], reference_cache=cache):
             inputs = materialize(cpu, device)
             outputs = {}
-            order = ("before", "both", "legacy_tf32") if batches % 2 == 0 else ("legacy_tf32", "both", "before")
+            order = list(models) if batches % 2 == 0 else list(reversed(models))
             for name in order:
                 torch.backends.cudnn.allow_tf32 = name == "legacy_tf32"
                 backend.synchronize()
@@ -137,7 +138,9 @@ def evaluate_pair(dataset_path, checkpoint, output, *, device="cpu", batch_size=
                 predictions_seconds[name] += time.perf_counter()-tick
             torch.backends.cudnn.allow_tf32 = False
             mask = inputs["data_mask"]
-            disagreements[keys[0][0]] += compare_outputs(outputs["before"], outputs["both"], statistics_by_field, mask)
+            for name in CANDIDATES:
+                disagreements[name][keys[0][0]] += compare_outputs(outputs["before"], outputs[name],
+                                                                  statistics_by_field[name], mask)
             # Independent labels/reference are opened after both forwards finish.
             precision = models["before"].config["precision"]
             target = supervision(dataset, keys, device=device, precision=precision, include_reference=False)
@@ -168,23 +171,26 @@ def evaluate_pair(dataset_path, checkpoint, output, *, device="cpu", batch_size=
                 print(f"{dataset.channel} {dataset.split}: {blocks} blocks", flush=True)
             del outputs, inputs, target
         metrics = {name: accumulator.report(dataset.snr_db) for name, accumulator in accumulators.items()}
-        deltas = []
-        for si, (left, right) in enumerate(zip(metrics["before"], metrics["both"])):
-            deltas.append(dict(snr_db=left["snr_db"], total_bits=left["total_bits"],
-                final_decision_disagreements=int(disagreements[si, -1]),
-                layer_decision_disagreements=disagreements[si].tolist(),
-                final_error_count_change=right["bit_errors"][-1]-left["bit_errors"][-1],
-                final_ber_change=right["ber"][-1]-left["ber"][-1],
-                final_nmse_db_change=right["mean_nmse_db"][-1]-left["mean_nmse_db"][-1],
-                final_error_count_change_from_legacy_tf32=right["bit_errors"][-1]-metrics["legacy_tf32"][si]["bit_errors"][-1],
-                final_nmse_db_change_from_legacy_tf32=right["mean_nmse_db"][-1]-metrics["legacy_tf32"][si]["mean_nmse_db"][-1]))
-        equivalent = all(row["max_tolerance_ratio"] <= 1 for row in statistics_by_field.values())
+        deltas = {name: [] for name in CANDIDATES}
+        for name in CANDIDATES:
+            for si, (left, right) in enumerate(zip(metrics["before"], metrics[name])):
+                deltas[name].append(dict(snr_db=left["snr_db"], total_bits=left["total_bits"],
+                    final_decision_disagreements=int(disagreements[name][si, -1]),
+                    layer_decision_disagreements=disagreements[name][si].tolist(),
+                    final_error_count_change=right["bit_errors"][-1]-left["bit_errors"][-1],
+                    final_ber_change=right["ber"][-1]-left["ber"][-1],
+                    final_nmse_db_change=right["mean_nmse_db"][-1]-left["mean_nmse_db"][-1],
+                    final_error_count_change_from_legacy_tf32=right["bit_errors"][-1]-metrics["legacy_tf32"][si]["bit_errors"][-1],
+                    final_nmse_db_change_from_legacy_tf32=right["mean_nmse_db"][-1]-metrics["legacy_tf32"][si]["mean_nmse_db"][-1]))
+        equivalent = {name: all(row["max_tolerance_ratio"] <= 1 for row in fields.values())
+                      for name, fields in statistics_by_field.items()}
         result = dict(complete=True, channel=dataset.channel, split=dataset.split, input_view="compensated",
             blocks=blocks, batches=batches, frame_limit=frame_limit, batch_size=batch_size,
             model_config=payload["model_config"], learned_weights_unchanged=True,
             numerical=dict(atol=ATOL, rtol=RTOL, allclose=equivalent, fields=statistics_by_field,
                            band_absolute_tolerance_units="per-sample initial-channel RMS row norm, as used by model normalization",
-                           bitwise_equal=all(row["max_absolute_error"] == 0 for row in statistics_by_field.values())),
+                           bitwise_equal={name: all(row["max_absolute_error"] == 0 for row in fields.values())
+                                          for name, fields in statistics_by_field.items()}),
             per_snr=metrics, differences=deltas, forward_seconds_during_scoring=predictions_seconds,
             elapsed_seconds=time.perf_counter()-started,
             input_backend="dense_device: identical reconstructed tensor supplied to both paths",
@@ -192,8 +198,8 @@ def evaluate_pair(dataset_path, checkpoint, output, *, device="cpu", batch_size=
         write_json(output/"metrics.json", result)
         _plot(result, output)
         write_json(output/"progress.json", dict(phase="completed", blocks=blocks, allclose=equivalent))
-        if not equivalent:
-            raise AssertionError("Frozen output equivalence failed; see "+str(output/"metrics.json"))
+        # A failed candidate remains a failed check, but must not suppress the
+        # other channel's accuracy/timing audit. Never widen tolerances here.
         return result
 
 
@@ -204,7 +210,7 @@ def _plot(report, directory):
     for field, filename, ylabel in (("ber", "ber_snr.png", "BER"),
                                     ("mean_nmse_db", "nmse_snr.png", "Mean full-matrix CSI NMSE (dB)")):
         fig, ax = plt.subplots(figsize=(6.4, 4.2))
-        for name, style in (("before", "o-"), ("both", "x--"), ("legacy_tf32", ":")):
+        for name, style in (("before", "o-"), ("residual_only", "s-."), ("both", "x--"), ("legacy_tf32", ":")):
             rows = report["per_snr"][name]
             ax.plot([r["snr_db"] for r in rows], [r[field][-1] for r in rows], style, label=name)
         if field == "ber":
@@ -298,11 +304,15 @@ def run_channel(directory, checkpoint, output, *, device="cpu", batch_size=2, re
     identity.assert_unchanged()
     if source_fingerprint(CODE) != code:
         raise RuntimeError("Source changed during paired evaluation")
-    result = dict(complete=True, channel=test["channel"], learned_weights_unchanged=True,
+    selected = "residual_only"
+    result = dict(complete=True, channel=test["channel"], learned_weights_unchanged=True, default_variant=selected,
+        default_numerical_checks_passed=validation["numerical"]["allclose"][selected] and test["numerical"]["allclose"][selected],
         validation_allclose=validation["numerical"]["allclose"], test_allclose=test["numerical"]["allclose"],
-        test_blocks=test["blocks"], final_decision_disagreements=sum(r["final_decision_disagreements"] for r in test["differences"]),
+        test_blocks=test["blocks"], final_decision_disagreements={name: sum(r["final_decision_disagreements"] for r in rows)
+                                                               for name, rows in test["differences"].items()},
         mean_ber={name: float(np.mean([r["ber"][-1] for r in rows])) for name, rows in test["per_snr"].items()},
-        max_absolute_nmse_db_change=max(abs(r["final_nmse_db_change"]) for r in test["differences"]),
+        max_absolute_nmse_db_change={name: max(abs(r["final_nmse_db_change"]) for r in rows)
+                                    for name, rows in test["differences"].items()},
         timing=timing["measurements"], data_identity=identity.files, code=code)
     write_json(output/"summary.json", result)
     return result

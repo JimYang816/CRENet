@@ -35,10 +35,10 @@ def test_paired_pipeline_preserves_checkpoint_and_writes_both_curves(tmp_path):
                 data_indices=dataset._indices.tolist(), snr_db=dataset.snr_db.tolist()))
         original = checkpoint.read_bytes()
         result = run_channel(directory, checkpoint, tmp_path/"report", validation_frames=1, test_frames=1, repeats=1)
-        assert result["complete"] and result["validation_allclose"] and result["test_allclose"]
+        assert result["complete"] and all(result["validation_allclose"].values()) and all(result["test_allclose"].values())
         assert checkpoint.read_bytes() == original
         assert result["learned_weights_unchanged"]
-        assert result["final_decision_disagreements"] == 0
+        assert all(value == 0 for value in result["final_decision_disagreements"].values())
         assert result["mean_ber"]["before"] == result["mean_ber"]["both"]
         for split in ("validation", "test"):
             for name in ("ber_snr.png", "nmse_snr.png", "metrics.json"):

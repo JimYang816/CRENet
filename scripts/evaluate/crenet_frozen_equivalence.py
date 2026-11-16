@@ -29,6 +29,7 @@ def main():
     parser.add_argument("--device", choices=("cpu", "cuda"), default=default_device())
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--double", action="store_true", help="Promote the same saved weights for an FP64 algebra check")
+    parser.add_argument("--static", action="store_true", help="Also audit the optional static convolution cache")
     args = parser.parse_args()
     if args.output.exists():
         raise FileExistsError("Use a new equivalence report path")
@@ -45,7 +46,7 @@ def main():
             model = CRENet(**dict(model.config, precision="complex128")).to(args.device)
             model.load_state_dict(payload["model"], strict=True)
             model.eval().requires_grad_(False)
-        optimized = prepare_frozen_inference(copy.deepcopy(model))
+        optimized = prepare_frozen_inference(copy.deepcopy(model), cache_static_correction=args.static)
         batches, blocks = 0, 0
         maximum_errors = {key: 0. for key in ("probabilities", "log_probabilities", "symbols", "variances", "bands")}
         atol, rtol = (1e-4, 1e-4) if model.config["precision"] == "complex64" else (1e-12, 1e-12)
@@ -70,7 +71,7 @@ def main():
         report = dict(complete=True, bitwise_equal=all(value == 0 for value in maximum_errors.values()),
             allclose=True, atol=atol, rtol=rtol, max_absolute_errors=maximum_errors,
             csi_absolute_tolerance_units="model per-sample channel normalization", cudnn_tf32=False,
-            precision=model.config["precision"], diagnostic_promotion=args.double,
+            precision=model.config["precision"], diagnostic_promotion=args.double, static_cache=args.static,
             test_access=False, batches=batches, blocks=blocks,
             snr_db=ds.snr_db.tolist(), deterministic=True, purpose="equivalence only, not latency",
             checkpoint_sha256=file_sha256(args.checkpoint), data_identity=guard.files,

@@ -44,11 +44,12 @@ def _feedback_from_residual(initial_channel, channel, residual, mean, variance,
 class FrozenCSICorrector(nn.Module):
     """Split conv1 before its nonlinearity, retaining all original parameters."""
 
-    def __init__(self, corrector, forward_cache):
+    def __init__(self, corrector, forward_cache, *, cache_static=True):
         super().__init__()
         self.width = corrector.width
         self.conv1, self.conv2, self.head = corrector.conv1, corrector.conv2, corrector.head
         self._forward_cache = forward_cache
+        self.cache_static = cache_static
         # Flattening is offset-major: initial CSI (2), masks (3), then noise (3).
         static = [14*k+j for k in range(self.width) for j in (0, 1, 11, 12, 13)]
         static += list(range(14*self.width+2, 14*self.width+5))
@@ -73,13 +74,16 @@ class FrozenCSICorrector(nn.Module):
     def _forward(self, feedback, noise_features):
         features = torch.cat((feedback.offsets.flatten(-2), feedback.residual, noise_features), -1)
         features = features.transpose(1, 2).to(self.conv1.weight.dtype)
-        shared = self._forward_cache
-        if "correction_static" not in shared:
-            shared["correction_static"] = functional.conv1d(
-                features.index_select(1, self.static_indices), self.static_weight, self.conv1.bias, padding=1)
-        dynamic = functional.conv1d(features.index_select(1, self.dynamic_indices),
-                                    self.dynamic_weight, padding=1)
-        hidden = functional.silu(shared["correction_static"]+dynamic)
+        if self.cache_static:
+            shared = self._forward_cache
+            if "correction_static" not in shared:
+                shared["correction_static"] = functional.conv1d(
+                    features.index_select(1, self.static_indices), self.static_weight, self.conv1.bias, padding=1)
+            dynamic = functional.conv1d(features.index_select(1, self.dynamic_indices),
+                                        self.dynamic_weight, padding=1)
+            hidden = functional.silu(shared["correction_static"]+dynamic)
+        else:
+            hidden = functional.silu(self.conv1(features))
         output = self.head(functional.silu(self.conv2(hidden))).transpose(1, 2)
         real, imaginary, gate = output.split(self.width, dim=-1)
         return torch.complex(real, imaginary), gate.sigmoid()
@@ -307,7 +311,7 @@ def _residual_reuse_forward(self, observations, initial_channel, known, data_mas
                         tuple(channels), tuple(diagnostics), log_probabilities=torch.stack(log_states, 1))
 
 
-def prepare_frozen_inference(model, *, cache_static_correction=True, reuse_correction_residual=True):
+def prepare_frozen_inference(model, *, cache_static_correction=False, reuse_correction_residual=True):
     """Prepare an already frozen model in place; do not save it as a checkpoint.
 
     Call after load_model and device/dtype selection. Loading the original
@@ -327,8 +331,9 @@ def prepare_frozen_inference(model, *, cache_static_correction=True, reuse_corre
             model.register_forward_pre_hook(lambda owner, args: owner._budgeted_forward_cache.clear())
         model.equalizers = nn.ModuleList(FrozenBudgetedMMSELayer(layer, model._budgeted_forward_cache).eval()
             if type(layer) is BudgetedMMSELayer else layer for layer in model.equalizers)
-        if cache_static_correction:
-            model.corrector = FrozenCSICorrector(model.corrector, model._budgeted_forward_cache).eval()
+        if cache_static_correction or reuse_correction_residual:
+            model.corrector = FrozenCSICorrector(model.corrector, model._budgeted_forward_cache,
+                                                 cache_static=cache_static_correction).eval()
         if reuse_correction_residual:
             model.forward = MethodType(_residual_reuse_forward, model)
     return model
