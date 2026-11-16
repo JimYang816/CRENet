@@ -43,7 +43,8 @@ CRENet/
 │   ├── experiment/           # 正式实验、消融及相关结果
 │   ├── smoke/                # 测试源码、小样本数据、临时文件及测试结果
 │   │   ├── data_generation_tests/ # 数据生成测试源码
-│   │   └── tests/            # 算法、数据、训练和评测测试源码
+│   │   ├── tests/            # 算法、数据、训练和评测测试源码
+│   │   └── pytest/           # pytest 运行时临时文件，自动生成
 │   └── paper/                # 论文主稿 main.tex、图片及历史稿 archive/
 ├── AGENTS.md                 # 项目开发约定
 └── pyproject.toml            # Python 依赖与测试配置
