@@ -43,4 +43,4 @@ def test_paired_pipeline_preserves_checkpoint_and_writes_both_curves(tmp_path):
         for split in ("validation", "test"):
             for name in ("ber_snr.png", "nmse_snr.png", "metrics.json"):
                 assert (tmp_path/"report"/split/name).is_file()
-        assert set(result["timing"]["forward"]) == {"before", "both", "static_only", "residual_only"}
+        assert set(result["timing"]["forward"]) == {"before", "both", "static_only", "residual_only", "legacy_tf32"}

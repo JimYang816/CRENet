@@ -9,6 +9,7 @@ path for numerical and timing comparisons. No learned weight is approximated.
 from __future__ import annotations
 
 import math
+from contextlib import nullcontext
 from types import MethodType
 
 import torch
@@ -60,6 +61,16 @@ class FrozenCSICorrector(nn.Module):
     def forward(self, feedback, noise_features):
         if self.training:
             raise RuntimeError("Prepared correction layers cannot be trained")
+        # Different cuDNN convolution shapes can choose different TF32 kernels.
+        # Split sums require a full-FP32 oracle, not shape-dependent truncation.
+        context = (torch.backends.cudnn.flags(enabled=torch.backends.cudnn.enabled,
+                   benchmark=torch.backends.cudnn.benchmark, deterministic=torch.backends.cudnn.deterministic,
+                   allow_tf32=False)
+                   if feedback.offsets.is_cuda and torch.backends.cudnn.allow_tf32 else nullcontext())
+        with context:
+            return self._forward(feedback, noise_features)
+
+    def _forward(self, feedback, noise_features):
         features = torch.cat((feedback.offsets.flatten(-2), feedback.residual, noise_features), -1)
         features = features.transpose(1, 2).to(self.conv1.weight.dtype)
         shared = self._forward_cache

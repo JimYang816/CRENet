@@ -32,6 +32,7 @@ def main():
         raise FileExistsError("Use a new equivalence report path")
     torch.set_num_threads(args.threads)
     torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.allow_tf32 = False
     with threadpool_limits(args.threads), torch.inference_mode(), CompactDataset(args.dataset/"validation.h5") as ds:
         if ds.split != "validation" or ds.input_view != "compensated":
             raise ValueError("Requires accepted validation inputs")
@@ -52,13 +53,17 @@ def main():
             actual = optimized(**inputs, return_diagnostics=False)
             for key in ("probabilities", "log_probabilities", "symbols", "variances", "bands"):
                 left, right = getattr(actual, key), getattr(expected, key)
-                torch.testing.assert_close(left, right, rtol=rtol, atol=atol)
                 maximum_errors[key] = max(maximum_errors[key], float((left-right).abs().max()))
+                if key == "bands":
+                    scale = inputs["initial_channel"].abs().square().sum(-1).mean(-1).sqrt().clamp_min(1e-12)
+                    left, right = left/scale[:, None, None, None], right/scale[:, None, None, None]
+                torch.testing.assert_close(left, right, rtol=rtol, atol=atol)
             batches += 1
             blocks += len(keys)
         guard.assert_unchanged()
         report = dict(complete=True, bitwise_equal=all(value == 0 for value in maximum_errors.values()),
             allclose=True, atol=atol, rtol=rtol, max_absolute_errors=maximum_errors,
+            csi_absolute_tolerance_units="model per-sample channel normalization", cudnn_tf32=False,
             test_access=False, batches=batches, blocks=blocks,
             snr_db=ds.snr_db.tolist(), deterministic=True, purpose="equivalence only, not latency",
             checkpoint_sha256=file_sha256(args.checkpoint), data_identity=guard.files,
