@@ -31,7 +31,9 @@ from src.evaluation.fingerprints import DataIdentity, numerical_environment, sou
 VARIANTS = {"before": (False, False), "legacy_tf32": (False, False), "static_only": (True, False),
             "residual_only": (False, True), "both": (True, True)}
 FIELDS = ("probabilities", "log_probabilities", "symbols", "variances", "bands")
-ATOL, RTOL = 2e-5, 2e-5
+# Fixed before full validation/test. NCS1's FP32 oracle itself differs from
+# identical promoted FP64 weights by ~2.5e-5 in probability on validation probes.
+ATOL, RTOL = 1e-4, 1e-4
 CODE = INFERENCE_CODE+("src.algorithms.crenet.inference", "src.algorithms.crenet.legacy_identity",
                        "src.evaluation.crenet_inference_optimization",
                        "src.evaluation.crenet", "src.data.crenet_dense_training",
