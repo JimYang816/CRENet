@@ -157,3 +157,6 @@ python -m scripts.evaluate.four_data_rotated_audit --report-only
 `audit_metrics.csv`列出各SNR的精确NMSE及已计算的30 dB BER；空BER单元格代表未计算，未插值。
 `covariance_audit.png/pdf`显示原始BER-SNR、30 dB先验下限对照点，以及各项NMSE-SNR。
 图中oracle曲线用于归因，不能作为接收机性能报告。
+
+后续按用户要求实现了独立先验联合协方差标定，并完成两信道、两种LMMSE的三方案重跑。
+实现定义、参数冻结边界和正式结果见`docs/four_data_covariance.md`，不覆盖本诊断或修正前结果。
