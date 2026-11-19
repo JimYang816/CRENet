@@ -134,18 +134,21 @@ class FourDataEstimator:
         self.prior, self.backend = prior, backend
         self.known = np.asarray(known, dtype=np.complex128).copy()
         n, q, length = prior.model.c["nfft"], prior.model.count, prior.model.length
-        if self.known.shape != (4, n) or np.any(self.known[:, masks["data"]] != 0):
+        data_masks = np.broadcast_to(np.asarray(masks["data"], bool), (4, n))
+        tracking_masks = np.broadcast_to(np.asarray(masks["tracking"], bool), (4, n))
+        if self.known.shape != (4, n) or np.any(self.known[data_masks] != 0):
             raise ValueError("All four symbols must hide their unknown data in the public waveform")
         if (prior.empirical_weight, prior.scale, prior.interference_scale, prior.feedback_iterations) != (0, 1, 1, 0):
             raise ValueError("Use the fixed delay-block prior without feedback")
-        self.rows = np.flatnonzero(masks["tracking"])
-        m = len(self.rows)
+        self.rows = [np.flatnonzero(mask) for mask in tracking_masks]
+        observation_offsets = np.cumsum([0]+[len(rows) for rows in self.rows])
+        size = int(observation_offsets[-1])
         v = prior.model.sampled_basis.reshape(4, n, q)
         x = input_windows(self.known, length)
-        correlation = np.fft.ifft(np.fft.ifftshift(masks["data"].astype(float)))
+        correlation = np.fft.ifft(np.fft.ifftshift(data_masks.astype(float), axes=-1), axis=-1)
         differences = (np.arange(n)[:, None]-np.arange(n)) % n
-        covariance = backend.array(np.zeros((4*m, 4*m), dtype=np.complex128))
-        cross = np.zeros((q, length, 4*m), dtype=np.complex128)
+        covariance = backend.array(np.zeros((size, size), dtype=np.complex128))
+        cross = np.zeros((q, length, size), dtype=np.complex128)
         interference = np.zeros((4, n, n), dtype=np.complex128)
         for select, temporal, delay in prior.separable_blocks():
             lt = linalg.cholesky(temporal, lower=True, check_finite=False)
@@ -154,24 +157,23 @@ class FourDataEstimator:
             factors = []
             for symbol in range(4):
                 time = ((v[symbol] @ lt)[:, :, None]*(x[symbol, :, select] @ ld)[:, None, :]).reshape(n, q*width)
-                factors.append(np.fft.fftshift(np.fft.fft(time, axis=0, norm="ortho"), axes=0)[self.rows])
+                factors.append(np.fft.fftshift(np.fft.fft(time, axis=0, norm="ortho"), axes=0)[self.rows[symbol]])
             z = np.concatenate(factors)
             dz = backend.array(z)
             covariance += dz @ dz.conj().T
-            cross[:, select] = np.einsum("qa,lb,mab->qlm", lt, ld, z.conj().reshape(4*m, q, width), optimize=True)
+            cross[:, select] = np.einsum("qa,lb,mab->qlm", lt, ld, z.conj().reshape(size, q, width), optimize=True)
             rho = np.zeros(n, dtype=np.complex128)
             offsets = np.arange(width)
             np.add.at(rho, ((offsets[:, None]-offsets) % n).ravel(), delay.ravel())
-            stationary = np.fft.ifft(np.fft.fft(rho)*np.fft.fft(correlation))[differences]
             for symbol in range(4):
+                stationary = np.fft.ifft(np.fft.fft(rho)*np.fft.fft(correlation[symbol]))[differences]
                 interference[symbol] += (v[symbol] @ temporal @ v[symbol].conj().T)*stationary
         for symbol in range(4):
-            select = slice(symbol*m, (symbol+1)*m)
-            covariance[select, select] += backend.array(hermitian(selected_time_covariance(interference[symbol], self.rows)))
-        noise = np.asarray(unit_noise)[np.ix_(self.rows, self.rows)]
-        self.selected_noise = linalg.block_diag(*([noise]*4))
+            select = slice(observation_offsets[symbol], observation_offsets[symbol+1])
+            covariance[select, select] += backend.array(hermitian(selected_time_covariance(interference[symbol], self.rows[symbol])))
+        self.selected_noise = linalg.block_diag(*[np.asarray(unit_noise)[np.ix_(rows, rows)] for rows in self.rows])
         factor = linalg.cholesky(self.selected_noise, lower=True, check_finite=False)
-        whitener = linalg.solve_triangular(factor, np.eye(4*m), lower=True, check_finite=False)
+        whitener = linalg.solve_triangular(factor, np.eye(size), lower=True, check_finite=False)
         w = backend.array(whitener)
         whitened = w @ covariance @ w.conj().T
         whitened = (whitened+whitened.conj().T)*0.5
@@ -186,8 +188,8 @@ class FourDataEstimator:
         self.ridge = prior.regularizer*float(values.mean())
         self.values = backend.array(values)
         self.projected = w.conj().T @ vectors
-        self.gain = backend.array(cross.reshape(q*length, 4*m)) @ self.projected
-        self.diagnostics = dict(observations=4*m, observations_per_symbol=m,
+        self.gain = backend.array(cross.reshape(q*length, size)) @ self.projected
+        self.diagnostics = dict(observations=size, observations_per_symbol=len(self.rows[0]),
                                 min_eigenvalue=float(raw.min()), max_eigenvalue=float(raw.max()),
                                 whitened_ridge=self.ridge)
 
@@ -198,7 +200,8 @@ class FourDataEstimator:
             raise ValueError("Expected one four-symbol observation per RF variance")
         if not np.all(np.isfinite(y)) or not np.all(np.isfinite(variance)) or np.any(variance < 0):
             raise ValueError("Observations and nonnegative RF variances must be finite")
-        selected = y[..., self.rows].reshape(-1, 4*len(self.rows)).T
+        selected = np.concatenate([y[..., symbol, rows] for symbol, rows in enumerate(self.rows)], axis=-1)
+        selected = selected.reshape(-1, sum(map(len, self.rows))).T
         b = self.backend
         spectral = self.projected.conj().T @ b.array(selected)
         result = self.gain @ (spectral/(self.values[:, None]+b.array(variance.ravel())[None]+self.ridge))
