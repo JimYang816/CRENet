@@ -284,3 +284,59 @@ def run_audit(run, output, archive, *, device, channels=("NOF1", "NCS1"), frame_
         ["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip(), channels={channel:{k:v for k,v in result.items() if k != "frames"} for channel,result in results.items()})
     write_json(output/"audit.json", report)
     return report
+
+
+def plot_audit(run, output, *, channels=("NOF1", "NCS1")):
+    """Show measured curves and separately marked 30-dB causal controls."""
+    import csv
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    run, output = Path(run), Path(output)
+    report = json.loads((output/"audit.json").read_text(encoding="utf-8"))
+    results = {channel:report["channels"][channel] for channel in channels}
+    if not report["complete"] or not all(d["complete"] for d in results.values()):
+        raise ValueError("Cannot report an incomplete covariance audit")
+    original = json.loads((run/"metrics.json").read_text(encoding="utf-8"))["channels"]
+    fig, axes = plt.subplots(2, len(channels), squeeze=False, figsize=(6.5*len(channels), 8.6), layout="constrained")
+    for col, (channel, data) in enumerate(results.items()):
+        snr = data["snr_db"]
+        ax = axes[0, col]
+        for scheme in ("old", "new"):
+            for algorithm, style, color in (("single_tap_mmse", "--", "#245a87"), ("full_matrix_mmse", "-", "#ce674b")):
+                label = f"{'Original' if scheme == 'old' else 'New'} {'single-tap' if algorithm == 'single_tap_mmse' else 'full-matrix'}"
+                ax.semilogy(snr, original[channel][scheme]["algorithms"][algorithm]["ber"], style,
+                            color="#8c9198" if scheme == "old" else color, marker="o", markersize=3, label=label)
+                if scheme == "new":
+                    ax.semilogy([30], [data["ber_30db"]["prior_residual_floor"][algorithm]], "*", color=color,
+                                markersize=11, label=f"Prior-only floor, {'single' if algorithm == 'single_tap_mmse' else 'full'} (30 dB)")
+        ax.set(title=f"{channel}: BER-SNR", ylabel="Bit error rate", xlabel="SNR (dB)")
+        ax.legend(fontsize=7.2)
+        ax = axes[1, col]
+        for name, label, color, style in (
+            ("actual", "Actual receiver CSI", "#24282d", "-"),
+            ("noise_averaged_expected", "Exact thermal-noise expectation", "#24282d", ":"),
+            ("remove_pilot_mismatch", "Remove pilot BEM residual (oracle)", "#245a87", "--"),
+            ("matched_bem_observations", "Remove all model residuals (oracle)", "#278560", "-"),
+            ("empirical_in_space_data_covariance", "Prior empirical in-space data covariance", "#9154a3", ":"),
+            ("prior_residual_floor", "Prior-only residual variance floor", "#ce674b", "-")):
+            ax.plot(snr, data["mean_nmse_db"][name], style, color=color, marker="o", markersize=3, label=label)
+        ax.set(title=f"{channel}: CSI-error controls", ylabel="Mean channel NMSE (dB)", xlabel="SNR (dB)")
+        ax.legend(fontsize=7.2)
+        for ax in axes[:, col]:
+            ax.set_xticks(snr)
+            ax.grid(True, which="both", alpha=.2)
+    fig.suptitle("12 Hz, no P, 4D: high-SNR covariance audit\nSame saved observations; oracle changes apply only to CSI estimation", fontsize=12)
+    fig.supxlabel("BER controls shown only at measured 30-dB points; original BER curves retained\nPrior-only floor is a diagnostic control; original experiment is unchanged", fontsize=9)
+    for suffix in ("png", "pdf"):
+        fig.savefig(output/f"covariance_audit.{suffix}", dpi=180)
+    plt.close(fig)
+    with (output/"audit_metrics.csv").open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(("channel", "control", "snr_db", "mean_nmse_db", "single_tap_ber", "full_matrix_ber"))
+        for channel, data in results.items():
+            for name, curve in data["mean_nmse_db"].items():
+                for snr, nmse in zip(data["snr_db"], curve, strict=True):
+                    ber = data["ber_30db"].get(name, {}) if snr == 30 else {}
+                    writer.writerow((channel, name, snr, nmse, ber.get("single_tap_mmse", ""), ber.get("full_matrix_mmse", "")))

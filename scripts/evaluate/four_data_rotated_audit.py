@@ -14,6 +14,7 @@ def main():
     p.add_argument("--threads", type=int, default=4)
     p.add_argument("--frame-limit", type=int)
     p.add_argument("--channels", nargs="+", choices=("NOF1", "NCS1"), default=("NOF1", "NCS1"))
+    p.add_argument("--report-only", action="store_true", help="Plot completed audit JSON without HDF5 or channel replay")
     a = p.parse_args()
     if a.threads < 1 or a.frame_limit is not None and a.frame_limit < 1:
         p.error("Limits must be positive")
@@ -21,10 +22,13 @@ def main():
         os.environ[name] = str(a.threads)
     from threadpoolctl import threadpool_limits
     from src.common.numerics import default_device
-    from src.evaluation.four_data_rotated_audit import run_audit
+    from src.evaluation.four_data_rotated_audit import plot_audit, run_audit
     with threadpool_limits(a.threads):
-        run_audit(a.run,a.output or a.run/"covariance_audit",a.archive,
-                  device=a.device or default_device(),channels=a.channels,frame_limit=a.frame_limit)
+        output = a.output or a.run/"covariance_audit"
+        if not a.report_only:
+            run_audit(a.run,output,a.archive,device=a.device or default_device(),
+                      channels=a.channels,frame_limit=a.frame_limit)
+        plot_audit(a.run,output,channels=a.channels)
 
 
 if __name__ == "__main__":
