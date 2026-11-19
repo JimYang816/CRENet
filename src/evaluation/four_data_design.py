@@ -16,6 +16,7 @@ from data_generation.src.receiver.estimation import input_windows
 from data_generation.src.receiver.four_data import BlockedFourDataReceiver, fixed_four_data_model
 from data_generation.src.transmitter.ofdm import qpsk
 from src.common.experiment import file_sha256, write_json
+from src.common.numerics import DenseBackend, default_device
 from src.evaluation.four_data_mmse import experiment_config
 
 
@@ -110,7 +111,7 @@ def collect(channel, archive, path, *, smoke=False):
         saved.attrs["complete"] = True
 
 
-def audit(channel, path, output, *, ranks=True):
+def audit(channel, path, output, *, ranks=True, backend=None):
     config = experiment_config(channel)
     result = dict(channel=channel, representation=[], reduced_representation=[], sparse_support=[], pilot_rank=[],
                   prior_records=config["prior_records"], validation_records=config["validation_records"])
@@ -180,7 +181,9 @@ def audit(channel, path, output, *, ranks=True):
                     if np.any(norms == 0):
                         raise ValueError("Zero public-pilot channel atom")
                     matrix /= norms
-                    singular = linalg.svdvals(matrix, check_finite=False)
+                    singular = (backend.numpy(backend.torch.linalg.svdvals(backend.array(matrix)))
+                                if backend is not None and backend.torch else
+                                linalg.svdvals(matrix, check_finite=False))
                     ratio = float(singular[-1]/singular[0])
                     row = dict(layout=name, counts_per_symbol=counts[0], observations=len(matrix),
                                unknowns=q*count, modes=count,
@@ -194,16 +197,17 @@ def audit(channel, path, output, *, ranks=True):
     return result
 
 
-def run_design(output, archive, *, smoke=False, ranks=True):
+def run_design(output, archive, *, smoke=False, ranks=True, device=None):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
+    backend = DenseBackend(device or default_device())
     results = {}
     for channel in ("NOF1", "NCS1"):
         cache = output/f"{channel.lower()}_projection_cache.h5"
         collect(channel, archive, cache, smoke=smoke)
-        results[channel] = audit(channel, cache, output, ranks=ranks)
+        results[channel] = audit(channel, cache, output, ranks=ranks, backend=backend)
     report = dict(schema="four-data-12hz-design-audit-v1", complete=True, smoke=smoke,
-                  source=dict(code_sha256=file_sha256(Path(__file__)), git_head=subprocess.check_output(
+                  source=dict(device=backend.device, code_sha256=file_sha256(Path(__file__)), git_head=subprocess.check_output(
                       ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()),
                   note="Representation uses oracle projection on independent validation, not receiver NMSE or BER; rank uses public pilots only",
                   channels=results)

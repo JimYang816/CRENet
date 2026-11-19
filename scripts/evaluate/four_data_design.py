@@ -15,6 +15,7 @@ def main():
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--skip-ranks", action="store_true")
+    parser.add_argument("--device", choices=("cpu", "cuda"))
     args = parser.parse_args()
     if args.threads < 1:
         parser.error("--threads must be positive")
@@ -25,7 +26,7 @@ def main():
 
     output = args.output or ROOT/("outputs/smoke" if args.smoke else "outputs/experiment")/"four_data_12hz_design_20261119"
     with threadpool_limits(args.threads):
-        run_design(output, args.archive, smoke=args.smoke, ranks=not args.skip_ranks)
+        run_design(output, args.archive, smoke=args.smoke, ranks=not args.skip_ranks, device=args.device)
 
 
 if __name__ == "__main__":
