@@ -130,7 +130,7 @@ class BlockedFourDataReceiver:
 class FourDataEstimator:
     """One shared Q x L coefficient solve from the four embedded-pilot observations."""
 
-    def __init__(self, prior: FrozenPrior, known, masks, unit_noise, backend):
+    def __init__(self, prior: FrozenPrior, known, masks, unit_noise, backend, *, capture_moments=False):
         self.prior, self.backend = prior, backend
         self.known = np.asarray(known, dtype=np.complex128).copy()
         n, q, length = prior.model.c["nfft"], prior.model.count, prior.model.length
@@ -168,9 +168,13 @@ class FourDataEstimator:
             for symbol in range(4):
                 stationary = np.fft.ifft(np.fft.fft(rho)*np.fft.fft(correlation[symbol]))[differences]
                 interference[symbol] += (v[symbol] @ temporal @ v[symbol].conj().T)*stationary
+        captured_interference = np.zeros((size, size), complex) if capture_moments else None
         for symbol in range(4):
             select = slice(observation_offsets[symbol], observation_offsets[symbol+1])
-            covariance[select, select] += backend.array(hermitian(selected_time_covariance(interference[symbol], self.rows[symbol])))
+            block = hermitian(selected_time_covariance(interference[symbol], self.rows[symbol]))
+            covariance[select, select] += backend.array(block)
+            if capture_moments:
+                captured_interference[select, select] = block
         self.selected_noise = linalg.block_diag(*[np.asarray(unit_noise)[np.ix_(rows, rows)] for rows in self.rows])
         factor = linalg.cholesky(self.selected_noise, lower=True, check_finite=False)
         whitener = linalg.solve_triangular(factor, np.eye(size), lower=True, check_finite=False)
@@ -192,6 +196,9 @@ class FourDataEstimator:
         self.diagnostics = dict(observations=size, observations_per_symbol=len(self.rows[0]),
                                 min_eigenvalue=float(raw.min()), max_eigenvalue=float(raw.max()),
                                 whitened_ridge=self.ridge)
+        if capture_moments:
+            self.captured_moments = dict(observation_covariance=backend.numpy(covariance).copy(),
+                data_interference=captured_interference, cross_covariance=cross.reshape(q*length, size).copy())
 
     def estimate_coefficients(self, observations, variances):
         y = np.asarray(observations, dtype=np.complex128)

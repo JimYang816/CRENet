@@ -54,7 +54,8 @@ def test_rf_ensemble_power_matches_independent_tone_sum_and_frame_power():
 
 
 @pytest.mark.parametrize("device", ("cpu", "cuda"))
-def test_staggered_rows_match_explicit_dense_channel_lmmse(device):
+@pytest.mark.parametrize("complex_basis", (False, True))
+def test_staggered_rows_match_explicit_dense_channel_lmmse(device, complex_basis):
     if device == "cuda":
         torch = pytest.importorskip("torch")
         if not torch.cuda.is_available():
@@ -64,6 +65,8 @@ def test_staggered_rows_match_explicit_dense_channel_lmmse(device):
                   data_count=8, pilot_count=2)
     rng = np.random.default_rng(42)
     model = fixed_four_data_model(config, count=2, length=3)
+    if complex_basis:
+        model.basis = model.basis @ np.array([[1, .2j], [.3j, 1.1]])
     prior = FrozenPrior.fit_coefficients(model, rng.normal(size=(20, 2, 3))+1j*rng.normal(size=(20, 2, 3)),
                                          0, 1, (51,), delay_block_size=2)
     base = carrier_masks(config)
@@ -96,7 +99,12 @@ def test_staggered_rows_match_explicit_dense_channel_lmmse(device):
     z = rng.normal(size=(14, 14))+1j*rng.normal(size=(14, 14))
     noise = z @ z.conj().T/14+np.eye(14)
     selected_noise = linalg.block_diag(*[noise[np.ix_(r, r)] for r in rows])
-    estimator = FourDataEstimator(prior, known, masks, noise, DenseBackend(device))
+    estimator = FourDataEstimator(prior, known, masks, noise, DenseBackend(device), capture_moments=True)
+    moments = estimator.captured_moments
+    total = a @ covariance @ a.conj().T+interference
+    np.testing.assert_allclose(moments["observation_covariance"], total, rtol=2e-12, atol=2e-13)
+    np.testing.assert_allclose(moments["data_interference"], interference, rtol=2e-12, atol=2e-13)
+    np.testing.assert_allclose(moments["cross_covariance"], covariance @ a.conj().T, rtol=2e-12, atol=2e-13)
     y = rng.normal(size=(2, 4, 14))+1j*rng.normal(size=(2, 4, 14))
     variances, expected = np.array([.01, .4]), []
     for yi, variance in zip(y, variances, strict=True):
@@ -117,3 +125,15 @@ def test_staggered_rows_match_explicit_dense_channel_lmmse(device):
                                +(variance+gain**2*estimator.ridge)*selected_noise, selected, assume_a="her")
         scaled_expected.append((gain**2*covariance @ a.conj().T @ weights).reshape(2, 3))
     np.testing.assert_allclose(actual, scaled_expected, rtol=2e-10, atol=2e-11)
+    # Independently propagate the RF thermal covariance through the dense gain.
+    from src.evaluation.four_data_rotated_audit import replace_data_covariance, thermal_mode_energy
+    rebuilt = replace_data_covariance(estimator, interference)
+    np.testing.assert_allclose(rebuilt.estimate_coefficients(y, variances), expected, rtol=2e-10, atol=2e-11)
+    mode_energy = thermal_mode_energy(estimator, basis)
+    eigenvalues = estimator.backend.numpy(estimator.values)
+    for variance in variances:
+        k = covariance @ a.conj().T @ linalg.inv(total+(variance+estimator.ridge)*selected_noise)
+        error_covariance = variance*k @ selected_noise @ k.conj().T
+        exact = [np.trace(np.kron(v.conj().T @ v, np.eye(3)) @ error_covariance).real for v in basis]
+        spectral = variance*np.sum(mode_energy/(eigenvalues+variance+estimator.ridge)**2, axis=-1)
+        np.testing.assert_allclose(spectral, exact, rtol=2e-10, atol=2e-11)
