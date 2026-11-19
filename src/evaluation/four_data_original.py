@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import subprocess
+import shutil
 import time
 
 import h5py
@@ -19,7 +20,9 @@ from data_generation.src.receiver.four_data_rotated import load_rotated_prior
 from src.algorithms.likelihood import make_whitener
 from src.common.experiment import file_sha256, write_json
 from src.common.numerics import DenseBackend
-from src.evaluation.four_data_covariance import ALPHAS, RHOS, calibrate, channel_report, comparison
+from src.evaluation.four_data_covariance import (
+    ALPHAS, RHOS, calibrate, channel_report, comparison, load_estimator, save_estimator,
+)
 from src.evaluation.four_data_mmse import ALGORITHMS, _summary, experiment_config, window_ids
 from src.evaluation.four_data_rotated import PARAMETERS, baseline_report, score
 
@@ -35,8 +38,8 @@ CODE = ("data_generation/src/receiver/four_data_original.py", "src/evaluation/fo
         "src/algorithms/full_matrix_lmmse/equalizer.py", "src/algorithms/likelihood.py", "src/common/numerics.py")
 
 
-def restored_parameters(channel):
-    q, length = PARAMETERS[channel]
+def restored_parameters(channel, *, selected_model=None):
+    q, length = PARAMETERS[channel] if selected_model is None else (selected_model["effective_q"], selected_model["length"])
     return dict(frame="D1-D2-D3-D4", bandwidth_hz=12, dictionary_q=27, effective_q=q, length=length,
         pilots_per_d=128, protection_per_d=256, data_per_d=512, empty_edges_per_d=128,
         edge_bins_each_side=64, observations=1536, unknown_coefficients=q*length,
@@ -49,7 +52,7 @@ def restored_parameters(channel):
         csi_definition="unchanged self-symbol circular CSI, projected into frozen Qeff/L")
 
 
-def run_channel(channel, archive_path, basis_source, baseline, output, backend, source, *, smoke):
+def run_channel(channel, archive_path, basis_source, baseline, output, backend, source, *, smoke, selected_model=None):
     config = experiment_config(channel)
     _, original = baseline_report(baseline, channel)
     prior_ids, test_ids = window_ids(config, smoke)
@@ -62,7 +65,8 @@ def run_channel(channel, archive_path, basis_source, baseline, output, backend, 
             or {r for r,_ in prior_ids+validation_ids} & {r for r,_ in test_ids}):
         raise ValueError("Independent calibration, validation and test records overlap")
     identity = digest(dict(channel=channel, source=source, smoke=smoke, prior=prior_ids,
-        validation=validation_ids, test=test_ids, alphas=ALPHAS, rhos=RHOS, carrier_contract="original-fixed-v1"))
+        validation=validation_ids, test=test_ids, alphas=ALPHAS, rhos=RHOS, carrier_contract="original-fixed-v1",
+        selected_model=selected_model))
     run = output/channel.lower()
     run.mkdir(parents=True, exist_ok=True)
     path = run/"metrics.json"
@@ -76,7 +80,7 @@ def run_channel(channel, archive_path, basis_source, baseline, output, backend, 
     else:
         result = dict(schema="four-data-original-fixed-receiver-v1", identity=identity, complete=False,
             channel=channel, smoke=smoke, source=source, prior_windows=prior_ids, validation_windows=validation_ids,
-            test_windows=test_ids, parameters=restored_parameters(channel), frames=[],
+            test_windows=test_ids, parameters=restored_parameters(channel,selected_model=selected_model), frames=[],
             source_receiver_identity=original["identity"],
             comparison="All three curves use exactly the original carrier masks, bits, pilots, waveform and RF noise")
     known, masks = original_protocol(config)
@@ -87,7 +91,14 @@ def run_channel(channel, archive_path, basis_source, baseline, output, backend, 
         assert_original_protocol(config, saved["known"][:], masks)
         noise = saved["unit_noise_covariance"][:]
         np.testing.assert_array_equal(saved["snr_db"][:], config["snr_db"])
-    q, length = PARAMETERS[channel]
+    q, length = PARAMETERS[channel] if selected_model is None else (selected_model["effective_q"],selected_model["length"])
+    if selected_model is not None:
+        rank = selected_model["pilot_rank"]
+        if q*length>1536 or rank["numerical_rank"]!=q*length or not rank["accepted"]:
+            raise ValueError("Selected model must have a full-column-rank original pilot system")
+        result["parameters"]["pilot_rank"] = rank
+        result["parameters"]["estimation"] = "full-column-rank original pilot system with independent-prior Bayesian LMMSE"
+        result["q_l_selection"] = selected_model
     model,prior,ids = load_rotated_prior(basis_source,channel,config,q,length,smoke=smoke)
     if ids != [(int(r),float(s)) for r,s in prior_ids]:
         raise ValueError("Independent temporal prior source identities changed")
@@ -99,9 +110,24 @@ def run_channel(channel, archive_path, basis_source, baseline, output, backend, 
             saved.create_dataset("coefficients",data=prior.coefficients)
     receiver, archive = BlockedFourDataReceiver(config), WatermarkArchive(archive_path, channel)
     print(f"{channel} original masks fixed: 128P/256Z/512D, 64 empty bins per edge; "
-          f"{q*length} coefficients > 1536 pilot/protection observations (Bayesian estimate)", flush=True)
-    estimator, selection = calibrate(run, identity, prior, known, masks, noise, receiver, archive,
-        prior_ids, validation_ids, backend, smoke=smoke, frame_factory=make_original_frame)
+          f"{q*length} coefficients / 1536 pilot/protection observations", flush=True)
+    if selected_model is None:
+        estimator, selection = calibrate(run, identity, prior, known, masks, noise, receiver, archive,
+            prior_ids, validation_ids, backend, smoke=smoke, frame_factory=make_original_frame)
+    else:
+        origin = Path(selected_model["candidate_directory"])
+        if file_sha256(origin/"frozen_estimator.h5")!=selected_model["frozen_estimator_sha256"]:
+            raise ValueError("Independently selected estimator changed before testing")
+        estimator, selection = load_estimator(origin/"frozen_estimator.h5",prior,known,masks,backend,selected_model["candidate_identity"])
+        selection = dict(selection,identity=identity,q_l_selection=selected_model)
+        save_estimator(run/"frozen_estimator.h5",estimator,identity,selection)
+        for filename in ("frozen_moments.h5","validation.h5"):
+            shutil.copyfile(origin/filename,run/filename)
+            with h5py.File(run/filename,"r+") as copied:
+                copied.attrs["identity"] = identity
+        calibration = json.loads((origin/"calibration.json").read_text(encoding="utf-8"))
+        write_json(run/"calibration.json",dict(calibration,identity=identity,selected_source=selected_model))
+        write_json(run/"selection.json",selection)
     result["selected_parameters"] = selection["selected"]
     result["estimator"] = estimator.diagnostics
     result["frozen_estimator_sha256"] = file_sha256(run/"frozen_estimator.h5")

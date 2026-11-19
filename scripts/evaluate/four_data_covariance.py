@@ -12,12 +12,15 @@ def main():
                    default=ROOT/"outputs/experiment/four_data_12hz_design_20261119",
                    help="Independent temporal-basis NPZ and physical prior-projection cache; contains no transmitted carrier layout")
     p.add_argument("--baseline", type=Path, default=ROOT/"outputs/experiment/four_data_12hz_q24_l176_20261119")
-    p.add_argument("--output", type=Path, default=ROOT/"outputs/experiment/four_data_original_layout_joint_20261119")
+    p.add_argument("--calibration-source",type=Path,default=ROOT/"outputs/experiment/four_data_original_layout_joint_20261119",
+                   help="Independent physical prior/validation moments only, used by --select-ql")
+    p.add_argument("--output", type=Path)
     p.add_argument("--channels", nargs="+", choices=("NOF1", "NCS1"), default=("NOF1", "NCS1"))
     p.add_argument("--device", choices=("cpu", "cuda"))
     p.add_argument("--threads", type=int, default=4)
     p.add_argument("--smoke", action="store_true")
     p.add_argument("--report-only", action="store_true")
+    p.add_argument("--select-ql",action="store_true",help="Select full-column-rank Qeff/L using only independent prior/validation records")
     a = p.parse_args()
     if a.threads < 1:
         p.error("Threads must be positive")
@@ -25,10 +28,19 @@ def main():
         os.environ[name] = str(a.threads)
     from threadpoolctl import threadpool_limits
     from src.common.numerics import default_device
-    from src.evaluation.four_data_original import run_experiment
+    output=a.output or ROOT/("outputs/smoke" if a.smoke else "outputs/experiment")/(
+        "four_data_original_layout_search_20261119" if a.select_ql else "four_data_original_layout_joint_20261119")
+    if a.smoke and ROOT/"outputs/smoke" not in output.resolve().parents:
+        p.error("Smoke output must remain under outputs/smoke")
     with threadpool_limits(a.threads):
-        run_experiment(a.archive, a.basis_source, a.baseline, a.output, channels=a.channels,
-                       device=a.device or default_device(), smoke=a.smoke, report_only=a.report_only)
+        if a.select_ql:
+            from src.evaluation.four_data_search import run_experiment
+            run_experiment(a.archive,a.basis_source,a.calibration_source,a.baseline,output,channels=a.channels,
+                           device=a.device or default_device(),smoke=a.smoke,report_only=a.report_only)
+        else:
+            from src.evaluation.four_data_original import run_experiment
+            run_experiment(a.archive, a.basis_source, a.baseline, output, channels=a.channels,
+                           device=a.device or default_device(), smoke=a.smoke, report_only=a.report_only)
 
 
 if __name__ == "__main__":

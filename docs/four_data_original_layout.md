@@ -1,5 +1,8 @@
 # 恢复原载波掩码后的12 Hz、无P、4D实验
 
+本页记录恢复掩码但仍沿用旧Q_eff/L的实验。后续只用独立先验/验证重新选择非欠定参数的流程见
+`docs/four_data_original_search.md`，当前入口加`--select-ql`启动新搜索，不覆盖本页结果。
+
 本实验按用户最新要求固定原始载波分布，禁止以增加导频、去除边缘空载波或错位四D掩码来改善性能。
 当前默认入口为`python -m scripts.evaluate.four_data_covariance`；历史全频带入口只能重画已完成结果。
 
