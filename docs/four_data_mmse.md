@@ -49,6 +49,8 @@ git pull --ff-only
 各信道保留逐帧误码计数、NMSE、符号间泄漏、支撑外能量及物理模型残差。
 `frozen_prior.h5` 和 `receiver_estimates.h5` 保存冻结先验、逐帧估计系数、公开信号、干净观测、标准噪声及标签，供复核。
 结果按窗口断点续跑，代码、配置、源包或运行环境身份变化时拒绝混用已有目录。
+仅重新绘图可运行 `python -m scripts.evaluate.four_data_mmse --report-only --output <结果目录>`；
+原始计算来源保持不变，新的绘图代码哈希另存于 `plot_manifest.json`。
 
 独立测试将联合估计与显式构造的稠密 LMMSE 比较，将分块回放及参考核与完整物理算子比较，
 并检查所有四个 D、隐藏数据、支撑外 NMSE 能量和完整矩阵 MMSE 的解调结果。

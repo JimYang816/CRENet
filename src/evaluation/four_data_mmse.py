@@ -245,33 +245,67 @@ def write_report(output, channels, source):
                                  single["bit_errors"][si], single["ber"][si], full["bit_errors"][si], full["ber"][si],
                                  result["mean_nmse_linear"][si], result["mean_nmse_db"][si]])
     colors = {"NOF1": "#245a87", "NCS1": "#cd6549"}
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.25), layout="constrained")
     labels = {"single_tap_mmse": "Single-tap MMSE", "full_matrix_mmse": "Full-matrix MMSE"}
-    for channel, result in report["channels"].items():
-        for name, linestyle, marker in (("single_tap_mmse", "--", "o"), ("full_matrix_mmse", "-", "s")):
-            axes[0].semilogy(result["snr_db"], result["algorithms"][name]["ber"],
-                             color=colors[channel], linestyle=linestyle, marker=marker, markersize=4,
-                             label=f"{channel} / {labels[name]}")
-        axes[1].plot(result["snr_db"], result["mean_nmse_db"], color=colors[channel], marker="o",
-                      markersize=4, label=f"{channel} / shared receiver CSI")
-    axes[0].set(xlabel="SNR (dB)", ylabel="Bit error rate", title="BER-SNR")
-    axes[1].set(xlabel="SNR (dB)", ylabel="Mean channel NMSE (dB)", title="NMSE-SNR")
-    for axis in axes:
+
+    def draw(axis, metric):
+        for channel, result in report["channels"].items():
+            if metric == "ber":
+                for name, linestyle, marker in (("single_tap_mmse", "--", "o"), ("full_matrix_mmse", "-", "s")):
+                    axis.semilogy(result["snr_db"], result["algorithms"][name]["ber"],
+                                  color=colors[channel], linestyle=linestyle, marker=marker, markersize=4,
+                                  label=f"{channel} / {labels[name]}")
+            else:
+                axis.plot(result["snr_db"], result["mean_nmse_db"], color=colors[channel], marker="o",
+                          markersize=4, label=f"{channel} / shared receiver CSI")
+        axis.set(xlabel="SNR (dB)", ylabel="Bit error rate" if metric == "ber" else "Mean channel NMSE (dB)",
+                 title="BER-SNR" if metric == "ber" else "NMSE-SNR")
         axis.set_xticks(next(iter(report["channels"].values()))["snr_db"])
         axis.grid(True, which="both", alpha=0.22)
         axis.legend(fontsize=8)
+
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.25), layout="constrained")
+    draw(axes[0], "ber")
+    draw(axes[1], "nmse")
     frames = {value["frame_count"] for value in report["channels"].values()}
     count = str(next(iter(frames))) if len(frames) == 1 else "/".join(map(str, sorted(frames)))
     fig.suptitle("4D full-frame estimation | no P | 12 Hz | Q=24, L=176", fontsize=12)
     fig.supxlabel(f"Direct receiver CSI; {count} frames per channel per SNR; 4 data symbols per frame", fontsize=9)
     fig.savefig(output/"comparison.png", dpi=190)
     fig.savefig(output/"comparison.pdf")
-    for axis, name in zip(axes, ("ber_snr", "nmse_snr"), strict=True):
-        extent = axis.get_tightbbox(fig.canvas.get_renderer()).transformed(fig.dpi_scale_trans.inverted()).expanded(1.05, 1.08)
-        fig.savefig(output/f"{name}.png", dpi=190, bbox_inches=extent)
-        fig.savefig(output/f"{name}.pdf", bbox_inches=extent)
     plt.close(fig)
+    for metric in ("ber", "nmse"):
+        single, axis = plt.subplots(figsize=(6, 4.6), layout="constrained")
+        draw(axis, metric)
+        single.suptitle("4D full-frame | no P | 12 Hz | Q=24, L=176", fontsize=10)
+        single.supxlabel(f"Direct receiver CSI | {count} frames per channel per SNR\n4 data symbols per frame", fontsize=8)
+        single.savefig(output/f"{metric}_snr.png", dpi=190)
+        single.savefig(output/f"{metric}_snr.pdf")
+        plt.close(single)
+    write_json(output/"plot_manifest.json", dict(
+        source_git_head=source["git_head"], plotting_code_sha256=file_sha256(Path(__file__)),
+        created_utc=datetime.now(timezone.utc).isoformat()))
     return report
+
+
+def render_saved_report(output):
+    """Re-export finished metrics without repeating estimation or equalization."""
+    output = Path(output).resolve()
+    results = {}
+    for channel in ("NOF1", "NCS1"):
+        path = output/channel.lower()/"metrics.json"
+        if not path.exists():
+            path = output/f"{channel.lower()}_metrics.json"
+        if path.exists():
+            result = json.loads(path.read_text(encoding="utf-8"))
+            if not result["complete"]:
+                raise ValueError(f"Cannot export unfinished metrics: {path}")
+            results[channel] = result
+    if not results:
+        raise FileNotFoundError("No completed four-data channel metrics")
+    sources = [result["source"] for result in results.values()]
+    if any(source != sources[0] for source in sources):
+        raise ValueError("Channel results have different sources")
+    return write_report(output, results, sources[0])
 
 
 def run_experiment(archive, output, *, channels=("NOF1", "NCS1"), device="cpu", smoke=False):
