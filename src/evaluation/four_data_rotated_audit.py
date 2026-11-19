@@ -45,7 +45,7 @@ def thermal_mode_energy(estimator, basis):
     gain = estimator.gain.reshape(q, length, -1)
     result = []
     for v in basis:
-        weighted = (b.array(v.conj().T @ v) @ gain.reshape(q, -1)).reshape(gain.shape)
+        weighted = (b.array(np.asarray(v.conj().T @ v, dtype=complex)) @ gain.reshape(q, -1)).reshape(gain.shape)
         product = (gain.conj()*weighted).real
         result.append(b.numpy(product.sum(dim=(0, 1)) if b.torch else product.sum(axis=(0, 1))))
     return np.maximum(np.stack(result), 0)
