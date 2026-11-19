@@ -63,21 +63,33 @@ class BlockedFourDataReceiver:
                                  shape=(len(indices), self.chain.u.shape[0]))
 
     def reference_rows(self, sounding, origin, indices):
+        return self.reference_parts(sounding, origin, indices, include_image=False)[0]
+
+    def reference_parts(self, sounding, origin, indices, *, include_image=True):
+        """Finite receive-window operators y=A x+B x*, including other D blocks."""
         indices = np.asarray(indices, dtype=np.intp)
         if indices.ndim != 1 or np.any(indices < 0) or np.any(indices >= self.chain.length):
             raise ValueError("Reference rows must lie in the receive waveform")
-        blocks = []
+        blocks, conjugate_blocks = [], []
         for start in range(0, len(indices), self.row_block):
             selected = indices[start:start+self.row_block]
             forward, image = self.chain.r[selected], self.chain.ri[selected]
             support = np.union1d(forward.indices, image.indices)
             native = self._native_rows(sounding, origin, support)
-            direct = (forward[:, support] @ native) @ self.chain.u
-            mixed = (image[:, support] @ native.conjugate()) @ self._u_conj
+            forward_native = forward[:, support] @ native
+            image_native = image[:, support] @ native.conjugate()
+            direct = forward_native @ self.chain.u
+            mixed = image_native @ self._u_conj
             block = (0.5*(direct+mixed)).tocsr()
             block.eliminate_zeros()
             blocks.append(block)
-        return sparse.vstack(blocks, format="csr")
+            if include_image:
+                conjugate = .5*(forward_native @ self.chain.ui+image_native @ self.chain.u.conjugate())
+                conjugate = conjugate.tocsr()
+                conjugate.eliminate_zeros()
+                conjugate_blocks.append(conjugate)
+        return (sparse.vstack(blocks, format="csr"),
+                sparse.vstack(conjugate_blocks, format="csr") if include_image else None)
 
     def replay_frame(self, sounding, origin, frame):
         config = self.chain.c
