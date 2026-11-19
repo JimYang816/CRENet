@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--skip-ranks", action="store_true")
     parser.add_argument("--device", choices=("cpu", "cuda"))
     parser.add_argument("--temporal-only", action="store_true")
+    parser.add_argument("--rank-layouts", nargs="+", choices=("more_pilots_more_observations", "medium_pilots", "dense_pilots", "full_band_pilots"))
     args = parser.parse_args()
     if args.threads < 1:
         parser.error("--threads must be positive")
@@ -28,7 +29,7 @@ def main():
     output = args.output or ROOT/("outputs/smoke" if args.smoke else "outputs/experiment")/"four_data_12hz_design_20261119"
     with threadpool_limits(args.threads):
         if args.temporal_only:
-            temporal_audit(output, device=args.device, ranks=not args.skip_ranks)
+            temporal_audit(output, device=args.device, ranks=not args.skip_ranks, layout_names=args.rank_layouts)
         else:
             run_design(output, args.archive, smoke=args.smoke, ranks=not args.skip_ranks, device=args.device)
 

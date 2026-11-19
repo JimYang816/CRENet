@@ -32,3 +32,12 @@ def test_public_pilot_matrix_matches_direct_channel_action():
                 +np.sum(abs(taps[..., 2:])**2, axis=(1, 2)))/energy
     np.testing.assert_allclose(projection_error(basis, coefficients, cross, energy, 2), expected,
                                 rtol=2e-13, atol=2e-13)
+
+
+def test_full_band_pilot_layout_covers_both_band_edges():
+    config = load_config()
+    known, rows, counts = pilot_layout(config, "full_band_pilots")
+    assert all(c == dict(pilots=512, protection=256, data=256, observations=768) for c in counts)
+    assert all(np.count_nonzero(x) == 512 for x in known)
+    assert all(np.any(selected < 64) and np.any(selected >= 960) for selected in rows)
+    assert all(np.any(x[:64]) and np.any(x[960:]) for x in known)

@@ -27,13 +27,16 @@ LAYOUTS = {"current": ("DDZPZDD", False),
            "more_pilots_same_data": ("DDPPZDD", True),
            "more_pilots_more_observations": ("DDZPPZD", True),
            "medium_pilots": ("DDZPPPZ", True),
-           "dense_pilots": ("DZPPPPZ", True)}
+           "dense_pilots": ("DZPPPPZ", True),
+           "full_band_pilots": ("DDZPPPPZ", True)}
 
 
 def pilot_layout(config, name):
     """All four D use public independent QPSK pilots; optional staggered masks."""
     pattern, stagger = LAYOUTS[name]
     n, edge = config["nfft"], config["null_per_edge"]
+    if name == "full_band_pilots":
+        edge = 0
     active = n-2*edge
     if active % len(pattern):
         raise ValueError("Pilot pattern must tile the occupied band")
@@ -217,7 +220,7 @@ def run_design(output, archive, *, smoke=False, ranks=True, device=None):
     return report
 
 
-def temporal_audit(output, *, device=None, ranks=True):
+def temporal_audit(output, *, device=None, ranks=True, layout_names=None):
     """Rotate the common Q27 DPSS dictionary using independent temporal statistics."""
     output = Path(output)
     backend = DenseBackend(device or default_device())
@@ -259,7 +262,7 @@ def temporal_audit(output, *, device=None, ranks=True):
                 candidates = [(4,512), (5,512), (4,736)] if channel == "NOF1" else [(10,224), (12,224), (12,208)]
                 for count, length in candidates:
                     basis = (sampled @ rotation[:, :count]).reshape(4, n, count)
-                    for name in ("more_pilots_more_observations", "medium_pilots", "dense_pilots"):
+                    for name in (layout_names or ("more_pilots_more_observations", "medium_pilots", "dense_pilots")):
                         known, rows, counts = pilot_layout(config, name)
                         if sum(map(len, rows)) < count*length:
                             result["pilot_rank"].append(dict(effective_q=count, length=length, layout=name,
