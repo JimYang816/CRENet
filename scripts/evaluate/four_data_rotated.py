@@ -21,6 +21,8 @@ def main():
     args = p.parse_args()
     if args.threads < 1:
         p.error("--threads must be positive")
+    if not args.report_only:
+        p.error("The changed full-band layout is archived. Use scripts.evaluate.four_data_covariance for the fixed original layout; this entry only supports --report-only.")
     for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
         os.environ[name] = str(args.threads)
     from threadpoolctl import threadpool_limits

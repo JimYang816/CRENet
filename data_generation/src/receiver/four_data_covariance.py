@@ -80,7 +80,7 @@ def collect_joint_moments(prior, known, masks, noise, receiver, dataset, identit
         physical = selected_fft(direct @ public_waveform+image @ public_waveform.conj(), config, rows)
         operator_error = None
         if index == 0:
-            frame = Frame(known, known, np.zeros((4, n//4, 2), np.uint8), public_waveform, ())
+            frame = Frame(known, known, np.zeros((4, int(masks["data"][0].sum()), 2), np.uint8), public_waveform, ())
             replay = receiver.replay_frame(sounding, origin, frame)
             replay = receive_symbols(receiver.chain.receive(replay), config)
             replay = np.concatenate([replay[s, r] for s, r in enumerate(rows)])

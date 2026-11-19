@@ -65,14 +65,14 @@ class RecordSubset:
         return self.archive.load(record)
 
 
-def validation_data(prior, known, masks, receiver, archive, identities):
+def validation_data(prior, known, masks, receiver, archive, identities, *, frame_factory):
     config = prior.model.c
     q, n, length = prior.model.count, config["nfft"], prior.model.length
     basis = prior.model.sampled_basis.reshape(4, n, q)
     clean, variances, cross, energy = [], [], [], []
     for record, start in identities:
         sounding = archive.load(record)
-        frame = make_full_band_frame(config, record, start, known, masks)
+        frame = frame_factory(config, record, start, known, masks)
         origin = start-config["guard_samples"]/config["fs_baseband"]
         physical = receiver.replay_frame(sounding, origin, frame)
         y = receive_symbols(receiver.chain.receive(physical), config)
@@ -129,7 +129,7 @@ def load_estimator(path, prior, known, masks, backend, identity):
         return estimator, json.loads(saved.attrs["selection_json"])
 
 
-def calibrate(run, identity, prior, known, masks, noise, receiver, archive, prior_ids, validation_ids, backend, *, smoke):
+def calibrate(run, identity, prior, known, masks, noise, receiver, archive, prior_ids, validation_ids, backend, *, smoke, frame_factory):
     frozen = run/"frozen_estimator.h5"
     if frozen.exists():
         return load_estimator(frozen, prior, known, masks, backend, identity)
@@ -164,7 +164,7 @@ def calibrate(run, identity, prior, known, masks, noise, receiver, archive, prio
             validation = {name:saved[name][:] for name in ("clean", "variances", "cross", "energy")}
     else:
         validation = validation_data(prior, known, masks, receiver,
-            RecordSubset(archive, {r for r,_ in validation_ids}), validation_ids)
+            RecordSubset(archive, {r for r,_ in validation_ids}), validation_ids, frame_factory=frame_factory)
         with h5py.File(val_path, "w") as saved:
             saved.attrs.update(complete=False, identity=identity, windows_json=json.dumps(validation_ids))
             for name, value in validation.items():
@@ -246,7 +246,7 @@ def run_channel(channel, archive_path, previous, baseline, output, backend, sour
         known, noise = saved["known"][:], saved["unit_noise_covariance"][:]
         masks = {name:saved[f"masks/{name}"][:] for name in ("data", "tracking", "pilot", "protection")}
     estimator, selection = calibrate(run, identity, prior, known, masks, noise, receiver, archive,
-                                     prior_ids, validation_ids, backend, smoke=smoke)
+                                     prior_ids, validation_ids, backend, smoke=smoke, frame_factory=make_full_band_frame)
     result["selected_parameters"] = selection["selected"]
     result["estimator"] = estimator.diagnostics
     result["frozen_estimator_sha256"] = file_sha256(run/"frozen_estimator.h5")
@@ -304,8 +304,9 @@ def run_channel(channel, archive_path, previous, baseline, output, backend, sour
     return result, before, original
 
 
-def comparison(output, results, source):
-    report = dict(schema="four-data-three-way-covariance-v1", complete=True, source=source, channels={})
+def comparison(output, results, source, *, original_layout=False):
+    report = dict(schema="four-data-original-layout-three-way-v1" if original_layout else "four-data-three-way-covariance-v1",
+                  complete=True, source=source, channels={})
     for channel, (new, before, original) in results.items():
         report["channels"][channel] = dict(corrected=new["summary"], before=before["summary"],
             q24_l176=original["summary"], parameters=new["parameters"], selected_parameters=new["selected_parameters"],
@@ -326,7 +327,8 @@ def comparison(output, results, source):
     def draw(axis, channel, metric):
         data = report["channels"][channel]
         for scheme, label, color, marker in (("q24_l176", "Original Q24/L176", "#8a919a", "v"),
-                ("before", "Before correction", "#cf7455", "o"), ("corrected", "Joint covariance", "#245b89", "s")):
+                ("before", "Qeff/L, structured prior" if original_layout else "Before correction", "#cf7455", "o"),
+                ("corrected", "Qeff/L, joint covariance" if original_layout else "Joint covariance", "#245b89", "s")):
             s = data[scheme]
             if metric == "ber":
                 for algorithm, style, suffix in (("single_tap_mmse", "--", "single-tap"), ("full_matrix_mmse", "-", "full-matrix")):
@@ -344,6 +346,9 @@ def comparison(output, results, source):
     channels = list(report["channels"])
     title = "12 Hz | 4D, no P | frozen independent-prior joint covariance"
     caption = "Same observations and matched RF power before/after correction; no test CSI in calibration\nNew layout: 512 pilots / 256 protection / 256 data per D; original Q24/L176 has twice the payload"
+    if original_layout:
+        title = "12 Hz | 4D, no P | original carrier layout retained"
+        caption = "All three schemes: identical original waveform, data bits and RF noise; no test CSI in calibration\n128 pilots / 256 protection / 512 data per D; 64 empty bins at each edge; identical masks in all four D"
     fig, axes = plt.subplots(2, len(channels), figsize=(6.4*len(channels), 8.7), squeeze=False, layout="constrained")
     for col, channel in enumerate(channels):
         draw(axes[0, col], channel, "ber")
