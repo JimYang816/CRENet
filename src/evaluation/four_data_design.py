@@ -25,7 +25,9 @@ LENGTHS = (64, 96, 128, 176, 224, 256, 384, 512, 736, 1024)
 MODES = (16, 24, 32, 40, 48, 56)
 LAYOUTS = {"current": ("DDZPZDD", False),
            "more_pilots_same_data": ("DDPPZDD", True),
-           "more_pilots_more_observations": ("DDZPPZD", True)}
+           "more_pilots_more_observations": ("DDZPPZD", True),
+           "medium_pilots": ("DDZPPPZ", True),
+           "dense_pilots": ("DZPPPPZ", True)}
 
 
 def pilot_layout(config, name):
@@ -173,7 +175,7 @@ def audit(channel, path, output, *, ranks=True, backend=None):
         np.savez(output/f"{channel.lower()}_delay_basis.npz", basis=delay_modes[:, :max(MODES)],
                  temporal_basis=full_basis, prior_singular_values=singular)
         if ranks:
-            for name in LAYOUTS:
+            for name in ("current", "more_pilots_same_data", "more_pilots_more_observations"):
                 known, rows, counts = pilot_layout(config, name)
                 for count in (32, 48):
                     matrix = measurement_matrix(basis, delay_modes[:, :count], known, rows)
@@ -212,4 +214,76 @@ def run_design(output, archive, *, smoke=False, ranks=True, device=None):
                   note="Representation uses oracle projection on independent validation, not receiver NMSE or BER; rank uses public pilots only",
                   channels=results)
     write_json(output/"design.json", report)
+    return report
+
+
+def temporal_audit(output, *, device=None, ranks=True):
+    """Rotate the common Q27 DPSS dictionary using independent temporal statistics."""
+    output = Path(output)
+    backend = DenseBackend(device or default_device())
+    results = {}
+    for channel in ("NOF1", "NCS1"):
+        config = experiment_config(channel)
+        path = output/f"{channel.lower()}_projection_cache.h5"
+        result = dict(channel=channel, projection=[], pilot_rank=[])
+        with h5py.File(path, "r") as saved:
+            n = config["nfft"]
+            positions = np.concatenate([s*(n+config["cp"])+config["cp"]-config["fft_advance"]+np.arange(n) for s in range(4)])
+            full = saved["basis"][:]
+            sampled = full[positions]
+            # V=Z R, Z^H Z=I. Fit temporal covariance in this orthonormal
+            # receive-window coordinate; all resulting modes remain in V's span.
+            gram = sampled.conj().T @ sampled
+            factor = linalg.cholesky((gram+gram.conj().T)*0.5, lower=False)
+            covariance = np.zeros((27, 27), complex)
+            for group in saved["prior"].values():
+                transformed = factor @ group["Q27/coefficients"][:]
+                covariance += (transformed @ transformed.conj().T)/float(group["energy"][:].sum())
+            values, vectors = linalg.eigh((covariance+covariance.conj().T)*0.5, driver="evr")
+            rotation = linalg.solve_triangular(factor, vectors[:, ::-1], lower=False)
+            validation = list(saved["validation"].values())
+            for count in (2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 27):
+                transform = rotation[:, :count]
+                basis = (sampled @ transform).reshape(4, n, count)
+                for length in (176, 192, 208, 224, 256, 384, 512, 736, 1024):
+                    errors = []
+                    for group in validation:
+                        cross = transform.conj().T @ group["Q27/cross"][:]
+                        coefficients = cross.sum(axis=0)
+                        errors.append(projection_error(basis, coefficients, cross, group["energy"][:], length))
+                    result["projection"].append(dict(effective_q=count, dictionary_q=27, length=length,
+                        unknowns=count*length, mean_nmse_db=float(10*np.log10(np.mean(errors)))))
+            np.savez(output/f"{channel.lower()}_temporal_basis.npz", full_basis=full @ rotation,
+                     eigenvalues=values[::-1], rotation=rotation)
+            if ranks:
+                candidates = [(4,512), (5,512), (4,736)] if channel == "NOF1" else [(10,224), (12,224), (12,208)]
+                for count, length in candidates:
+                    basis = (sampled @ rotation[:, :count]).reshape(4, n, count)
+                    for name in ("more_pilots_more_observations", "medium_pilots", "dense_pilots"):
+                        known, rows, counts = pilot_layout(config, name)
+                        if sum(map(len, rows)) < count*length:
+                            result["pilot_rank"].append(dict(effective_q=count, length=length, layout=name,
+                                counts_per_symbol=counts[0], observations=sum(map(len, rows)),
+                                unknowns=count*length, rank_upper_bound=sum(map(len, rows)),
+                                underdetermined=True))
+                            continue
+                        matrix = measurement_matrix(basis, np.eye(length), known, rows)
+                        matrix /= np.linalg.norm(matrix, axis=0)
+                        singular = (backend.numpy(backend.torch.linalg.svdvals(backend.array(matrix)))
+                                    if backend.torch else linalg.svdvals(matrix, check_finite=False))
+                        ratio = float(singular[-1]/singular[0])
+                        row = dict(effective_q=count, length=length, layout=name,
+                            counts_per_symbol=counts[0], observations=len(matrix), unknowns=count*length,
+                            underdetermined=False,
+                            numerical_rank_1e_10=int(np.count_nonzero(singular > singular[0]*1e-10)),
+                            column_normalized_condition=1/ratio)
+                        result["pilot_rank"].append(row)
+                        print(f"{channel} temporal Qeff{count} L{length} {name}: rank "
+                              f"{row['numerical_rank_1e_10']}/{row['unknowns']}, condition {1/ratio:.3g}", flush=True)
+        write_json(output/f"{channel.lower()}_temporal_design.json", result)
+        results[channel] = result
+    report = dict(schema="four-data-temporal-compression-audit-v1", complete=True,
+                  note="Channel-specific statistical rotations inside the same 12-Hz Q27 DPSS dictionary; oracle validation projection, not receiver NMSE",
+                  channels=results, code_sha256=file_sha256(Path(__file__)))
+    write_json(output/"temporal_design.json", report)
     return report
