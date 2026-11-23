@@ -16,7 +16,7 @@ from data_generation.src.config import digest
 from data_generation.src.dataset.compact_protocol import (
     SCHEMA, MODEL_SCHEMA, SPLITS, SPLIT_CODES, physical_identities, sample_identities, target_nmse_db)
 from data_generation.src.dataset.compact_math import coefficient_nmse, reconstruct, projection_power
-from data_generation.src.receiver.pdd import JointEstimator
+from data_generation.src.receiver.pdd import JointEstimator, symbol_layout
 from data_generation.src.transmitter.ofdm import make_frame, carrier_masks
 from src.common.experiment import write_json
 from src.data.uncertainty import blocks_from_prior
@@ -50,6 +50,7 @@ def prepare_model(path, c, chain, prior, backend, provenance):
                 raise ValueError("Shared model identity/protocol mismatch")
             prepared = JointEstimator.__new__(JointEstimator)
             prepared.prior, prepared.backend = prior, backend
+            prepared.data_symbols, prepared.training_symbols = symbol_layout(c)
             prepared.known, prepared.masks = known, masks
             prepared.model_error_ratio = float(c["csi_model_error_ratio"])
             prepared.noise_gain = float(h["estimator"].attrs["noise_gain"])

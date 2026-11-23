@@ -11,6 +11,13 @@ from src.common.numerics import hermitian
 from data_generation.src.pdd import SYMBOL_COUNT, DATA_SYMBOL_INDICES, TRAINING_SYMBOL_INDICES
 
 
+def symbol_layout(config):
+    """Return the data and full-training symbols for the configured frame."""
+    if config.get("frame_structure") == "DDDD":
+        return (0, 1, 2, 3), ()
+    return DATA_SYMBOL_INDICES, TRAINING_SYMBOL_INDICES
+
+
 def selected_time_covariance(kernel, rows):
     """S F kernel F^H S^H without whitening or retaining excluded FFT rows."""
     left = np.fft.fftshift(np.fft.fft(kernel, axis=0, norm="ortho"), axes=0)[rows]
@@ -19,14 +26,15 @@ def selected_time_covariance(kernel, rows):
 
 def selected_components(prior, known, masks, backend):
     n, q, length = prior.model.c["nfft"], prior.model.count, prior.model.length
+    data_symbols, training_symbols = symbol_layout(prior.model.c)
     known = np.asarray(known, np.complex128)
     if (prior.fit_domain != FULL_FRAME_DOMAIN or prior.empirical_weight != 0
             or prior.scale != 1 or prior.interference_scale != 1 or prior.feedback_iterations != 0
             or set(prior.source_records) & set(prior.model.c.get("test_records", []))):
         raise ValueError("PDDP requires an independent full-frame fixed prior with feedback disabled")
-    if known.shape != (SYMBOL_COUNT, n) or np.any(known[list(DATA_SYMBOL_INDICES)][:, masks["data"]] != 0):
-        raise ValueError("Unknown D1/D2 labels must be zero in public training")
-    rows = [np.arange(n) if s in TRAINING_SYMBOL_INDICES else np.flatnonzero(masks["tracking"])
+    if known.shape != (SYMBOL_COUNT, n) or np.any(known[list(data_symbols)][:, masks["data"]] != 0):
+        raise ValueError("Unknown data labels must be zero in public training")
+    rows = [np.arange(n) if s in training_symbols else np.flatnonzero(masks["tracking"])
             for s in range(SYMBOL_COUNT)]
     offsets = np.cumsum([0]+[len(r) for r in rows])
     size = offsets[-1]
@@ -58,7 +66,7 @@ def selected_components(prior, known, masks, backend):
         indices = np.arange(width)
         np.add.at(rho, ((indices[:, None]-indices) % n).ravel(), delay.ravel())
         stationary = np.fft.ifft(np.fft.fft(rho)*np.fft.fft(correlation))[difference]
-        for s in DATA_SYMBOL_INDICES:
+        for s in data_symbols:
             kernel = (v[s] @ temporal @ v[s].conj().T)*stationary
             interference = hermitian(selected_time_covariance(kernel, rows[s]))
             target = slice(offsets[s], offsets[s+1])
@@ -67,10 +75,11 @@ def selected_components(prior, known, masks, backend):
 
 
 class JointEstimator:
-    """One P1+D1+D2+P2 solve; both D share batch x Q x L coefficients."""
+    """One full-frame solve; all data symbols share Q x L coefficients."""
 
     def __init__(self, prior, known, masks, unit_noise_covariance, backend):
         self.prior, self.backend = prior, backend
+        self.data_symbols, self.training_symbols = symbol_layout(prior.model.c)
         self.model_error_ratio = float(prior.model.c.get("csi_model_error_ratio", 0))
         if not 0 <= self.model_error_ratio <= 1:
             raise ValueError("CSI model error ratio must be finite and between zero and one")
@@ -103,7 +112,7 @@ class JointEstimator:
                                  max_eigenvalue=float(raw.max()), whitened_ridge=self.ridge)]
 
     def effective_noise_variances(self, observations, noise_variances):
-        """Thermal RF variance plus a floor inferred only from public P1/P2."""
+        """Thermal RF variance plus the existing receive-power model-error floor."""
         y = np.asarray(observations, complex)
         if y.ndim == 2:
             y = y[None]
@@ -114,18 +123,21 @@ class JointEstimator:
             raise ValueError("Invalid noise variance")
         if self.model_error_ratio == 0:
             return variance
-        symbols = list(TRAINING_SYMBOL_INDICES)
+        symbols = list(self.training_symbols or self.data_symbols)
         if self.noise_gain <= 0:
             raise ValueError("CSI covariance floor needs positive noise gain")
         training_power = np.mean(np.sum(abs(self.known[symbols])**2, axis=1))
         if training_power <= 0:
-            raise ValueError("CSI covariance floor needs nonzero public training")
-        data_power = np.mean(np.sum(abs(self.known[list(DATA_SYMBOL_INDICES)])**2, axis=1)) + np.count_nonzero(self.masks["data"])
+            raise ValueError("CSI covariance floor needs nonzero public pilots")
+        data_power = np.mean(np.sum(abs(self.known[list(self.data_symbols)])**2, axis=1)) + np.count_nonzero(self.masks["data"])
         received_power = np.mean(abs(y[:, symbols])**2, axis=(1, 2))
         if not np.all(np.isfinite(received_power)):
             raise ValueError("Nonfinite public training power")
         signal_rf_power = np.maximum(received_power/self.noise_gain-variance, 0)
-        return variance+self.model_error_ratio*(data_power/training_power)*signal_rf_power
+        # Without full-pilot symbols, the measured receive power already has
+        # the data-frame power; it must not be scaled by the pilot-only power.
+        scale = data_power/training_power if self.training_symbols else 1.0
+        return variance+self.model_error_ratio*scale*signal_rf_power
 
     def estimate_coefficients(self, observations, known, masks, noise_variances):
         if not np.array_equal(known, self.known) or any(not np.array_equal(masks.get(k), v) for k, v in self.masks.items()):
@@ -148,4 +160,4 @@ class JointEstimator:
     def estimate(self, observations, known, masks, noise_variances):
         coefficients = self.estimate_coefficients(observations, known, masks, noise_variances)
         return np.stack([np.stack([taps_to_matrix(self.prior.model.reconstruct(c, s))
-                                  for s in DATA_SYMBOL_INDICES]) for c in coefficients])
+                                  for s in self.data_symbols]) for c in coefficients])

@@ -1,4 +1,4 @@
-"""Isolated 4D comb-pilot Q sweep; the accepted PDDP data are untouched."""
+"""Four-data comb-pilot physical inputs and raw-CSI Q sweep."""
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -14,8 +14,7 @@ from scipy import linalg, sparse
 from scipy.signal.windows import dpss
 
 from data_generation.src.channel.watermark.replay import WatermarkArchive
-from data_generation.src.config import ROOT, digest
-from data_generation.src.pdd import load_pdd_config
+from data_generation.src.config import ROOT, digest, load_config
 from data_generation.src.receiver import pdd
 from data_generation.src.receiver.chain import ReceiverChain, relative_energy, resample, taps_to_matrix
 from data_generation.src.receiver.dpss import DPSSModel
@@ -23,7 +22,6 @@ from data_generation.src.receiver.estimation import FrozenPrior, input_windows
 from data_generation.src.transmitter.ofdm import Frame, decisions, fft, ifft, qpsk, receive_symbols, window_indices
 from src.common.experiment import file_sha256, write_json
 from src.common.numerics import DenseBackend
-from src.data.contract import target_nmse_db
 
 
 ORDERS = tuple(range(16, 33))
@@ -37,13 +35,16 @@ CODE = ("src/evaluation/four_data_q_sweep.py", "scripts/evaluate/four_data_q_swe
         "data_generation/src/receiver/chain.py", "data_generation/src/receiver/dpss.py",
         "data_generation/src/receiver/estimation.py", "data_generation/src/receiver/pdd.py",
         "data_generation/src/transmitter/ofdm.py", "data_generation/src/channel/watermark/replay.py",
-        "src/data/contract.py", "src/algorithms/full_matrix_lmmse/equalizer.py", "src/algorithms/likelihood.py")
+        "src/algorithms/full_matrix_lmmse/equalizer.py", "src/algorithms/likelihood.py")
 
 
 def config(channel):
-    c = load_pdd_config(ROOT / f"configs/data/{channel.lower()}/pddp.json")
-    return dict(c, delay_length=LENGTH, dpss_half_bandwidth_hz=BANDWIDTH_HZ,
-                pilot_count=256, data_count=512, csi_model_error_ratio=0.0)
+    c = load_config(ROOT / f"configs/data/{channel.lower()}/dddd.json")
+    if (c["frame_structure"] != "DDDD" or c["delay_length"] != LENGTH
+            or c["dpss_half_bandwidth_hz"] != BANDWIDTH_HZ
+            or (c["data_count"], c["pilot_count"]) != (512, 256)):
+        raise ValueError("Four-data configuration mismatch")
+    return c
 
 
 def masks(c):
@@ -274,72 +275,13 @@ def raw_nmse(model, coeff, truth):
     return result
 
 
-def compensation(raw, channel):
-    """Match the established reference-assisted split/SNR target, independent of BER."""
-    average = np.asarray(raw).mean(axis=(0, 2))
-    target = target_nmse_db(channel, SNR_DB)
-    if np.any(average <= 0) or not np.isfinite(average).all():
-        raise ValueError("Invalid raw NMSE")
-    return np.sqrt(10**(target/10)/average)
-
-
 def time_noise_covariance(noise):
     unshifted = np.fft.ifftshift(noise, axes=(0, 1))
     return np.fft.ifft(np.fft.fft(unshifted, axis=1, norm="ortho"), axis=0, norm="ortho")
 
 
-def score_frame(model, coefficients, truth, y, known, bits, variance, alpha, noise, data_mask, backend):
-    """Full 1024-row/512-column LMMSE in an exactly equivalent time coordinate."""
-    if backend.torch is None:
-        return score_frame_cpu(model, coefficients, truth, y, known, bits, variance, alpha, noise, data_mask)
-    import torch
-    n = model.c["nfft"]
-    carriers = np.fft.fftshift(np.arange(n))[data_mask]
-    tb = torch.as_tensor(model.sampled_basis.reshape(4, n, model.count), dtype=torch.complex128, device="cuda")
-    cf = torch.as_tensor(coefficients, device="cuda")
-    ref = torch.as_tensor(truth, device="cuda")
-    a = torch.as_tensor(alpha, device="cuda")
-    tap = ref.unsqueeze(0) * (1-a[:, None, None, None])
-    tap[..., :model.length] += a[:, None, None, None]*torch.einsum("dnq,sql->sdnl", tb, cf)
-    td = torch.fft.fft(tap, dim=-1).index_select(-1, torch.as_tensor(carriers, device="cuda"))
-    phase = torch.as_tensor(np.exp(2j*np.pi/n*np.arange(n)[:, None]*carriers)/np.sqrt(n), device="cuda")
-    matrix = td*phase
-    kw = torch.as_tensor(input_windows(known, n), device="cuda")
-    clean_known = (tap*kw[None]).sum(-1)
-    obs = torch.as_tensor(y, device="cuda")
-    residual = torch.fft.ifft(torch.fft.ifftshift(obs, dim=-1), dim=-1, norm="ortho")-clean_known
-    factor = torch.linalg.cholesky(torch.as_tensor(time_noise_covariance(noise), device="cuda"))
-    combined = torch.cat((matrix, residual[..., None]), dim=-1)
-    whitened = torch.linalg.solve_triangular(factor, combined, upper=False)
-    h, v = whitened[..., :-1], whitened[..., -1:]
-    gram = h.mH @ h
-    gram.diagonal(dim1=-2, dim2=-1).add_(torch.as_tensor(variance, device="cuda")[:, None, None])
-    fitted = torch.linalg.solve(gram, h.mH @ v)[..., 0]
-    result = fitted.detach().cpu().numpy()
-    return np.count_nonzero(decisions(result) != bits[None], axis=(-1, -2))
-
-
-def score_frame_cpu(model, coefficients, truth, y, known, bits, variance, alpha, noise, data_mask):
-    from src.algorithms.full_matrix_lmmse.equalizer import equalize_batch
-    from src.algorithms.interface import EqualizerBatch
-    from src.algorithms.likelihood import make_whitener
-    backend = DenseBackend("cpu")
-    whitener = make_whitener(noise, backend)
-    idx = np.flatnonzero(data_mask)
-    errors = np.empty((len(variance), 4), dtype=int)
-    for d in range(4):
-        reference = taps_to_matrix(truth[d])
-        for s in range(len(variance)):
-            raw = taps_to_matrix(model.reconstruct(coefficients[s], d))
-            h = reference+alpha[s]*(raw-reference)
-            residual = y[s, d]-h@known[d]
-            batch = EqualizerBatch(h[None], y[s, d][None], residual[None], variance[s:s+1], idx, noise)
-            estimate = equalize_batch(batch, backend, whitener=whitener).symbols[0]
-            errors[s, d] = np.count_nonzero(decisions(estimate) != bits[d])
-    return errors
-
-
 def estimate_split(h, c, model, order, split, backend):
+    from src.evaluation.four_data_raw_q_sweep import detect_raw
     known, noise = h["known"][:], h["unit_noise"][:]
     groups = list(h[split].values())
     observations = np.stack([g["clean"][:][None]+np.sqrt(g["variance"][:])[:, None, None]*g["standard"][:][None]
@@ -352,24 +294,22 @@ def estimate_split(h, c, model, order, split, backend):
         estimator = pdd.JointEstimator(prior, known, m, noise, backend)
         coeff = estimator.estimate_coefficients(observations.reshape(-1, 4, c["nfft"]), known, m,
                                                 variances.ravel()).reshape(len(groups), len(SNR_DB), order, LENGTH)
-    raw = np.stack([raw_nmse(model, coeff[i], g["truth"][:]) for i, g in enumerate(groups)])
-    alpha = compensation(raw, c["channel"])
     del estimator, prior
     if backend.torch:
         backend.torch.cuda.empty_cache()
     rows = []
     for i, g in enumerate(groups):
         t = time.perf_counter()
-        errors = score_frame(model, coeff[i], g["truth"][:], observations[i], known, g["bits"][:],
-                             variances[i], alpha, noise, m["data"], backend)
+        detected = detect_raw(model, coeff[i], observations[i], known, variances[i], noise, m["data"], backend)
+        errors = np.count_nonzero(decisions(detected) != g["bits"][:][None], axis=(-1, -2))
+        raw = raw_nmse(model, coeff[i], g["truth"][:])
         rows.append(dict(record=int(g.attrs["record"]), start_seconds=float(g.attrs["start_seconds"]),
-                         errors=errors.tolist(), raw_nmse=raw[i].tolist(),
-                         compensated_nmse=(raw[i]*alpha[:, None]**2).tolist()))
+                         errors=errors.tolist(), raw_nmse=raw.tolist()))
         print(f"{c['channel']} {split} Q={order} frame {i+1}/{len(groups)} {time.perf_counter()-t:.1f}s", flush=True)
     error = np.asarray([r["errors"] for r in rows]).sum(axis=(0, 2))
-    nmse = np.asarray([r["compensated_nmse"] for r in rows]).mean(axis=(0, 2))
+    nmse = np.asarray([r["raw_nmse"] for r in rows]).mean(axis=(0, 2))
     count = len(groups)*4*512*2
-    return dict(q=order, split=split, frames=rows, alpha=alpha.tolist(), bit_errors=error.tolist(),
+    return dict(q=order, split=split, frames=rows, input_view="raw", bit_errors=error.tolist(),
                 bits_per_snr=count, ber=(error/count).tolist(), mean_ber=float(np.mean(error/count)),
                 mean_nmse_db=(10*np.log10(nmse)).tolist())
 
@@ -445,8 +385,7 @@ def run(output, archive_path, smoke, backend, *, stage="all"):
                     orders=list(ORDERS), snr_db=list(SNR_DB), bandwidth_hz=BANDWIDTH_HZ, length=LENGTH,
                     frame="D1-D2-D3-D4; no full-pilot symbol", carrier_pattern="P,D,D,P,D,D,zero; 64 edge nulls",
                     observations="256 pilot + 128 interior null per D; four D jointly", smoke=smoke,
-                    csi_view="reference-assisted compensated, split/SNR target fixed; no BER-based scaling",
-                    compensation="H_ref + alpha*(H_raw-H_ref), alpha per channel/Q/split/SNR, from all frames in that split",
+                    csi_view="raw receiver-estimated CSI; no reference-assisted adjustment",
                     source_splits={name: [[r, s] for r, s in ids]
                                    for name, ids in zip(("prior", "validation", "test"), identities(smoke))},
                     equalizer="all 1024 receive rows, 512 data columns, full colored noise covariance",

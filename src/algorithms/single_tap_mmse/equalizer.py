@@ -6,6 +6,18 @@ import numpy as np
 from src.algorithms.interface import EqualizerResult
 
 
+def equalize_diagonal(diagonal, observations, variance, backend):
+    """Apply the same single-tap rule to already extracted diagonal entries."""
+    denominator = abs(diagonal)**2 + variance
+    numerator = diagonal.conj()*observations
+    if backend.torch:
+        safe = backend.torch.where(denominator > 0, denominator, backend.torch.ones_like(denominator))
+        return backend.torch.where(denominator > 0, numerator/safe, backend.torch.zeros_like(numerator))
+    estimate = np.zeros_like(numerator)
+    np.divide(numerator, denominator, out=estimate, where=denominator > 0)
+    return estimate
+
+
 def mmse(channel, observations, data_mask, noise_variance):
     h, y = np.asarray(channel), np.asarray(observations)
     mask = np.asarray(data_mask, bool)
@@ -33,12 +45,6 @@ def equalize_batch(batch, backend, **parameters):
     diagonal = (batch.channel.diagonal(dim1=-2, dim2=-1) if b.torch
                 else np.diagonal(batch.channel, axis1=-2, axis2=-1))[:, indices]
     noise = b.array(np.diag(batch.noise_covariance).real[indices])
-    denominator = abs(diagonal)**2+b.array(batch.variances)[:, None]*noise
-    numerator = diagonal.conj()*batch.raw_observations[:, indices]
-    if b.torch:
-        safe = b.torch.where(denominator > 0, denominator, b.torch.ones_like(denominator))
-        estimate = b.torch.where(denominator > 0, numerator/safe, b.torch.zeros_like(numerator))
-    else:
-        estimate = np.zeros_like(numerator)
-        np.divide(numerator, denominator, out=estimate, where=denominator > 0)
+    estimate = equalize_diagonal(diagonal, batch.raw_observations[:, indices],
+                                 b.array(batch.variances)[:, None]*noise, b)
     return EqualizerResult(b.numpy(estimate), np.zeros(len(batch.variances), dtype=np.int64))
