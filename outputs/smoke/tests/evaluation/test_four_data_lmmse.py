@@ -1,5 +1,6 @@
 """Exercise the fixed four-data setup and the actual detector contracts."""
 from inspect import signature
+import json
 from types import SimpleNamespace
 
 import numpy as np
@@ -7,6 +8,7 @@ import pytest
 from scipy import linalg
 
 from data_generation.src.config import ROOT, load_config
+from data_generation.src.pdd import load_pdd_config
 from data_generation.src.receiver.chain import ReceiverChain, taps_to_matrix
 from data_generation.src.receiver.dpss import build_model
 from data_generation.src.receiver.pdd import JointEstimator, symbol_layout
@@ -23,6 +25,7 @@ def test_four_data_parameters_and_independent_test_records():
     for channel in options["channels"]:
         c = channel_config(channel)
         assert (c["frame_structure"], c["data_count"], c["pilot_count"]) == ("DDDD", 512, 256)
+        assert (c["nfft"], c["cp"], c["fft_advance"]) == (1024, 256, 32)
         assert (c["dpss_half_bandwidth_hz"], c["dpss_expected_count"], c["delay_length"]) == (12, 24, 176)
         assert c["csi_model_error_ratio"] == .03
         assert symbol_layout(c) == ((0, 1, 2, 3), ())
@@ -30,15 +33,18 @@ def test_four_data_parameters_and_independent_test_records():
         assert (carriers["data"].sum(), carriers["pilot"].sum(), carriers["protection"].sum(), carriers["edge"].sum()) == (512, 256, 128, 128)
         frame = make_frame(c, options["test_records"][0], options["start_seconds"], 2)
         assert frame.bits.shape == (4, 512, 2)
+        assert frame.baseband.shape == (5720,)
+        blocks = frame.baseband[c["guard_samples"]:-c["guard_samples"]].reshape(4, 1280)
+        np.testing.assert_array_equal(blocks[:, :256], blocks[:, -256:])
         assert np.all(frame.known[:, carriers["data"]] == 0)
         assert np.all(frame.x[:, carriers["null"]] == 0)
         basis, concentration = model_basis(c)
-        assert basis.shape == (5632, 24)
+        assert basis.shape == (5120, 24)
         np.testing.assert_allclose(basis.T@basis, np.eye(24), atol=2e-13)
         np.testing.assert_allclose(build_model(c).basis, basis, rtol=0, atol=2e-12)
         diagnostics = basis_diagnostics(c, concentration)
         assert diagnostics["order"] == 24 and not diagnostics["tail_threshold_enforced"]
-        assert diagnostics["tail_ratio"] == pytest.approx(.00254780394785836, rel=1e-9)
+        assert diagnostics["tail_ratio"] == pytest.approx(.0000559585884206681, rel=1e-8)
         assert diagnostics["tail_ratio"] > diagnostics["tail_threshold"]
         assert np.all(np.diff(concentration) <= 1e-12)
 
@@ -54,6 +60,17 @@ def test_four_data_noise_floor_uses_data_frame_power():
     variance = np.array([1., 3.])
     actual = estimator.effective_noise_variances(y, variance)
     np.testing.assert_allclose(actual, variance+.03*(8-variance))
+
+
+def test_default_and_historical_frames_require_their_own_cp(tmp_path):
+    current, historical = load_config(), load_pdd_config()
+    assert (current["frame_structure"], current["cp"]) == ("DDDD", 256)
+    assert (historical["frame_structure"], historical["cp"]) == ("PDDP", 384)
+    for c, cp, expected in ((current, 384, "CP256"), (historical, 256, "CP384")):
+        path = tmp_path/f"{c['frame_structure']}.json"
+        path.write_text(json.dumps(dict(c, cp=cp)), encoding="utf-8")
+        with pytest.raises(ValueError, match=expected):
+            load_config(path)
 
 
 def test_receiver_snr_uses_all_four_data_windows():

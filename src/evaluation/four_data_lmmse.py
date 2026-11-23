@@ -308,6 +308,10 @@ def finish(output, metadata, reports):
     if len(orders) != 1:
         raise ValueError("Channel reports must use the same fixed DPSS order")
     order = orders.pop()
+    cps = {metadata["configs"][channel]["cp"] for channel in reports}
+    if len(cps) != 1:
+        raise ValueError("Channel reports must use the same cyclic-prefix length")
+    cp = cps.pop()
     write_json(output/"metrics.json", dict(complete=True, metadata=metadata, channels=reports))
     with (output/"summary.csv").open("w", encoding="utf-8-sig", newline="") as stream:
         writer = csv.writer(stream)
@@ -339,7 +343,7 @@ def finish(output, metadata, reports):
         ax.set_yscale("log")
         ax.grid(alpha=.25, which="both")
         ax.legend(fontsize=8)
-    fig.suptitle("4D raw CSI versus ideal reference CSI | zero errors shown at half-count floor")
+    fig.suptitle(f"4D, CP={cp}, Q={order} | raw vs reference CSI | zero errors at half-count floor")
     fig.savefig(output/"ber_snr.png", dpi=180)
     fig.savefig(output/"ber_snr.pdf")
     plt.close(fig)
@@ -351,7 +355,7 @@ def finish(output, metadata, reports):
         ax.set(title=channel, xlabel="SNR (dB)", ylabel="Mean full-matrix CSI NMSE (dB)", xticks=r["snr_db"])
         ax.grid(alpha=.25)
         ax.legend()
-    fig.suptitle(f"4D, 512 data + 256 pilots | 12 Hz / Q={order} / L=176")
+    fig.suptitle(f"4D, CP={cp}, 512 data + 256 pilots | 12 Hz / Q={order} / L=176")
     fig.savefig(output/"nmse_snr.png", dpi=180)
     fig.savefig(output/"nmse_snr.pdf")
     plt.close(fig)

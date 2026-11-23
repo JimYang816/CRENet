@@ -24,7 +24,7 @@ def test_q24_uses_same_first_dpss_vectors_and_reports_tail_limit():
     reduced = dpss(len(full), nw, Kmax=24, sym=True, norm=2).T
     np.testing.assert_allclose(full[:, :24], reduced, rtol=0, atol=2e-12)
     tail = 1-np.sum(concentration[:24])/(2*nw)
-    assert tail == pytest.approx(.00254780394785836, rel=1e-9)
+    assert tail == pytest.approx(.0000559585884206681, rel=1e-8)
     assert tail > c["dpss_tail_ratio"]
 
 
@@ -33,6 +33,8 @@ def test_historical_q32_source_may_differ_only_in_order():
     validate_source_config("NOF1", dict(c, dpss_expected_count=32))
     with pytest.raises(ValueError, match="beyond DPSS order"):
         validate_source_config("NOF1", dict(c, dpss_expected_count=32, delay_length=175))
+    with pytest.raises(ValueError, match="beyond DPSS order"):
+        validate_source_config("NOF1", dict(c, dpss_expected_count=32, cp=384))
     with pytest.raises(ValueError, match="beyond DPSS order"):
         validate_source_config("NOF1", c)
 

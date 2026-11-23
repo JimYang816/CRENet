@@ -21,7 +21,7 @@ def test_q16_is_the_first_16_vectors_and_records_the_actual_tail():
     reduced = dpss(len(basis), nw, Kmax=16, sym=True, norm=2).T
     np.testing.assert_allclose(basis[:, :16], reduced, rtol=0, atol=2e-12)
     tail = 1-np.sum(concentration[:16])/(2*nw)
-    assert tail == pytest.approx(.289772792300458, rel=1e-10)
+    assert tail == pytest.approx(.2187564635093302, rel=1e-10)
     assert tail > c["dpss_tail_ratio"]
 
 

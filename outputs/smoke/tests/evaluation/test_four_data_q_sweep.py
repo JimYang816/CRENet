@@ -35,7 +35,7 @@ def test_carriers_and_paired_frame_are_fixed():
 def test_dpss_q32():
     c = config("NCS1")
     vectors, ratio = basis(c)
-    assert vectors.shape == (5632, 32)
+    assert vectors.shape == (5120, 32)
     np.testing.assert_allclose(vectors.T @ vectors, np.eye(32), atol=2e-13)
     assert np.all(np.diff(ratio) <= 1e-12)
 
