@@ -150,7 +150,7 @@
   "validation_snr_db": 30,
   "dpss_half_bandwidth_hz": 12,
   "dpss_tail_ratio": 0.00001,
-  "dpss_expected_count": 32,
+  "dpss_expected_count": 24,
   "delay_length": 176,
   "delay_block_size": 32,
   "empirical_weight": 0,

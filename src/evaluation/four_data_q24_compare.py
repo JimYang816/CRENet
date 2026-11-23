@@ -17,6 +17,14 @@ ORDERS = (24, 32)
 CHANNELS = ("NOF1", "NCS1")
 
 
+def validate_source_config(channel, source_config):
+    """Permit only the order difference between current Q24 and the Q32 source."""
+    active = channel_config(channel)
+    if (source_config.get("dpss_expected_count") != 32
+            or source_config != dict(active, dpss_expected_count=32)):
+        raise ValueError("Q32 source differs from the active waveform parameters beyond DPSS order")
+
+
 def verify_source(source, backend):
     """Authenticate the original run and bind both orders to its physical data."""
     source = Path(source).resolve()
@@ -30,9 +38,8 @@ def verify_source(source, backend):
         raise ValueError("Q32 baseline is not the completed, uncompensated paired experiment")
     paths, tails = {}, {}
     for channel in CHANNELS:
-        c = channel_config(channel)
-        if c != original["configs"][channel]:
-            raise ValueError("Active waveform parameters do not match the Q32 experiment")
+        c = original["configs"][channel]
+        validate_source_config(channel, c)
         path = source/channel.lower()/"physical.h5"
         expected_identity = digest(dict(schema=original["schema"], config=c, options=expected_options,
             archive=original["archive_sha256"], code=original["code_sha256"]))

@@ -14,7 +14,7 @@ from data_generation.src.receiver.dpss import DPSSModel
 from data_generation.src.transmitter.ofdm import make_frame
 from src.common.numerics import DenseBackend
 from src.evaluation.four_data_lmmse import channel_config, evaluate, model_basis
-from src.evaluation.four_data_q24_compare import verify_q32, verify_reference
+from src.evaluation.four_data_q24_compare import validate_source_config, verify_q32, verify_reference
 
 
 def test_q24_uses_same_first_dpss_vectors_and_reports_tail_limit():
@@ -26,6 +26,15 @@ def test_q24_uses_same_first_dpss_vectors_and_reports_tail_limit():
     tail = 1-np.sum(concentration[:24])/(2*nw)
     assert tail == pytest.approx(.00254780394785836, rel=1e-9)
     assert tail > c["dpss_tail_ratio"]
+
+
+def test_historical_q32_source_may_differ_only_in_order():
+    c = channel_config("NOF1")
+    validate_source_config("NOF1", dict(c, dpss_expected_count=32))
+    with pytest.raises(ValueError, match="beyond DPSS order"):
+        validate_source_config("NOF1", dict(c, dpss_expected_count=32, delay_length=175))
+    with pytest.raises(ValueError, match="beyond DPSS order"):
+        validate_source_config("NOF1", c)
 
 
 def synthetic_source(source):

@@ -11,7 +11,7 @@ from data_generation.src.receiver.chain import ReceiverChain, taps_to_matrix
 from data_generation.src.receiver.dpss import build_model
 from data_generation.src.receiver.pdd import JointEstimator, symbol_layout
 from src.common.numerics import DenseBackend
-from src.evaluation.four_data_lmmse import channel_config, detect, load_run_config, model_basis
+from src.evaluation.four_data_lmmse import basis_diagnostics, channel_config, detect, load_run_config, model_basis
 from data_generation.src.transmitter.ofdm import window_indices
 from src.evaluation.four_data_q_sweep import make_frame, masks
 
@@ -23,7 +23,7 @@ def test_four_data_parameters_and_independent_test_records():
     for channel in options["channels"]:
         c = channel_config(channel)
         assert (c["frame_structure"], c["data_count"], c["pilot_count"]) == ("DDDD", 512, 256)
-        assert (c["dpss_half_bandwidth_hz"], c["dpss_expected_count"], c["delay_length"]) == (12, 32, 176)
+        assert (c["dpss_half_bandwidth_hz"], c["dpss_expected_count"], c["delay_length"]) == (12, 24, 176)
         assert c["csi_model_error_ratio"] == .03
         assert symbol_layout(c) == ((0, 1, 2, 3), ())
         carriers = masks(c)
@@ -33,9 +33,13 @@ def test_four_data_parameters_and_independent_test_records():
         assert np.all(frame.known[:, carriers["data"]] == 0)
         assert np.all(frame.x[:, carriers["null"]] == 0)
         basis, concentration = model_basis(c)
-        assert basis.shape == (5632, 32)
-        np.testing.assert_allclose(basis.T@basis, np.eye(32), atol=2e-13)
+        assert basis.shape == (5632, 24)
+        np.testing.assert_allclose(basis.T@basis, np.eye(24), atol=2e-13)
         np.testing.assert_allclose(build_model(c).basis, basis, rtol=0, atol=2e-12)
+        diagnostics = basis_diagnostics(c, concentration)
+        assert diagnostics["order"] == 24 and not diagnostics["tail_threshold_enforced"]
+        assert diagnostics["tail_ratio"] == pytest.approx(.00254780394785836, rel=1e-9)
+        assert diagnostics["tail_ratio"] > diagnostics["tail_threshold"]
         assert np.all(np.diff(concentration) <= 1e-12)
 
 

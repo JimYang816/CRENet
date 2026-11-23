@@ -51,7 +51,7 @@ def load_run_config(path):
 def channel_config(channel):
     c = load_config(ROOT/f"configs/data/{channel.lower()}/dddd.json")
     if (c["channel"] != channel or c["frame_structure"] != "DDDD"
-            or (c["data_count"], c["pilot_count"], c["dpss_expected_count"], c["delay_length"]) != (512, 256, 32, 176)
+            or (c["data_count"], c["pilot_count"], c["dpss_expected_count"], c["delay_length"]) != (512, 256, 24, 176)
             or c["dpss_half_bandwidth_hz"] != 12 or c["snr_db"] != list(range(0, 31, 5))):
         raise ValueError("The data configuration does not match the fixed four-data experiment")
     return c
@@ -63,6 +63,17 @@ def model_basis(c):
     vectors, concentration = dpss(total, nw, Kmax=c["dpss_expected_count"], sym=True,
                                   norm=2, return_ratios=True)
     return vectors.T.copy(), concentration
+
+
+def basis_diagnostics(c, concentration):
+    total = 4*(c["nfft"]+c["cp"])
+    nw = total*c["dpss_half_bandwidth_hz"]/c["fs_baseband"]
+    if len(concentration) != c["dpss_expected_count"]:
+        raise ValueError("DPSS concentration count does not match the fixed order")
+    return dict(order=c["dpss_expected_count"], time_bandwidth_product=float(nw),
+                tail_ratio=float(max(0., 1-np.sum(concentration)/(2*nw))),
+                tail_threshold=float(c["dpss_tail_ratio"]), tail_threshold_enforced=False,
+                order_selection="explicit fixed order")
 
 
 def manifest(options, archive, backend):
@@ -77,6 +88,7 @@ def manifest(options, archive, backend):
                 dirty=bool(subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT, text=True).strip()),
                 code_sha256={name: file_sha256(ROOT/name) for name in CODE_FILES},
                 archive_sha256=file_sha256(archive), options=options, configs=configs,
+                dpss_diagnostics={ch: basis_diagnostics(c, model_basis(c)[1]) for ch, c in configs.items()},
                 input_view="raw", csi_compensation=False, precision="complex128", device=backend.device,
                 prior="full-frame reference kernels from independent prior records only",
                 reference_use="ideal-CSI detector and NMSE scoring only; never used to modify estimated CSI",
@@ -292,6 +304,10 @@ def finish(output, metadata, reports):
     import matplotlib.pyplot as plt
 
     output = Path(output)
+    orders = {report["q"] for report in reports.values()}
+    if len(orders) != 1:
+        raise ValueError("Channel reports must use the same fixed DPSS order")
+    order = orders.pop()
     write_json(output/"metrics.json", dict(complete=True, metadata=metadata, channels=reports))
     with (output/"summary.csv").open("w", encoding="utf-8-sig", newline="") as stream:
         writer = csv.writer(stream)
@@ -335,7 +351,7 @@ def finish(output, metadata, reports):
         ax.set(title=channel, xlabel="SNR (dB)", ylabel="Mean full-matrix CSI NMSE (dB)", xticks=r["snr_db"])
         ax.grid(alpha=.25)
         ax.legend()
-    fig.suptitle("4D, 512 data + 256 pilots | 12 Hz / Q=32 / L=176")
+    fig.suptitle(f"4D, 512 data + 256 pilots | 12 Hz / Q={order} / L=176")
     fig.savefig(output/"nmse_snr.png", dpi=180)
     fig.savefig(output/"nmse_snr.pdf")
     plt.close(fig)

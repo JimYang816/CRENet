@@ -28,15 +28,17 @@ def verify_q24_source(source, baseline, metadata):
             or manifest.get("physical") != metadata["physical"]
             or manifest.get("baseline_metrics_sha256") != metadata["baseline_metrics_sha256"]
             or manifest.get("baseline_manifest_sha256") != metadata["baseline_manifest_sha256"]
-            or manifest.get("code_sha256") != metadata["code_sha256"]
+            or set(manifest.get("code_sha256", {})) != set(metadata["code_sha256"])
             or set(report.get("channels", {})) != set(CHANNELS)):
-        raise ValueError("Previous Q24 comparison is not bound to the same physical data and code")
+        raise ValueError("Previous Q24 comparison is not bound to the same physical data and code scope")
     for channel in CHANNELS:
         if (set(report["channels"][channel]) != {"q24", "q32"}
                 or not report["channels"][channel]["q24"].get("complete")
                 or not report["channels"][channel]["q32"].get("complete")):
             raise ValueError("Previous Q24 comparison is incomplete")
-    return report["channels"], dict(path=str(baseline),
+    # Source revisions may differ, but run() recomputes and verifies every Q24
+    # and Q32 frame before accepting the previous results as a baseline.
+    return report["channels"], dict(path=str(baseline), previous_code_sha256=manifest["code_sha256"],
         manifest_sha256=file_sha256(baseline/"manifest.json"),
         metrics_sha256=file_sha256(baseline/"metrics.json"))
 

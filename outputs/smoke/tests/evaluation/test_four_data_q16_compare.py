@@ -68,3 +68,17 @@ def test_q24_source_rejects_changed_input_or_physical_identity(tmp_path):
     different = dict(metadata, physical={"NOF1": {"sha256": "changed"}})
     with pytest.raises(ValueError, match="physical data"):
         verify_q24_source(tmp_path, baseline, different)
+
+
+def test_q24_source_records_previous_code_while_allowing_a_rechecked_revision(tmp_path):
+    old = dict(options={}, configs={}, physical={}, baseline_metrics_sha256="a",
+               baseline_manifest_sha256="b", code_sha256={"receiver.py": "old"})
+    manifest = dict(schema="four-data-paired-q24-q32-v1", input_view="raw", csi_compensation=False, **old)
+    channels = {ch: {q: dict(complete=True) for q in ("q24", "q32")} for ch in ("NOF1", "NCS1")}
+    baseline = tmp_path/"previous"
+    baseline.mkdir()
+    (baseline/"manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (baseline/"metrics.json").write_text(json.dumps(dict(complete=True, metadata=manifest, channels=channels)), encoding="utf-8")
+    current = dict(old, code_sha256={"receiver.py": "new"})
+    _, identity = verify_q24_source(tmp_path, baseline, current)
+    assert identity["previous_code_sha256"] == {"receiver.py": "old"}

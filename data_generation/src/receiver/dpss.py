@@ -50,23 +50,31 @@ class DPSSModel:
 
 
 def build_model(c):
-    """Build the fixed absolute-Hz time basis, independent of native snapshot rate."""
+    """Build the configured absolute-Hz basis; DDDD uses its explicit fixed order."""
     total = SYMBOL_COUNT*(c["nfft"]+c["cp"])
     bandwidth = float(c["dpss_half_bandwidth_hz"])
     if not np.isfinite(bandwidth) or not 0 < bandwidth < c["fs_baseband"]/2:
         raise ValueError("DPSS half bandwidth must be finite and within the baseband Nyquist limit")
     nw = total*bandwidth/c["fs_baseband"]
-    requested = int(c["dpss_expected_count"])
-    if not 1 <= requested <= total:
+    requested = c["dpss_expected_count"]
+    if isinstance(requested, bool) or not isinstance(requested, (int, np.integer)) or not 1 <= requested <= total:
         raise ValueError("Invalid fixed DPSS order")
-    basis, eigenvalues = dpss(total, nw, Kmax=min(total, max(requested, int(np.ceil(2*nw))+24)),
+    tail_limit = float(c["dpss_tail_ratio"])
+    if not np.isfinite(tail_limit) or not 0 < tail_limit < 1:
+        raise ValueError("Invalid DPSS tail threshold")
+    fixed_order = c.get("frame_structure") == "DDDD"
+    candidates = requested if fixed_order else min(total, max(requested, int(np.ceil(2*nw))+24))
+    basis, eigenvalues = dpss(total, nw, Kmax=candidates,
                              sym=True, norm=2, return_ratios=True)
-    # The exact sum over all DPSS eigenvalues equals 2NW.
-    tails = np.maximum(1-np.cumsum(eigenvalues)/(2*nw), 0)
-    good = np.flatnonzero(tails <= c["dpss_tail_ratio"])
-    if not len(good):
-        raise RuntimeError("Insufficient DPSS eigenvalues for requested tail threshold")
-    count = requested if c.get("frame_structure") == "DDDD" else int(good[0]+1)
-    if count != requested or tails[count-1] > c["dpss_tail_ratio"]:
-        raise ValueError("Fixed DPSS configuration generated an unexpected basis count")
+    if fixed_order:
+        count = requested
+    else:
+        # Historical PDDP keeps its original automatic tail-threshold selection.
+        tails = np.maximum(1-np.cumsum(eigenvalues)/(2*nw), 0)
+        good = np.flatnonzero(tails <= tail_limit)
+        if not len(good):
+            raise RuntimeError("Insufficient DPSS eigenvalues for requested tail threshold")
+        count = int(good[0]+1)
+        if count != requested:
+            raise ValueError("Fixed DPSS configuration generated an unexpected basis count")
     return DPSSModel(basis[:count].T.copy(), bandwidth, c["dpss_tail_ratio"], c["delay_length"], c)

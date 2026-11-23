@@ -4,7 +4,7 @@
 
 ## 文档与当前实验范围
 
-- 当前阶段先验证 D-D-D-D 帧的 Single-tap LMMSE 与 Full-matrix LMMSE，使用 `configs/data/{nof1,ncs1}/dddd.json`：每符号 512 数据和 256 梳状导频，DPSS 半带宽 12 Hz、Q=32、L=176。小实验入口及结果定义见 `docs/four_data_lmmse.md`。
+- 当前阶段先验证 D-D-D-D 帧的 Single-tap LMMSE 与 Full-matrix LMMSE，使用 `configs/data/{nof1,ncs1}/dddd.json`：每符号 512 数据和 256 梳状导频，DPSS 半带宽 12 Hz、固定 Q=24、L=176。小实验入口及结果定义见 `docs/four_data_lmmse.md`。
 - CSI 直接使用接收机原始估计，不根据参考 CSI 或固定 NMSE 目标调整。参考 CSI 仅用于独立先验构造、理想参考均衡、训练监督和误差评分。
 - 历史 P-D-D-P 数据集、补偿视图、训练检查点及缓存不适用于新的 D-D-D-D 帧。后续学习型算法实验须先生成并验收新帧数据，再适配四个数据符号的训练与评测代码；当前小实验不代表正式数据集已完成。
 - CRENet 的原有8层残差 MMSE Unfolding 与论文消融方案可作为后续设计参考，但不得直接复用旧参数条件下的权重或结果。
