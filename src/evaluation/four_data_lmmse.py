@@ -17,7 +17,7 @@ from data_generation.src.receiver.chain import relative_energy, taps_to_matrix
 from data_generation.src.receiver.dpss import DPSSModel
 from data_generation.src.receiver.estimation import FrozenPrior, input_windows
 from data_generation.src.receiver.pdd import JointEstimator
-from data_generation.src.transmitter.ofdm import decisions, fft, receive_symbols
+from data_generation.src.transmitter.ofdm import carrier_masks, decisions, fft, receive_symbols
 from src.algorithms.full_matrix_lmmse.equalizer import equalize_batch as full_equalize
 from src.algorithms.interface import EqualizerBatch
 from src.algorithms.likelihood import make_whitener
@@ -214,11 +214,16 @@ def detect(taps, observations, known, variances, noise, data_mask, backend):
     return single.detach().cpu().numpy(), full.detach().cpu().numpy()
 
 
-def evaluate(channel, output, metadata, backend):
-    c, options = metadata["configs"][channel], metadata["options"]
-    path = Path(output)/channel.lower()/"physical.h5"
-    result_path = path.parent/"metrics.json"
-    identity = digest(dict(metadata=metadata, channel=channel))
+def evaluate(channel, output, metadata, backend, *, physical_root=None, order=None):
+    c, options = metadata["configs"][channel].copy(), metadata["options"]
+    order = c["dpss_expected_count"] if order is None else order
+    if isinstance(order, bool) or not isinstance(order, int) or order < 1:
+        raise ValueError("DPSS order must be a positive integer")
+    c["dpss_expected_count"] = order
+    path = Path(physical_root or output)/channel.lower()/"physical.h5"
+    result_path = Path(output)/channel.lower()/"metrics.json"
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    identity = digest(dict(metadata=metadata, channel=channel, order=order))
     if result_path.exists():
         saved = json.loads(result_path.read_text(encoding="utf-8"))
         if saved.get("identity") != identity:
@@ -227,19 +232,21 @@ def evaluate(channel, output, metadata, backend):
     with h5py.File(path, "r") as h:
         if not h.attrs.get("complete"):
             raise ValueError("Physical data are incomplete")
-        model = DPSSModel(h["basis"][:], c["dpss_half_bandwidth_hz"], c["dpss_tail_ratio"], c["delay_length"], c)
+        if h["basis"].shape[1] < order or h["prior"].shape[1] < order:
+            raise ValueError("Physical source does not contain the requested DPSS order")
+        model = DPSSModel(h["basis"][:, :order], c["dpss_half_bandwidth_hz"], c["dpss_tail_ratio"], c["delay_length"], c)
         known, noise = h["known"][:], h["unit_noise"][:]
         groups = list(h["test"].values())
         observations = np.stack([g["clean"][:][None]+np.sqrt(g["variance"][:])[:, None, None]*g["standard"][:][None] for g in groups])
         variances = np.stack([g["variance"][:] for g in groups])
-        prior = FrozenPrior.fit_coefficients(model, h["prior"][:], c["empirical_weight"], c["prior_scale"],
+        prior = FrozenPrior.fit_coefficients(model, h["prior"][:, :order], c["empirical_weight"], c["prior_scale"],
                   options["prior_records"], regularizer=c["relative_regularizer"], delay_block_size=c["delay_block_size"],
                   interference_scale=c["interference_scale"])
-        carrier_masks = masks(c)
-        print(f"{channel}: building raw joint DPSS estimator", flush=True)
-        estimator = JointEstimator(prior, known, carrier_masks, noise, backend)
+        layout = carrier_masks(c)
+        print(f"{channel}: building raw joint DPSS estimator, Q={order}", flush=True)
+        estimator = JointEstimator(prior, known, layout, noise, backend)
         coefficients = estimator.estimate_coefficients(observations.reshape(-1, 4, c["nfft"]), known,
-            carrier_masks, variances.ravel()).reshape(len(groups), len(c["snr_db"]), model.count, model.length)
+            layout, variances.ravel()).reshape(len(groups), len(c["snr_db"]), model.count, model.length)
         estimator_diagnostics = estimator.diagnostics
         del estimator, prior
         if backend.torch:
@@ -249,13 +256,13 @@ def evaluate(channel, output, metadata, backend):
         for i, group in enumerate(groups):
             begin = time.perf_counter()
             estimated = np.einsum("dnq,sql->sdnl", sampled, coefficients[i], optimize=True)
-            single, full = detect(estimated, observations[i], known, variances[i], noise, carrier_masks["data"], backend)
+            single, full = detect(estimated, observations[i], known, variances[i], noise, layout["data"], backend)
             bits = group["bits"][:]
             raw_errors = [np.count_nonzero(decisions(x) != bits[None], axis=(-1, -2)) for x in (single, full)]
             # Reference CSI is first read after raw detection and is never used to change estimated taps.
             truth = group["truth"][:]
             nmse = raw_nmse(model, coefficients[i], truth)
-            ref_single, ref_full = detect(truth, observations[i], known, variances[i], noise, carrier_masks["data"], backend)
+            ref_single, ref_full = detect(truth, observations[i], known, variances[i], noise, layout["data"], backend)
             ref_errors = [np.count_nonzero(decisions(x) != bits[None], axis=(-1, -2)) for x in (ref_single, ref_full)]
             frames.append(dict(record=int(group.attrs["record"]), start_seconds=float(group.attrs["start_seconds"]),
                 raw_single_errors=raw_errors[0].tolist(), raw_full_errors=raw_errors[1].tolist(),
@@ -271,7 +278,7 @@ def evaluate(channel, output, metadata, backend):
             errors = np.asarray([f[f"{view}_{algorithm}_errors"] for f in frames]).sum(axis=(0, 2))
             curves[f"{view}_{algorithm}"] = dict(bit_errors=errors.tolist(), ber=(errors/bits_per_snr).tolist())
     nmse = np.asarray([f["raw_nmse_linear"] for f in frames]).mean(axis=(0, 2))
-    report = dict(identity=identity, channel=channel, complete=True, frames=frames, bits_per_snr=bits_per_snr,
+    report = dict(identity=identity, channel=channel, complete=True, q=order, frames=frames, bits_per_snr=bits_per_snr,
                   snr_db=c["snr_db"], curves=curves, mean_raw_nmse_linear=nmse.tolist(),
                   mean_raw_nmse_db=(10*np.log10(nmse)).tolist(), reference_nmse_linear=0,
                   reference_nmse_db="-inf", estimator_diagnostics=estimator_diagnostics)
