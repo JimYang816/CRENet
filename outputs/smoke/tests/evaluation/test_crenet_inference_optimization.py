@@ -28,7 +28,7 @@ def test_paired_pipeline_preserves_checkpoint_and_writes_both_curves(tmp_path):
                 parameter.add_(.01*torch.randn_like(parameter))
         checkpoint = tmp_path/"model.pt"
         with CompactDataset(directory/"train.h5") as dataset:
-            atomic_save(checkpoint, dict(schema=SCHEMA, input_view="compensated", model_config=model.config,
+            atomic_save(checkpoint, dict(schema=SCHEMA, input_view="raw", model_config=model.config,
                 feedback_layout=FEEDBACK_LAYOUT, inference_code=source_fingerprint(INFERENCE_CODE),
                 model=cpu_state(model), training_scope="one_channel_all_snr_D1_D2", channel=dataset.channel,
                 data_schema=str(dataset._h.attrs["schema"]), model_identity=str(dataset._h.attrs["model_identity"]),

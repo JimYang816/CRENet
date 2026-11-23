@@ -72,7 +72,7 @@ def test_coverage_full_matrix_scoring_and_compensated_mmse_baselines(tmp_path, m
                               precision=precision, detector_mode=detector_mode)
             checkpoint = tmp_path/"crenet.pt"
             with CompactDataset(directory/"train.h5") as dataset:
-                atomic_save(checkpoint, dict(schema=SCHEMA, input_view="compensated", model_config=model.config,
+                atomic_save(checkpoint, dict(schema=SCHEMA, input_view="raw", model_config=model.config,
                     feedback_layout=FEEDBACK_LAYOUT,
                     inference_code=source_fingerprint(INFERENCE_CODE), model=cpu_state(model),
                     training_scope="one_channel_all_snr_D1_D2", channel=dataset.channel,
@@ -122,7 +122,7 @@ def test_coverage_full_matrix_scoring_and_compensated_mmse_baselines(tmp_path, m
                 batch_size=2, include_baselines=True, bootstrap_samples=16,
                 cache_dir=tmp_path/"cache")
             assert set(report["curves"]) == {"Single-tap LMMSE", "Full-matrix LMMSE", "CRENet"}
-            assert report["input_view"] == "compensated"
+            assert report["input_view"] == "raw"
             assert observed
             assert report["effective_model_config"]["precision"] == precision
             assert report["numerical_environment"]["precision"] == precision+"/"+str(expected_real).split(".")[-1]

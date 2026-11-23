@@ -35,7 +35,6 @@ def test_raw_reader_and_batches_do_not_access_forbidden_fields(raw_data, monkeyp
             raise AssertionError("Forbidden input read: "+str(name))
         return original(group, name)
     monkeypatch.setattr(h5py.Group, "__getitem__", guard)
-    monkeypatch.setattr(CompactDataset, "_channels", lambda *a: pytest.fail("Mixed CSI path accessed"))
     with CompactDataset(raw_data/"test.h5", input_view="raw") as ds:
         result = ds.model_input(0, 0)
         assert set(result["noise"]) == {"rf_variance", "unit_rx_covariance"}
@@ -44,7 +43,7 @@ def test_raw_reader_and_batches_do_not_access_forbidden_fields(raw_data, monkeyp
         np.testing.assert_allclose(batch.channel[0], result["csi"][0], atol=2e-15)
 
 
-def test_changing_test_truth_alpha_and_diagnostics_preserves_inputs_and_predictions(raw_data):
+def test_changing_test_truth_and_diagnostics_preserves_inputs_and_predictions(raw_data):
     def capture():
         with CompactDataset(raw_data/"test.h5", input_view="raw") as ds:
             inp = ds.raw_model_input(1, 0)
@@ -56,7 +55,6 @@ def test_changing_test_truth_alpha_and_diagnostics_preserves_inputs_and_predicti
         h["windows/reference_csi"][:] = 123+87j
         h["windows/reference_projection"][:] = -321-75j
         h["samples/bits"][:] ^= np.uint8(1)
-        h["compensation/alpha"][:] = .00001
         h["samples/actual_snr_db"][:] = -99
     after, batch_after, prediction_after = capture()
     for name in ("csi", "observations", "known", "data_indices", "carrier_positions"):
@@ -65,12 +63,13 @@ def test_changing_test_truth_alpha_and_diagnostics_preserves_inputs_and_predicti
     np.testing.assert_array_equal(prediction_before, prediction_after)
 
 
-def test_raw_is_unmixed_reconstruction_and_historical_view_is_explicit(raw_data):
-    with CompactDataset(raw_data/"test.h5", input_view="raw") as raw, CompactDataset(raw_data/"test.h5", input_view="compensated") as old:
+def test_raw_is_unmixed_reconstruction_and_other_views_are_rejected(raw_data):
+    with CompactDataset(raw_data/"test.h5", input_view="raw") as raw:
         expected = reconstruct(raw._model, raw._h["samples/raw_coefficients"][0, 0].astype(complex))
         np.testing.assert_array_equal(raw.model_input(0, 0)["csi"], expected)
-        assert old.model_input(0, 0)["input_view"] == "compensated"
-        assert not np.allclose(expected, old.model_input(0, 0)["csi"])
+        assert raw.model_input(0, 0)["input_view"] == "raw"
+    with pytest.raises(ValueError, match="unmodified"):
+        CompactDataset(raw_data/"test.h5", input_view="compensated")
 
 
 def test_crenet_batch_input_and_separate_supervision(raw_data, monkeypatch):
@@ -175,7 +174,6 @@ def test_fixed_crenet_prediction_survives_truth_changes(raw_data, monkeypatch):
     with h5py.File(raw_data/"test.h5", "r+") as h:
         h["windows/reference_csi"][:] = -500+99j
         h["samples/bits"][:] ^= np.uint8(1)
-        h["compensation/alpha"][:] = .9
         h["samples/actual_snr_db"][:] = -123
     after_inputs, after = prediction()
     for name in before_inputs:

@@ -1,4 +1,4 @@
-"""Three-stage training on the accepted compensated CSI; test data never participate in fitting or selection."""
+"""Three-stage training on receiver CSI; test data never participate in fitting or selection."""
 from __future__ import annotations
 
 from contextlib import ExitStack

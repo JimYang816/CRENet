@@ -29,7 +29,7 @@ def candidate(tmp_path):
         count, snr = dataset.frame_count, dataset.snr_db.tolist()
         bits = 4 * count * len(dataset._indices)
         channel = dataset.channel
-    report = dict(complete=True, split="validation", input_view="compensated", channel=channel, smoke=True,
+    report = dict(complete=True, split="validation", input_view="raw", channel=channel, smoke=True,
         checkpoint=str(checkpoint), checkpoint_sha256=file_sha256(checkpoint), snr_db=snr,
         data_identity=identity.files, model_config=dict(precision="complex64", noise_mode="diagonal"),
         curves={"CRENet":dict(errors=[0]*len(snr), total_bits=[bits]*len(snr), ber=[0.]*len(snr))},
@@ -49,11 +49,13 @@ def test_validation_comparison_uses_full_raw_lmmse_and_all_frames(candidate, tmp
     monkeypatch.setattr(comparison, "CompactDataset", reader)
     def forbidden(*args, **kwargs):
         raise AssertionError("Historical compensation must not enter raw comparison")
+    raw_input = CompactDataset.raw_model_input
     monkeypatch.setattr(CompactDataset, "raw_model_input", forbidden)
     with threadpool_limits(1):
         actual = comparison.evaluate(data / "validation.h5", path, tmp_path / "comparison", batch_size=3)
+        monkeypatch.setattr(CompactDataset, "raw_model_input", raw_input)
         expected_errors = []
-        with CompactDataset(data / "validation.h5", input_view="compensated") as dataset:
+        with CompactDataset(data / "validation.h5", input_view="raw") as dataset:
             for si in range(len(dataset.snr_db)):
                 errors = 0
                 for frame in range(dataset.frame_count):
@@ -85,7 +87,7 @@ def test_validation_comparison_uses_full_raw_lmmse_and_all_frames(candidate, tmp
 def test_comparison_rejects_mismatched_candidate_before_prediction(candidate, tmp_path, monkeypatch, change):
     data, path, report = candidate
     if change == "view":
-        report["input_view"] = "raw"
+        report["input_view"] = "compensated"
     elif change == "split":
         report["split"] = "test"
     elif change == "data":

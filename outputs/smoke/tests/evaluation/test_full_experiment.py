@@ -13,33 +13,32 @@ def test_new_joint_checkpoints_replace_historical_weights_and_missing_udnet(tmp_
     comparison = json.loads(Path("configs/evaluation/ber_comparison.json").read_text())
     baseline = tmp_path/"existing.pt"
     baseline.touch()
-    comparison["checkpoints"]["NOF1"]["udnet"] = str(baseline)
-    comparison["checkpoints"]["NCS1"]["udnet"] = str(tmp_path/"missing.pt")
+    comparison["checkpoints"] = {"NOF1": {"udnet": str(baseline)}, "NCS1": {"udnet": str(tmp_path/"missing.pt")}}
     result = comparison_config(training, comparison, tmp_path)
     assert result["checkpoints"]["NOF1"]["udnet"] == str(baseline)
     assert result["checkpoints"]["NCS1"]["udnet"] == str(tmp_path/"udnet/ncs1/best.pt")
     for ch in training["datasets"]:
         assert result["checkpoints"][ch]["crenet"] == str(tmp_path/"joint"/ch.lower()/"crenet.pt")
-    training["input_view"] = "raw"
-    with pytest.raises(ValueError, match="compensated"):
+    training["input_view"] = "compensated"
+    with pytest.raises(ValueError, match="raw"):
         comparison_config(training, comparison, tmp_path)
 
 
 def report():
-    return dict(complete=True, input_view="compensated", channel="NOF1", snr_db=SNR,
+    return dict(complete=True, input_view="raw", channel="NOF1", snr_db=SNR,
                 curves={name: dict(total_bits=[1228800]*7, errors=[12]*7, ber=[12/1228800]*7)
                         for name in LABELS}, nmse={})
 
 
-@pytest.mark.parametrize("failure", ("smoke", "partial", "missing_algorithm", "raw", "snr"))
+@pytest.mark.parametrize("failure", ("smoke", "partial", "missing_algorithm", "compensated", "snr"))
 def test_digest_rejects_incomplete_or_inconsistent_reports(failure):
     item = deepcopy(report())
     if failure == "partial":
         item["curves"][LABELS[0]]["total_bits"][0] -= 1
     elif failure == "missing_algorithm":
         del item["curves"][LABELS[-1]]
-    elif failure == "raw":
-        item["input_view"] = "raw"
+    elif failure == "compensated":
+        item["input_view"] = "compensated"
     elif failure == "snr":
         item["snr_db"] = [0]
     else:

@@ -33,7 +33,7 @@ def experiment(tmp_path):
                               detector_mode="budgeted")
             with CompactDataset(directory/"train.h5") as ds:
                 checkpoint = tmp_path/"study/joint"/ds.channel.lower()/"crenet.pt"
-                atomic_save(checkpoint, dict(schema=SCHEMA, input_view="compensated", model_config=model.config,
+                atomic_save(checkpoint, dict(schema=SCHEMA, input_view="raw", model_config=model.config,
                     feedback_layout=FEEDBACK_LAYOUT, inference_code=source_fingerprint(INFERENCE_CODE),
                     model=cpu_state(model), training_scope="one_channel_all_snr_D1_D2", channel=ds.channel,
                     data_schema=str(ds._h.attrs["schema"]), model_identity=str(ds._h.attrs["model_identity"]),
@@ -87,7 +87,7 @@ def test_changed_inputs_or_force_do_not_reuse_stale_report(experiment, change):
             assert before["bit_errors"][-1]+after["bit_errors"][-1] == before["total_bits"]
 
 
-@pytest.mark.parametrize("change", ("partial", "code", "raw"))
+@pytest.mark.parametrize("change", ("partial", "code", "compensated"))
 def test_invalid_historical_report_is_not_imported(experiment, change):
     dataset, checkpoint, root = experiment
     old = root/"study/comparison"/checkpoint.parent.name/"crenet"
@@ -97,7 +97,7 @@ def test_invalid_historical_report_is_not_imported(experiment, change):
     elif change == "code":
         candidate["code"] = {}
     else:
-        candidate["input_view"] = "raw"
+        candidate["input_view"] = "compensated"
     (old/"metrics.json").write_text(json.dumps(candidate))
     report = crenet_cache.evaluate(dataset, checkpoint, root/"new", DenseBackend(), cache_dir=root/"cache",
                                 bootstrap_samples=16)

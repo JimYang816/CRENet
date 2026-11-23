@@ -15,10 +15,10 @@ from src.common.outputs import resolve_output_root
 @pytest.mark.parametrize(
     ("module_name", "run_name", "suffix", "workflow"),
     [
-        ("scripts.train.crenet", "crenet_current", "joint/nof1", False),
-        ("scripts.run.crenet", "crenet_current", "", True),
-        ("scripts.train.oamp_net2", "oamp_net2_compensated", "nof1", False),
-        ("scripts.train.udnet", "udnet_compensated", "nof1", False),
+        ("scripts.train.crenet", "crenet_dddd_raw", "joint/nof1", False),
+        ("scripts.run.crenet", "crenet_dddd_raw", "", True),
+        ("scripts.train.oamp_net2", "oamp_net2_dddd_raw", "nof1", False),
+        ("scripts.train.udnet", "udnet_dddd_raw", "nof1", False),
     ],
 )
 @pytest.mark.parametrize(("smoke", "explicit"), [(False, False), (True, False), (True, True)])
@@ -61,9 +61,9 @@ def test_smoke_output_cannot_escape_through_configured_relative_path():
 @pytest.mark.parametrize(
     ("module_name", "config_path", "run_name", "comparison"),
     [
-        ("scripts.evaluate.compare", "configs/evaluation/ber_comparison.json", "equalizer_comparison_dd_ce_20261102", True),
-        ("scripts.evaluate.udnet", "configs/training/udnet.json", "udnet_compensated", False),
-        ("scripts.evaluate.oamp_net2", "configs/training/oamp_net2.json", "oamp_net2_compensated", False),
+        ("scripts.evaluate.compare", "configs/evaluation/ber_comparison.json", "equalizer_comparison_dddd_raw", True),
+        ("scripts.evaluate.udnet", "configs/training/udnet.json", "udnet_dddd_raw", False),
+        ("scripts.evaluate.oamp_net2", "configs/training/oamp_net2.json", "oamp_net2_dddd_raw", False),
     ],
 )
 def test_evaluation_of_smoke_data_keeps_reports_and_cache_separate(monkeypatch, tmp_path, module_name, config_path, run_name, comparison):

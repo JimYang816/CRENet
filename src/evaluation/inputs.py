@@ -29,14 +29,7 @@ def prepare_batch(dataset, si, frames, d, backend):
         circular = np.zeros((len(frames), n, n), complex)
         circular[:, rows, columns] = taps
         raw = np.fft.fftshift(np.fft.ifft(np.fft.fft(circular, axis=-2, norm="ortho"), axis=-1, norm="ortho"), axes=(-2, -1))
-    # Keep the complete raw matrix and never enter the historical _channels path.
     channel = raw
-    if ds.input_view == "compensated":
-        window = h["samples/window_index"][frames]
-        unique, inverse = np.unique(window, return_inverse=True)
-        reference = b.array(np.stack([h["windows/reference_csi"][int(wi), d] for wi in unique]).astype(complex))[inverse]
-        alpha = float(h["compensation/alpha"][si])
-        channel = reference+alpha*(raw-reference)
     y = b.array(y)
     residual = y-channel@b.array(ds._known[d+1])
     return EqualizerBatch(channel, y, residual, variances, ds._indices,

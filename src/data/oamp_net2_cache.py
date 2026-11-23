@@ -43,8 +43,8 @@ class SpectralCache:
 
 
 def build_features(dataset, root, backend, data_identity, *, frame_batch_size=8, frame_limit=None):
-    if dataset.input_view != "compensated" or dataset.split not in ("train", "validation"):
-        raise ValueError("Only compensated train/validation OAMP-Net2 features may be cached")
+    if dataset.input_view != "raw" or dataset.split not in ("train", "validation"):
+        raise ValueError("Only raw train/validation OAMP-Net2 features may be cached")
     if (not isinstance(frame_batch_size, int) or isinstance(frame_batch_size, bool) or frame_batch_size < 1
             or (frame_limit is not None and (not isinstance(frame_limit, int)
                 or isinstance(frame_limit, bool) or frame_limit < 1))):

@@ -3,21 +3,13 @@ from __future__ import annotations
 
 import numpy as np
 
-SCHEMA = "watermark-pddp-compact-v2"
+SCHEMA = "watermark-pddp-compact-raw-v3"
 MODEL_SCHEMA = SCHEMA + "-model"
 SPLITS = ("train", "validation", "test")
 SPLIT_CODES = dict(train=2, validation=3, test=4)
 TEST_RECORDS = list(range(11, 48, 4))
 VALIDATION_RECORDS = list(range(13, 46, 8))
 TRAIN_RECORDS = sorted(set(range(1, 51))-set(TEST_RECORDS)-set(VALIDATION_RECORDS))
-TARGET_PARAMETERS = dict(NOF1=(-12.7, 5.6), NCS1=(-6.2, 4.47))
-
-
-def target_nmse_db(channel, snr):
-    a, b = TARGET_PARAMETERS[channel]
-    return a-b*(-np.expm1(-np.asarray(snr, dtype=float)/10))/(-np.expm1(-3.0))
-
-
 def plan(smoke=False):
     return dict(protocol=SCHEMA,
                 records=dict(train=[1], validation=[2], test=[3]) if smoke else

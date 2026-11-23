@@ -1,4 +1,4 @@
-"""Resumable compact PDDP export, groupwise compensation and training-only statistics."""
+"""Resumable compact PDDP export with unmodified receiver-estimated CSI."""
 from __future__ import annotations
 
 import hashlib
@@ -14,7 +14,7 @@ import numpy as np
 
 from data_generation.src.config import digest
 from data_generation.src.dataset.compact_protocol import (
-    SCHEMA, MODEL_SCHEMA, SPLITS, SPLIT_CODES, physical_identities, sample_identities, target_nmse_db)
+    SCHEMA, MODEL_SCHEMA, SPLITS, SPLIT_CODES, physical_identities, sample_identities)
 from data_generation.src.dataset.compact_math import coefficient_nmse, reconstruct, projection_power
 from data_generation.src.receiver.pdd import JointEstimator, symbol_layout
 from data_generation.src.transmitter.ofdm import make_frame, carrier_masks
@@ -68,7 +68,7 @@ def prepare_model(path, c, chain, prior, backend, provenance):
         h.attrs.update(schema=MODEL_SCHEMA, identity=identity, prepared=False, complete=False,
                        config_json=json.dumps(c), provenance_json=json.dumps(provenance),
                        covariance_semantics="receiver_model_covariance_proxy",
-                       reference_assisted_construction=True,
+                       reference_assisted_prior=True, reference_assisted_csi_adjustment=False,
                        estimator_diagnostics=json.dumps(prepared.diagnostics))
         h.create_dataset("basis", data=prior.model.basis)
         h.create_dataset("known", data=known)
@@ -110,11 +110,9 @@ def initialize_split(path, c, split, identity):
     q, length = c["dpss_expected_count"], c["delay_length"]
     h = h5py.File(path, "w")
     h.attrs.update(schema=SCHEMA, model_identity=identity, split=split, channel=c["channel"],
-                   config_hash=digest(c), complete=False, raw_complete=False, compensated=False,
-                   model_file="model.h5", reference_assisted_construction=True,
+                   config_hash=digest(c), complete=False, raw_complete=False,
+                   model_file="model.h5", reference_assisted_prior=True, reference_assisted_csi_adjustment=False,
                    observation_reconstruction="clean_observations + sqrt(rf_noise_variance) * standard_noise",
-                   compensation_formula="H_ref + alpha * (H_raw - H_ref)",
-                   target_formula="a-b*(1-exp(-snr/10))/(1-exp(-3))",
                    construction_precision="complex128; stored full reference and raw coefficients complex64",
                    snr_definition="D1/D2 mean useful-window RX power / expected filtered real-RF thermal noise")
     for name, array in (("windows/record", [r for r, _ in windows]), ("windows/start_seconds", [t for _, t in windows]),
@@ -183,7 +181,7 @@ def generate_split(path, run, c, split, archive, chain, prepared, identity, *, s
                          len(physical_identities(c, split)), record, start, payload)
                 frame = make_frame(c, record, start, code, payload_repeat=payload)
                 if not h["windows/complete"][wi]:
-                    # Save full coupling before any DPSS projection or compensation.
+                    # Save full coupling before DPSS projection.
                     h["windows/reference_csi"][wi] = reference
                     theta = model.coefficients(taps)[0]
                     h["windows/reference_projection"][wi] = theta
@@ -273,33 +271,6 @@ def calibrate_training(model_path, train_path, c):
         model.flush()
 
 
-def compensate(path, c):
-    with h5py.File(path, "r+") as h:
-        if not h.attrs.get("raw_complete"):
-            raise ValueError("Cannot compensate incomplete raw data")
-        target = target_nmse_db(c["channel"], c["snr_db"])
-        if (h.attrs.get("compensated") and "compensation/target_nmse_db" in h
-                and np.array_equal(h["compensation/target_nmse_db"][:], target)):
-            return
-        raw = h["samples/raw_nmse_linear"][:].mean(axis=(1, 2))
-        if np.any(raw <= 0) or not np.all(np.isfinite(raw)):
-            raise ValueError("Invalid raw group NMSE")
-        alpha = np.sqrt(10**(target/10)/raw)
-        h.attrs.update(compensated=False, complete=False)
-        h.flush()
-        if "compensation" in h:
-            del h["compensation"]
-        g = h.create_group("compensation")
-        g.create_dataset("alpha", data=alpha)
-        g.create_dataset("target_nmse_db", data=target)
-        g.create_dataset("raw_mean_nmse_linear", data=raw)
-        g.attrs.update(grouping="channel x split x snr; arithmetic mean of per-D linear NMSE",
-                       reference_assisted=True, adjusted_using_ber=False)
-        h.flush()
-        h.attrs.update(compensated=True, complete=True)
-        h.flush()
-
-
 def generate(directory, run, c, archive, chain, prior, backend, provenance, *, workers=1, threads=4):
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
@@ -316,7 +287,10 @@ def generate(directory, run, c, archive, chain, prior, backend, provenance, *, w
             generate_split(path, run, c, split, archive, chain, prepared, identity, pool=pool, prefetch=workers*2)
             if split == "train":
                 calibrate_training(model_path, path, c)
-            compensate(path, c)
+            with h5py.File(path, "r+") as h:
+                if not h.attrs.get("raw_complete"):
+                    raise ValueError("Cannot finalize incomplete raw data")
+                h.attrs["complete"] = True
     with h5py.File(model_path, "r+") as h:
         h.attrs["complete"] = True
     # The estimator is large; release it before the independent disk acceptance pass.

@@ -55,13 +55,13 @@ def _nmse(ds, cache, data_identity, environment, origin):
 
 
 def evaluate(dataset_path, run, backend, *, batch_size=8,
-             algorithm_parameters=None, force=(), cache_dir=None, input_view="compensated"):
+             algorithm_parameters=None, force=(), cache_dir=None, input_view="raw"):
     if not isinstance(batch_size, int) or isinstance(batch_size, bool) or batch_size < 1:
         raise ValueError("Batch size must be a positive integer")
     parameters = resolve_parameters(algorithm_parameters)
     algorithms = selected_algorithms(parameters)
-    if {"mmse_dfe", "dd_ce_lmmse"}.intersection(parameters) and input_view != "compensated":
-        raise ValueError("Decision-directed comparison requires compensated CSI")
+    if input_view != "raw":
+        raise ValueError("Comparison requires unmodified receiver CSI")
     forced = resolve_force(force)
     run, cache = Path(run), Path(cache_dir) if cache_dir is not None else DEFAULT_CACHE
     run.mkdir(parents=True, exist_ok=True)
@@ -155,7 +155,7 @@ def evaluate(dataset_path, run, backend, *, batch_size=8,
             frame_count=count, bits_per_snr=bits, data_blocks_per_snr=count*2, curves=report_curves,
             parameters=parameters, dataset=str(Path(dataset_path).resolve()), data_identity=identity.files,
             nmse=nmse, report_generation=origin, numerical_environment=environment,
-            input_view=ds.input_view, csi="raw receiver CSI" if ds.input_view == "raw" else "accepted compensated CSI",
+            input_view=ds.input_view, csi="raw receiver CSI",
             single_tap="raw data-carrier observations; diagonal CSI; thermal noise",
             matrix_methods="all receive rows, all data-column ICI, estimated known-pilot cancellation")
         publish_report(run, report)

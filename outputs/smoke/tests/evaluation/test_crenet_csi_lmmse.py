@@ -42,7 +42,7 @@ def candidate(tmp_path):
         with CompactDataset(data/"validation.h5") as dataset:
             count, snr = dataset.frame_count, dataset.snr_db.tolist()
             bits = 4*count*len(dataset._indices)
-            payload = dict(schema=SCHEMA, input_view="compensated", model_config=model.config,
+            payload = dict(schema=SCHEMA, input_view="raw", model_config=model.config,
                 feedback_layout=FEEDBACK_LAYOUT, inference_code=source_fingerprint(INFERENCE_CODE),
                 model=cpu_state(model), training_scope="one_channel_all_snr_D1_D2", channel=dataset.channel,
                 data_schema=str(dataset._h.attrs["schema"]), model_identity=str(dataset._h.attrs["model_identity"]),
@@ -50,7 +50,7 @@ def candidate(tmp_path):
                 inference_correction_enabled=True, identity=dict(data=identity.files, controls=dict(lambda_h=.01)))
         checkpoint = tmp_path/"crenet.pt"
         atomic_save(checkpoint, payload)
-        report = dict(complete=True, split="validation", input_view="compensated", channel=payload["channel"],
+        report = dict(complete=True, split="validation", input_view="raw", channel=payload["channel"],
             smoke=True, checkpoint=str(checkpoint), checkpoint_sha256=file_sha256(checkpoint), snr_db=snr,
             data_identity=identity.files, model_config=model.config,
             curves={"CRENet":dict(errors=[0]*len(snr), total_bits=[bits]*len(snr), ber=[0.]*len(snr))},
@@ -77,6 +77,7 @@ def test_receiver_preparation_matches_original_candidate_inputs(candidate, preci
 def test_three_csi_variants_match_independent_full_colored_noise_solves(candidate, tmp_path, monkeypatch):
     data, checkpoint, path, _, original = candidate
     prepare, solve, reference = comparison.prepare_batch, comparison.equalize_batch, CompactDataset.reference_csi
+    raw_input = CompactDataset.raw_model_input
     state = dict(solves=0, checked=0)
     def receiver_batch(*args):
         state["solves"] = 0
@@ -109,6 +110,7 @@ def test_three_csi_variants_match_independent_full_colored_noise_solves(candidat
     assert set(opened) == {"validation.h5", "model.h5"}
     assert state["checked"] > 0
     monkeypatch.setattr(CompactDataset, "reference_csi", reference)
+    monkeypatch.setattr(CompactDataset, "raw_model_input", raw_input)
     model, _ = load_model(checkpoint)
     with CompactDataset(data/"validation.h5") as dataset, torch.inference_mode():
         expected = np.zeros((3, len(dataset.snr_db)), dtype=int)

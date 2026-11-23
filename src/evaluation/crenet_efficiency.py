@@ -1,4 +1,4 @@
-"""Compensated-CSI efficiency comparison with a fresh process for each detector.
+"""Raw-CSI efficiency comparison with a fresh process for each detector.
 
 Workers prohibit reads of test supervision and report setup separately from
 reconstruction plus inference.
@@ -35,10 +35,8 @@ AVAILABLE_IDENTIFIERS = tuple(a.identifier for a in AVAILABLE_ALGORITHMS) + ("ud
 def _guard_truth_reads():
     original = h5py.Dataset.__getitem__
     def guarded(dataset, selection):
-        # The accepted compensated CSI is constructed from saved reference_csi
-        # and alpha. These are input construction, not model supervision. Labels
-        # and other audit fields remain prohibited in timing workers.
-        if any(value in dataset.name for value in ("reference_projection",
+        # Receiver inputs must never read the reference or label fields.
+        if any(value in dataset.name for value in ("reference_csi", "reference_projection",
                 "samples/bits", "actual_snr", "model_residual", "effective_rf", "training_calibration/")):
             raise AssertionError("Efficiency inference attempted to read supervision: " + dataset.name)
         return original(dataset, selection)
@@ -174,7 +172,7 @@ def benchmark(dataset_path, comparison_report, checkpoint, udnet_checkpoint, *, 
     guard = DataIdentity(sources)
     report = json.loads(Path(comparison_report).read_text(encoding="utf-8"))
     if not report.get("complete") or report.get("input_view") != DEFAULT_INPUT_VIEW:
-        raise ValueError("Efficiency requires a complete compensated CSI comparison report")
+        raise ValueError("Efficiency requires a complete raw CSI comparison report")
     initial_validation_seconds = time.perf_counter() - validation_started
     options = dict(dataset=str(Path(dataset_path).resolve()), comparison=report,
         crenet_checkpoint=str(Path(checkpoint).resolve()), udnet_checkpoint=str(Path(udnet_checkpoint).resolve()),
@@ -202,8 +200,8 @@ def benchmark(dataset_path, comparison_report, checkpoint, udnet_checkpoint, *, 
         memory="fresh subprocess per algorithm; OS peak RSS includes imports/native tensors; CUDA peaks include model and setup",
         filesystem_cache="OS file cache is not flushed; one cold process per detector",
         process_startup_and_import_seconds_included=False, test_labels_read=False,
-        reference_assisted_csi_construction=True,
-        reference_usage="Saved reference CSI and alpha only construct the accepted compensated input; never passed separately to detectors")
+        reference_assisted_csi_construction=False,
+        reference_usage="Reference CSI is not read by the timing workers")
     if output:
         write_json(output, result)
     return result

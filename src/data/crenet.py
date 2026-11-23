@@ -21,12 +21,10 @@ def input_batches(dataset, *, device="cpu", batch_size=4, frame_limit=None, snr_
     A key is (SNR index, physical frame index, D-block index). D1 and D2
     share the same model; FFT positions include pilots and nulls uncompressed.
     """
-    if dataset.input_view not in ("raw", "compensated"):
-        raise ValueError("Unknown CRENet CSI input view")
+    if dataset.input_view != "raw":
+        raise ValueError("CRENet requires unmodified receiver CSI")
     if operator_backend not in ("dense", "dpss"):
         raise ValueError("Unknown CRENet operator backend")
-    if dataset.input_view == "compensated" and operator_backend == "dpss":
-        raise ValueError("Compensated CSI includes full reference support; use dense or dense_device")
     complex_dtype, real_dtype = precision_dtypes(precision)
     if (not isinstance(batch_size, int) or isinstance(batch_size, bool) or batch_size < 1
             or (frame_limit is not None and (not isinstance(frame_limit, int)
@@ -70,14 +68,7 @@ def input_batches(dataset, *, device="cpu", batch_size=4, frame_limit=None, snr_
                             np.empty((len(frames), dataset._model.count, dataset._model.length), dtype=numpy_complex))
                 observations = np.empty((len(frames), n), dtype=numpy_complex)
                 variances = np.empty(len(frames), dtype=numpy_real)
-                if dataset.input_view == "compensated":
-                    from src.common.numerics import DenseBackend
-                    from src.evaluation.inputs import prepare_batch
-                    batch = prepare_batch(dataset, si, frames, d, DenseBackend())
-                    channels[:] = batch.channel
-                    observations[:] = batch.raw_observations
-                    variances[:] = batch.variances
-                for index, fi in enumerate(frames if dataset.input_view == "raw" else ()):
+                for index, fi in enumerate(frames):
                     if bases is None:
                         raw_input = dataset.raw_model_input(si, fi)
                         channels[index] = raw_input["csi"][d]

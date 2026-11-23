@@ -1,6 +1,6 @@
 """Paired frozen-inference equivalence, accuracy and steady-state timing.
 
-Both paths consume the same accepted compensated inputs and checkpoint. Labels
+Both paths consume the same raw receiver inputs and checkpoint. Labels
 are accessed only after both predictions. Timing uses real validation inputs,
 alternates implementation order, and excludes supervision and disk reads.
 """
@@ -113,7 +113,7 @@ def evaluate_pair(dataset_path, checkpoint, output, *, device="cpu", batch_size=
     output.mkdir(parents=True, exist_ok=True)
     started = time.perf_counter()
     backend = DenseBackend(device)
-    with CompactDataset(dataset_path, input_view="compensated") as dataset, torch.inference_mode():
+    with CompactDataset(dataset_path, input_view="raw") as dataset, torch.inference_mode():
         if dataset.split not in ("validation", "test"):
             raise ValueError("Only fixed validation/test splits may be compared")
         _record_disjoint(dataset)
@@ -184,7 +184,7 @@ def evaluate_pair(dataset_path, checkpoint, output, *, device="cpu", batch_size=
                     final_nmse_db_change_from_legacy_tf32=right["mean_nmse_db"][-1]-metrics["legacy_tf32"][si]["mean_nmse_db"][-1]))
         equivalent = {name: all(row["max_tolerance_ratio"] <= 1 for row in fields.values())
                       for name, fields in statistics_by_field.items()}
-        result = dict(complete=True, channel=dataset.channel, split=dataset.split, input_view="compensated",
+        result = dict(complete=True, channel=dataset.channel, split=dataset.split, input_view="raw",
             blocks=blocks, batches=batches, frame_limit=frame_limit, batch_size=batch_size,
             model_config=payload["model_config"], learned_weights_unchanged=True,
             numerical=dict(atol=ATOL, rtol=RTOL, allclose=equivalent, fields=statistics_by_field,
@@ -227,7 +227,7 @@ def _plot(report, directory):
 def benchmark_validation(dataset_path, checkpoint, output, *, device="cpu", batch_size=2, repeats=11):
     """Paired wall-clock medians, including Python dispatch and all eight layers."""
     backend = DenseBackend(device)
-    with CompactDataset(dataset_path, input_view="compensated") as dataset, torch.inference_mode():
+    with CompactDataset(dataset_path, input_view="raw") as dataset, torch.inference_mode():
         if dataset.split != "validation":
             raise ValueError("Timing selection uses validation inputs only")
         models, payload = _models(checkpoint, dataset, device, VARIANTS)
@@ -267,7 +267,7 @@ def benchmark_validation(dataset_path, checkpoint, output, *, device="cpu", batc
             baseline = modes[mode]["before"]["ms_per_block_median"]
             for row in modes[mode].values():
                 row["relative_to_before"] = row["ms_per_block_median"]/baseline
-        result = dict(complete=True, channel=dataset.channel, input_view="compensated", split="validation",
+        result = dict(complete=True, channel=dataset.channel, input_view="raw", split="validation",
             batch_size=batch_size, repeats=repeats, warmup_rounds=3, blocks_per_repeat=blocks,
             variants={name: dict(cache_static_correction=flags[0], reuse_correction_residual=flags[1])
                       for name, flags in VARIANTS.items()}, measurements=modes,

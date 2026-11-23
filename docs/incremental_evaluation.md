@@ -1,5 +1,7 @@
 # 独立训练与增量评测
 
+> 本文记录旧 P-D-D-P / 参考辅助补偿条件下的设计或结果，仅供历史参考。当前实验使用 D-D-D-D 帧和未经补偿的 CSI；范围及运行方式见 [四数据符号 LMMSE 小实验](four_data_lmmse.md)。
+
 当前七算法报告位于 `outputs/experiment/equalizer_comparison_dd_ce_20261102/{nof1,ncs1}/`，包含 BER 和平均 NMSE 图。此前六算法汇总已清理。DD-CE 的 BER 和修正 CSI 的逐块线性 NMSE 同步缓存，可用 `--force dd_ce_lmmse` 单独刷新。运行方法见[统一评测](equalizer_comparison.md)。
 服务器保留 CRENet 的 warmup/fixed/joint 检查点、UDNet 的 best/latest 检查点、原 OAMP-Net2 检查点及逐算法结果缓存。
 本地保存图、指标、训练记录与报告；完整数据、特征缓存及权重仍留服务器。

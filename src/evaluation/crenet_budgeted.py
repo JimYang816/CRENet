@@ -135,8 +135,8 @@ def _historical_reference(checkpoint, dataset, device):
         raise ValueError("Historical baseline does not match the frozen quartet")
     payload = torch.load(checkpoint, map_location="cpu", weights_only=True)
     validate_dataset(payload, dataset)
-    if payload.get("input_view") != "compensated" or payload.get("smoke"):
-        raise ValueError("Historical baseline requires accepted compensated data")
+    if payload.get("input_view") != "raw" or payload.get("smoke"):
+        raise ValueError("Historical baseline requires matching raw data")
     for name in ("train.h5", "validation.h5", "model.h5"):
         if payload["identity"]["data"][name]["sha256"] != file_sha256(dataset.path.parent/name):
             raise ValueError("Historical training data differ")
@@ -195,7 +195,7 @@ def compare(dataset_path, checkpoint, run, backend, *, split="validation", batch
     accumulators, seconds = {}, defaultdict(float)
     preparation, blocks = 0., 0
     cache = ReferenceCache(cache_mib*2**20)
-    with CompactDataset(dataset_path, input_view="compensated") as dataset, torch.inference_mode():
+    with CompactDataset(dataset_path, input_view="raw") as dataset, torch.inference_mode():
         if split not in ("validation", "test") or dataset.split != split:
             raise ValueError("Explicit validation/test split identity required")
         validate_dataset(payload, dataset)
@@ -224,9 +224,8 @@ def compare(dataset_path, checkpoint, run, backend, *, split="validation", batch
             source = cpu_inputs["initial_channel"]
             if id(source.basis) not in bases:
                 bases[id(source.basis)] = source.basis.to(backend.device)
-            reference = source.reference.to(backend.device)
             inputs = dict(initial_channel=source.dense(backend.device,
-                basis=bases[id(source.basis)], reference=reference))
+                basis=bases[id(source.basis)]))
             for name, value in cpu_inputs.items():
                 if name == "initial_channel":
                     continue
@@ -240,18 +239,22 @@ def compare(dataset_path, checkpoint, run, backend, *, split="validation", batch
             preparation += time.perf_counter()-tick
             if benchmark is None:
                 benchmark = _benchmark(models, inputs, backend)
-            predictions, nmse_values = {}, {}
+            predictions, nmse_values, outputs = {}, {}, {}
             for name, item in models.items():
                 tick = time.perf_counter()
                 output = item(**inputs, return_diagnostics=False)
                 backend.synchronize()
                 seconds[name] += time.perf_counter()-tick
                 predictions[name] = output.symbols[..., inputs["data_mask"]]
-                # CSI scoring is outside the prediction timer, never a model input.
+                outputs[name] = output
+            # Reference CSI is read only after every model has predicted.
+            reference = torch.cat([cache.get_full(dataset,
+                int(dataset._h["samples/window_index"][frame]), block, model.config["precision"])
+                for _, frame, block in keys]).to(backend.device)
+            for name, output in outputs.items():
                 before = _initial_nmse(inputs["initial_channel"], reference)
                 after = csi_nmse(output, reference)
                 nmse_values[name] = torch.cat((before[:, None], after), -1).cpu().numpy()
-                del output
             # First bit-label access occurs after every model has predicted.
             targets = supervision(dataset, keys, device=backend.device, include_reference=False,
                                   precision=model.config["precision"])
@@ -287,7 +290,7 @@ def compare(dataset_path, checkpoint, run, backend, *, split="validation", batch
                 stored_parameters=sum(p.numel() for p in models[name].parameters()),
                 seconds_per_block=(preparation+seconds[name])/blocks,
                 model_seconds_per_block=seconds[name]/blocks, benchmark=benchmark[name])
-        report = dict(complete=True, input_view="compensated", split=split, channel=dataset.channel,
+        report = dict(complete=True, input_view="raw", split=split, channel=dataset.channel,
             origin=generation_origin(run, backend, batch_size),
             environment=dict(numerical_environment(backend), model_precision=model.config["precision"],
                              precision=model.config["precision"], torch_threads=torch.get_num_threads(),
@@ -326,7 +329,7 @@ def plot(report, run):
         if metric == "ber":
             ax.set_yscale("log")
         ax.set(xlabel="SNR (dB)", ylabel="BER" if metric == "ber" else "Mean full-matrix NMSE (dB)",
-               title=f'{report["channel"]}: {report["split"]}, compensated CSI')
+               title=f'{report["channel"]}: {report["split"]}, raw CSI')
         ax.grid(True, which="both", alpha=.3)
         ax.legend()
         fig.tight_layout()

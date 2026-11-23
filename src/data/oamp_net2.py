@@ -5,7 +5,7 @@ import numpy as np
 
 from src.algorithms.likelihood import batch_likelihood
 
-PREPROCESSING = dict(version=1, input_view="compensated", support="all_receive_rows_all_data_columns",
+PREPROCESSING = dict(version=2, input_view="raw", support="all_receive_rows_all_data_columns",
     pilot_cancellation="complete_estimated_channel", noise="full_thermal_covariance",
     whitening="unit_covariance_and_rf_variance", decomposition="full_complex_hermitian_eigh",
     precision="complex128/float64", csi="fixed_no_error_oracle")

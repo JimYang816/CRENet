@@ -26,19 +26,20 @@ def decisions(symbols):
 
 
 def carrier_masks(c):
-    if c.get("frame_structure") != FRAME_STRUCTURE:
-        raise ValueError("Only the PDDP frame layout is supported")
+    if c.get("frame_structure") not in (FRAME_STRUCTURE, "DDDD"):
+        raise ValueError("Unknown four-symbol frame layout")
     n = c["nfft"]
     middle = n-2*c["null_per_edge"]
     if middle % 7:
         raise ValueError("PDDP requires repeated seven-carrier groups")
-    pattern = np.tile([1, 1, 0, 2, 0, 1, 1], middle//7)
+    group = [2, 1, 1, 2, 1, 1, 0] if c["frame_structure"] == "DDDD" else [1, 1, 0, 2, 0, 1, 1]
+    pattern = np.tile(group, middle//7)
     layout = np.pad(pattern, c["null_per_edge"])
     data, pilot = layout == 1, layout == 2
     active = np.zeros(n, bool)
     active[c["null_per_edge"]:n-c["null_per_edge"]] = True
     if data.sum() != c["data_count"] or pilot.sum() != c["pilot_count"]:
-        raise ValueError("PDDP carrier counts do not match")
+        raise ValueError("Frame carrier counts do not match")
     protection = active & ~(data | pilot)
     return dict(active=active, pilot=pilot, data=data, null=~(data | pilot),
                 protection=protection, edge=~active, tracking=pilot | protection)
@@ -69,6 +70,16 @@ def make_frame(c, record, start, split=2, *, payload_repeat=None):
         seed += (int(payload_repeat),)
     rng = np.random.default_rng(np.random.SeedSequence(seed))
     m = carrier_masks(c)
+    if c["frame_structure"] == "DDDD":
+        public = np.random.default_rng(np.random.SeedSequence([c["seed"], 11]))
+        known = np.zeros((SYMBOL_COUNT, c["nfft"]), np.complex128)
+        known[:, m["pilot"]] = qpsk(public.integers(0, 2, (SYMBOL_COUNT, c["pilot_count"], 2), dtype=np.uint8))
+        bits = rng.integers(0, 2, (SYMBOL_COUNT, c["data_count"], 2), dtype=np.uint8)
+        x = known.copy()
+        x[:, m["data"]] = qpsk(bits)
+        time = ifft(x)
+        blocks = np.concatenate((time[:, -c["cp"]:], time), axis=1).ravel()
+        return Frame(x, known, bits, np.pad(blocks, (c["guard_samples"], c["guard_samples"])), seed)
     x = np.zeros((SYMBOL_COUNT, c["nfft"]), np.complex128)
     training_rng = np.random.default_rng(np.random.SeedSequence([c["seed"], 11]))
     x[:, m["active"]] = qpsk(training_rng.integers(0, 2, (SYMBOL_COUNT, m["active"].sum(), 2), dtype=np.uint8))
@@ -87,7 +98,8 @@ def make_frame(c, record, start, split=2, *, payload_repeat=None):
 
 def overhead(c):
     n, cp = c["nfft"], c["cp"]
-    return dict(nondata_grid_fraction=1-c["data_count"]*2/(SYMBOL_COUNT*n),
+    data_symbols = SYMBOL_COUNT if c.get("frame_structure") == "DDDD" else len(DATA_SYMBOL_INDICES)
+    return dict(nondata_grid_fraction=1-c["data_count"]*data_symbols/(SYMBOL_COUNT*n),
                 cp_fraction_of_transmitted_samples=cp/(n+cp),
                 cp_to_useful_ratio=cp/n, useful_frame_samples=SYMBOL_COUNT*(n+cp),
                 useful_passband_samples=n*16, cp_passband_samples=cp*16,

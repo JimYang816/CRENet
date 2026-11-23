@@ -1,5 +1,7 @@
 # DPSS 实验算子与完整矩阵后端
 
+> 本文记录旧 P-D-D-P / 参考辅助补偿条件下的设计或结果，仅供历史参考。当前实验使用 D-D-D-D 帧和未经补偿的 CSI；范围及运行方式见 [四数据符号 LMMSE 小实验](four_data_lmmse.md)。
+
 当前正式实验使用默认读取器 `input_view="compensated"` 返回的完整估计 CSI：训练采用 `dense_device`，评测采用 `dense`。本页另记录原始系数视图（`raw`）下的 DPSS 算子诊断；该诊断保留 CRENet 的参数、完整信道耦合、带状修正、门控、阻尼、软反馈、归一化、噪声模式与三阶段损失，不重新拟合 DPSS 或截断基函数频谱。只有显式要求 raw 诊断时才使用该路径，其检查点、特征及评测缓存不用于正式主对比。
 
 统一配置 `configs/training/crenet.json` 的 `training.operator_backend="dense_device"` 是完整矩阵训练数据准备路径：双精度计算移到设备，随后转为模型精度；均衡时保留稠密算子。默认估计 CSI 不受原始 DPSS 系数子空间限制，单独的 `dpss` 算子不能表示其完整输入，因此正式训练应使用 `dense` 或 `dense_device`，正式评测使用 `dense`。解析器保留的 `dpss` 选项不代表默认输入支持该后端。当前batch 8、预取2批与8192 MiB主存参考缓存见 [训练性能说明](crenet_training_performance.md)；运行命令见 [CRENet](crenet.md#6-验证与运行)。

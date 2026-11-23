@@ -104,7 +104,7 @@ def plot(reports, root: Path, split: str):
             ax.set_xlabel("SNR (dB)")
         handles, labels = axes[0, 0].get_legend_handles_labels()
         fig.legend(handles, labels, ncol=3, loc="upper center", bbox_to_anchor=(0.5, 0.96), frameon=False)
-        fig.suptitle(f"Frozen {split} · Compensated CSI · One training seed", y=0.995, fontsize=13)
+        fig.suptitle(f"Frozen {split} · Raw CSI · One training seed", y=0.995, fontsize=13)
         fig.text(0.5, 0.014, "Original/repaired depth: NCS1 8/8; NOF1 22/8. Fixed-CSI LMMSE uses one solve.",
                  ha="center", fontsize=9, color="#444444")
         fig.tight_layout(rect=(0, 0.035, 1, 0.91), h_pad=2)

@@ -28,7 +28,7 @@ def reports():
             by_record=[dict(record=r, bits=614400, blocks=600, bit_errors=[errors]*layers)
                        for r in (1, 2)]) for snr in SNR]
         result[group] = dict(complete=True, smoke=False, channel="NOF1", split="test",
-            input_view="compensated", snr_db=SNR, effective_model_config=config, per_snr=rows,
+            input_view="raw", snr_db=SNR, effective_model_config=config, per_snr=rows,
             checkpoint=f"{group}.pt", checkpoint_sha256=group, data_identity={"test.h5": "same"},
             performance={"seconds_per_block": .01})
     return result
@@ -46,15 +46,15 @@ def test_formal_report_keeps_true_counts_paired_records_and_both_figures(tmp_pat
         assert (tmp_path/name).stat().st_size > 0
 
 
-@pytest.mark.parametrize("mutation", ("missing", "partial", "raw", "depth", "records", "data", "fixed_csi"))
+@pytest.mark.parametrize("mutation", ("missing", "partial", "compensated", "depth", "records", "data", "fixed_csi"))
 def test_formal_summary_rejects_invalid_scientific_comparisons(mutation):
     items = reports()
     if mutation == "missing":
         items.pop("C")
     elif mutation == "partial":
         items["D"]["per_snr"][0]["total_bits"] -= 1024
-    elif mutation == "raw":
-        items["D"]["input_view"] = "raw"
+    elif mutation == "compensated":
+        items["D"]["input_view"] = "compensated"
     elif mutation == "depth":
         items["D"]["effective_model_config"]["layers"] = 22
     elif mutation == "records":

@@ -37,7 +37,7 @@ def main():
     torch.use_deterministic_algorithms(True)
     torch.backends.cudnn.allow_tf32 = False
     with threadpool_limits(args.threads), torch.inference_mode(), CompactDataset(args.dataset/"validation.h5") as ds:
-        if ds.split != "validation" or ds.input_view != "compensated":
+        if ds.split != "validation" or ds.input_view != "raw":
             raise ValueError("Requires accepted validation inputs")
         guard = DataIdentity({name: args.dataset/name for name in ("validation.h5", "model.h5")})
         model, payload = load_model(args.checkpoint, args.device)
@@ -55,8 +55,7 @@ def main():
             precision=model.config["precision"], reference_cache=ReferenceCache(64*2**20)):
             source = cpu.pop("initial_channel")
             inputs = {k: v.to(args.device) for k, v in cpu.items()}
-            inputs["initial_channel"] = source.dense(args.device, basis=source.basis.to(args.device),
-                                                     reference=source.reference.to(args.device))
+            inputs["initial_channel"] = source.dense(args.device, basis=source.basis.to(args.device))
             expected = model(**inputs, return_diagnostics=False)
             actual = optimized(**inputs, return_diagnostics=False)
             for key in ("probabilities", "log_probabilities", "symbols", "variances", "bands"):

@@ -8,13 +8,13 @@ from data_generation.src.receiver.chain import taps_to_matrix
 from data_generation.src.receiver.dpss import FULL_FRAME_DOMAIN
 from data_generation.src.receiver.estimation import input_windows
 from src.common.numerics import hermitian
-from data_generation.src.pdd import SYMBOL_COUNT, DATA_SYMBOL_INDICES, TRAINING_SYMBOL_INDICES
+from data_generation.src.pdd import SYMBOL_COUNT, DATA_SYMBOL_INDICES, TRAINING_SYMBOL_INDICES, frame_data_indices
 
 
 def symbol_layout(config):
     """Return the data and full-training symbols for the configured frame."""
     if config.get("frame_structure") == "DDDD":
-        return (0, 1, 2, 3), ()
+        return frame_data_indices(config), ()
     return DATA_SYMBOL_INDICES, TRAINING_SYMBOL_INDICES
 
 

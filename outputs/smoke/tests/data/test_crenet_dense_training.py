@@ -67,7 +67,7 @@ def test_receiver_and_prefetched_dense_pipeline_preserve_legacy_fields(tmp_path,
 
 
 @pytest.mark.parametrize("precision", ("complex64", "complex128"))
-def test_compensated_reference_cache_reuses_decoded_windows_exactly(tmp_path, monkeypatch, precision):
+def test_raw_inputs_do_not_read_reference_and_supervision_reuses_cache(tmp_path, monkeypatch, precision):
     import h5py
     from src.data.crenet_training import _cpu_batches
     torch.set_num_threads(2)
@@ -95,18 +95,19 @@ def test_compensated_reference_cache_reuses_decoded_windows_exactly(tmp_path, mo
                     torch.testing.assert_close(inputs["initial_channel"].dense("cpu"),
                         expected["initial_channel"].dense("cpu"), rtol=0, atol=0)
             windows = set(dataset._h["samples/window_index"][:].tolist())
-            assert len(reads) == len(windows)  # one paired D1/D2 decode per window, across all SNRs/epochs
-            assert cache.bytes == len(windows)*2*dataset._config["nfft"]**2*getattr(torch, precision).itemsize
-            assert cache.bytes <= cache.max_bytes
+            assert not reads and cache.bytes == 0
             with monkeypatch.context() as scoped:
                 scoped.setattr(torch.Tensor, "pin_memory", lambda value: value)
                 for pinned in (False, True):
                     batches = _cpu_batches(dataset, include_reference=True, compact_reference=False,
                         bandwidth=2, cache=cache, pin_memory=pinned, batch_size=2, frame_limit=None,
                         precision=precision, operator_backend="dense_device", snr_indices=None, frame_indices=None)
-                    inputs, targets, _ = next(batches)
-                    assert targets["reference_channel"] is inputs["initial_channel"].reference
-                    batches.close()
+                    for inputs, targets, keys in batches:
+                        assert not hasattr(inputs["initial_channel"], "reference")
+                        assert targets["reference_channel"].shape[0] == len(keys)
+            assert len(reads) == len(windows)
+            assert cache.bytes == len(windows)*2*dataset._config["nfft"]**2*getattr(torch, precision).itemsize
+            assert cache.bytes <= cache.max_bytes
 
 
 @pytest.mark.parametrize("blocks", (0, 1, 2, 3))

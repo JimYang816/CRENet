@@ -36,7 +36,7 @@ def score_udnet(dataset, frames, d, result):
 
 
 def _evaluate(dataset_path, checkpoint, run, backend, *, batch_size=8, window_batch_size=2000,
-              cache_dir=None, algorithm_parameters=None, input_view="compensated"):
+              cache_dir=None, algorithm_parameters=None, input_view="raw"):
     run, checkpoint = Path(run), Path(checkpoint)
     run.mkdir(parents=True, exist_ok=True)
     model, payload = load_model(checkpoint, backend.device)
@@ -182,7 +182,7 @@ def write_html(report, run):
 <style>body{{font:16px/1.7 system-ui;max-width:1150px;margin:32px auto;padding:0 20px;color:#182c3d}}img{{max-width:100%}}table{{border-collapse:collapse;width:100%}}td,th{{border:1px solid #ccd5dc;padding:8px}}pre{{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f6f8;padding:16px}}</style>
 <h1>{report['channel']}：UDNet 与两种 MMSE 基线</h1>
 <p>完整测试集每 SNR {report['frame_count']} 帧，D1/D2 共用模型，{report['bits_per_snr']:,} 比特。测试集不参与训练和选模。</p>
-<p>CSI 输入视图：{html.escape(report.get('input_view', 'compensated'))}；保留既有划分和 QPSK 映射。32 个连续物理复载波窗、步长 16、两侧各 8 点上下文；仅拼接中心数据槽。局部窗外 ICI 截断。单位噪声协方差白化后，Gram 与 matched 输入共同除以本窗有效数据列的平均能量，ZF 不变；不使用标签或测试集统计量。</p>
+<p>CSI 输入视图：{html.escape(report.get('input_view', 'raw'))}；保留既有划分和 QPSK 映射。32 个连续物理复载波窗、步长 16、两侧各 8 点上下文；仅拼接中心数据槽。局部窗外 ICI 截断。单位噪声协方差白化后，Gram 与 matched 输入共同除以本窗有效数据列的平均能量，ZF 不变；不使用标签或测试集统计量。</p>
 <table><tr><th>BER</th>{headings}</tr>{rows}</table>
 <img src="ber_snr.png"><img src="nmse_snr.png"><img src="ser_snr.png"><img src="training_curves.png">
 <img src="validation_by_snr.png">

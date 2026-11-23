@@ -1,5 +1,7 @@
 # 2026-10-31 算法与仓库整理
 
+> 本文记录旧 P-D-D-P / 参考辅助补偿条件下的设计或结果，仅供历史参考。当前实验使用 D-D-D-D 帧和未经补偿的 CSI；范围及运行方式见 [四数据符号 LMMSE 小实验](four_data_lmmse.md)。
+
 本页记录当天仓库整理发生时的操作和验证，不作为实时实验状态。后续已完成 `icr_full_20261031_095549` 正式训练、`icr_ad_current_20261031_133445` 等深度A–D消融及加入MMSE-DFE的七算法正式汇总；当前检查点、结果与运行方法分别见 [CRENet说明](crenet.md) 和 [统一评测](equalizer_comparison.md)。
 
 当前算法以 [统一设计](crenet_algorithm_design.md) 和 `configs/training/crenet.json` 为准。

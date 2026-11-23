@@ -65,7 +65,7 @@ def match_once_budget(data_directory, checkpoint, backend, *, repeats=(1, 2, 3, 
     model, payload = load_model(checkpoint, backend.device)
     prepare_frozen_inference(model)
     precision = model.config["precision"]
-    with CompactDataset(Path(data_directory)/"validation.h5", input_view="compensated") as dataset:
+    with CompactDataset(Path(data_directory)/"validation.h5", input_view="raw") as dataset:
         # load_model already verifies checkpoint metadata; validation metadata is
         # checked by the same function used by formal evaluation.
         validate_dataset(payload, dataset)

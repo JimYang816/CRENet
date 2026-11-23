@@ -16,7 +16,7 @@ def batch_schedule(frames, snr_indices, batch_size, *, sampling_seed=None):
 
     Each interleaved round visits every SNR once with the same shuffled frames.
     Batches remain homogeneous in SNR and D-block, retaining the existing
-    batch size, compensation coefficient and physical time basis.
+    batch size and physical time basis.
     """
     if sampling_seed is None:
         for si in snr_indices:

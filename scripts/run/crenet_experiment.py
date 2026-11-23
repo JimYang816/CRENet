@@ -28,17 +28,17 @@ LABELS = SUPPORTED_CURVES
 
 def comparison_config(training, comparison, output):
     """Bind evaluation to this run's new models, retaining valid baseline paths."""
-    if training.get("input_view") != "compensated" or comparison.get("input_view") != "compensated":
-        raise ValueError("The full experiment requires compensated CSI")
+    if training.get("input_view") != "raw" or comparison.get("input_view") != "raw":
+        raise ValueError("The full experiment requires raw CSI")
     if set(training["datasets"]) != {"NOF1", "NCS1"}:
         raise ValueError("The full experiment requires both channels")
     result = deepcopy(comparison)
     result["output"] = str(output/"comparison")
     result["datasets"] = {ch: str(Path(path)/"test.h5") for ch, path in training["datasets"].items()}
     for ch in training["datasets"]:
-        checkpoints = result["checkpoints"][ch]
+        checkpoints = result.setdefault("checkpoints", {}).setdefault(ch, {})
         checkpoints["crenet"] = str(output/"joint"/ch.lower()/"crenet.pt")
-        if not Path(checkpoints["udnet"]).is_file():
+        if not checkpoints.get("udnet") or not Path(checkpoints["udnet"]).is_file():
             checkpoints["udnet"] = str(output/"udnet"/ch.lower()/"best.pt")
     return result
 
@@ -51,7 +51,7 @@ def preflight(training, comparison):
 
     for ch, directory in training["datasets"].items():
         for split, count in (("train", 525), ("validation", 75), ("test", 600)):
-            with CompactDataset(Path(directory)/(split+".h5"), input_view="compensated") as ds:
+            with CompactDataset(Path(directory)/(split+".h5"), input_view="raw") as ds:
                 if (ds.channel != ch or ds.split != split or ds.frame_count != count
                         or ds.snr_db.tolist() != SNR or len(ds._indices) != 512 or ds._config.get("smoke")):
                     raise ValueError(f"{ch}/{split}: requires the accepted complete dataset")
@@ -67,7 +67,7 @@ def preflight(training, comparison):
 def validate_report(report, channel):
     """Do not declare success for partial coverage or historical CRENet weights."""
     report = normalize_report_labels(report)
-    if (not report.get("complete") or report.get("smoke") or report.get("input_view") != "compensated"
+    if (not report.get("complete") or report.get("smoke") or report.get("input_view") != "raw"
             or report.get("channel") != channel or report.get("snr_db") != SNR
             or set(report.get("curves", {})) != set(LABELS)):
         raise ValueError(f"{channel}: incomplete {len(LABELS)}-algorithm report")
@@ -105,8 +105,8 @@ def run(args):
         original_comparison = json.loads(args.comparison_config.read_text(encoding="utf-8"))
         comparison = comparison_config(training, original_comparison, output)
         udnet = json.loads(Path("configs/training/udnet.json").read_text(encoding="utf-8"))
-        if udnet["datasets"] != training["datasets"] or udnet["training"].get("input_view") != "compensated":
-            raise ValueError("UDNet training must use the same accepted compensated datasets")
+        if udnet["datasets"] != training["datasets"] or udnet["training"].get("input_view") != "raw":
+            raise ValueError("UDNet training must use the same raw datasets")
         for ch in training["datasets"]:
             for stage in STAGES:
                 resolve_config(args.config, channel=ch, stage=stage, output=output)

@@ -11,7 +11,7 @@ import numpy as np
 from scipy import sparse, signal, linalg
 
 from data_generation.src.transmitter.ofdm import window_indices, receive_symbols
-from data_generation.src.pdd import SYMBOL_COUNT, DATA_SYMBOL_INDICES
+from data_generation.src.pdd import SYMBOL_COUNT, frame_data_indices
 
 
 def fir(up, down, c):
@@ -169,7 +169,7 @@ class ReceiverChain:
                            model_mismatch_retained=diagnose and not model_passed)
         if max([linear_error]+images) > limit or (not model_passed and not diagnose):
             raise RuntimeError(f"Physical link acceptance failed: {diagnostics}")
-        reference = np.stack([matrices[s] for s in DATA_SYMBOL_INDICES])
+        reference = np.stack([matrices[s] for s in frame_data_indices(self.c)])
         return clean, y, np.stack(kernels), reference, diagnostics
 
     def noise(self, clean, record, start, split=2, *, noise_repeat=None):
@@ -179,7 +179,7 @@ class ReceiverChain:
         rng = np.random.default_rng(np.random.SeedSequence(seed))
         standard = rng.standard_normal(len(clean))
         standard_y = receive_symbols(self.receive(standard), self.c)
-        symbols = DATA_SYMBOL_INDICES
+        symbols = frame_data_indices(self.c)
         power = np.mean([np.mean(abs(self.receive(clean)[window_indices(self.c, s)])**2) for s in symbols])
         variances = power/self.noise_gain/10**(np.asarray(self.c["snr_db"])/10)
         return standard_y, variances, float(power)

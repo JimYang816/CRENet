@@ -16,12 +16,11 @@ from scipy.signal.windows import dpss
 from data_generation.src.channel.watermark.replay import WatermarkArchive
 from data_generation.src.config import ROOT, digest, load_config
 from data_generation.src.receiver import pdd
-from data_generation.src.receiver.chain import ReceiverChain, relative_energy, resample, taps_to_matrix
+from data_generation.src.receiver.chain import ReceiverChain, relative_energy, resample
 from data_generation.src.receiver.dpss import DPSSModel
 from data_generation.src.receiver.estimation import FrozenPrior, input_windows
-from data_generation.src.transmitter.ofdm import Frame, decisions, fft, ifft, qpsk, receive_symbols, window_indices
+from data_generation.src.transmitter.ofdm import carrier_masks, decisions, fft, make_frame as transmit_frame, receive_symbols, window_indices
 from src.common.experiment import file_sha256, write_json
-from src.common.numerics import DenseBackend
 
 
 ORDERS = tuple(range(16, 33))
@@ -52,30 +51,14 @@ def masks(c):
     n, edge = c["nfft"], c["null_per_edge"]
     if n != 1024 or edge != 64 or (n - 2 * edge) % 7:
         raise ValueError("This experiment assumes FFT1024 and 64 nulls per edge")
-    layout = np.pad(np.tile([2, 1, 1, 2, 1, 1, 0], (n - 2 * edge) // 7), edge)
-    data, pilot = layout == 1, layout == 2
-    active = np.zeros(n, bool)
-    active[edge:n-edge] = True
-    protection = active & ~(data | pilot)
-    if (data.sum(), pilot.sum(), protection.sum()) != (512, 256, 128):
+    result = carrier_masks(c)
+    if (result["data"].sum(), result["pilot"].sum(), result["protection"].sum()) != (512, 256, 128):
         raise AssertionError("Unexpected carrier allocation")
-    return dict(data=data, pilot=pilot, active=active, protection=protection,
-                edge=~active, null=~(data | pilot), tracking=pilot | protection)
+    return result
 
 
 def make_frame(c, record, start, split):
-    m = masks(c)
-    seed = (c["seed"], split, int(record), round(float(start)*1000), 0, 0)
-    rng = np.random.default_rng(np.random.SeedSequence(seed))
-    public = np.random.default_rng(np.random.SeedSequence([c["seed"], 11]))
-    known = np.zeros((4, c["nfft"]), complex)
-    known[:, m["pilot"]] = qpsk(public.integers(0, 2, (4, 256, 2), dtype=np.uint8))
-    bits = rng.integers(0, 2, (4, 512, 2), dtype=np.uint8)
-    x = known.copy()
-    x[:, m["data"]] = qpsk(bits)
-    time = ifft(x)
-    blocks = np.concatenate((time[:, -c["cp"]:], time), axis=1).ravel()
-    return Frame(x, known, bits, np.pad(blocks, (c["guard_samples"], c["guard_samples"])), seed)
+    return transmit_frame(c, record, start, split, payload_repeat=0)
 
 
 def basis(c):

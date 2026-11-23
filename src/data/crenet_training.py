@@ -114,12 +114,9 @@ def _cpu_batches(dataset, *, include_reference, compact_reference, bandwidth, ca
         else:
             targets = supervision(dataset, keys, include_reference=False, precision=precision)
             if include_reference:
-                if isinstance(channel, DenseCoefficients) and channel.reference is not None:
-                    targets["reference_channel"] = channel.reference
-                else:
-                    targets["reference_channel"] = torch.cat([cache.get_full(dataset,
-                        int(dataset._h["samples/window_index"][frame]), block, precision)
-                        for _, frame, block in keys])
+                targets["reference_channel"] = torch.cat([cache.get_full(dataset,
+                    int(dataset._h["samples/window_index"][frame]), block, precision)
+                    for _, frame, block in keys])
         if pin_memory:
             # Shared masks/covariance/basis are copied once by the consumer.
             for name in ("observations", "rf_variance", "known"):
@@ -128,14 +125,11 @@ def _cpu_batches(dataset, *, include_reference, compact_reference, bandwidth, ca
                 inputs["initial_channel"] = DPSSChannel(channel.coefficients.pin_memory(), channel.basis,
                                                         spectrum=channel.spectrum)
             elif isinstance(channel, DenseCoefficients):
-                reference = channel.reference.pin_memory() if channel.reference is not None else None
                 inputs["initial_channel"] = DenseCoefficients(channel.coefficients.pin_memory(),
-                    channel.basis, channel.dtype, reference, channel.alpha)
+                    channel.basis, channel.dtype)
             else:
                 inputs["initial_channel"] = channel.pin_memory()
-            targets = {name: (reference if isinstance(channel, DenseCoefficients)
-                             and channel.reference is not None and value is channel.reference
-                             else value.map_tensors(lambda x: x.pin_memory())
+            targets = {name: (value.map_tensors(lambda x: x.pin_memory())
                              if isinstance(value, DPSSReference) else value.pin_memory())
                        for name, value in targets.items()}
         yield inputs, targets, keys
@@ -212,7 +206,6 @@ def training_batches(dataset, *, device="cpu", batch_size=2, frame_limit=None,
     def transfer(batches):
         for inputs, targets, keys in batches:
             prepared = {}
-            reference_source = reference_device = None
             for name, value in inputs.items():
                 if isinstance(value, DenseCoefficients):
                     # These are shared [N,Q] double bases; the full matrix is
@@ -220,11 +213,8 @@ def training_batches(dataset, *, device="cpu", batch_size=2, frame_limit=None,
                     key = id(value.basis)
                     if key not in bases:
                         bases[key] = move(value.basis)
-                    if value.reference is not None:
-                        reference_source = value.reference
-                        reference_device = move(reference_source)
                     with torch.no_grad():
-                        prepared[name] = value.dense(device, basis=bases[key], reference=reference_device,
+                        prepared[name] = value.dense(device, basis=bases[key],
                                                      non_blocking=bool(pin_memory and cuda))
                 elif isinstance(value, DPSSChannel):
                     if value.basis not in bases:
@@ -236,12 +226,11 @@ def training_batches(dataset, *, device="cpu", batch_size=2, frame_limit=None,
                     prepared[name] = shared[name]
                 else:
                     prepared[name] = move(value)
-            moved_targets = {name: reference_device if value is reference_source
-                             else value.map_tensors(move) if isinstance(value, DPSSReference) else move(value)
+            moved_targets = {name: value.map_tensors(move) if isinstance(value, DPSSReference) else move(value)
                              for name, value in targets.items()}
             yield prepared, moved_targets, keys
             # Do not retain the preceding device batch while requesting the next.
-            del prepared, moved_targets, inputs, targets, reference_source, reference_device
+            del prepared, moved_targets, inputs, targets
 
     with _prefetched(dataset, options, prefetch_batches) as batches:
         yield transfer(batches)

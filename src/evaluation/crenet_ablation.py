@@ -22,7 +22,7 @@ SNR = [0, 5, 10, 15, 20, 25, 30]
 
 def validate_report(report, channel, group, split):
     if (not report.get("complete") or report.get("smoke")
-            or report.get("input_view") != "compensated" or report.get("channel") != channel
+            or report.get("input_view") != "raw" or report.get("channel") != channel
             or report.get("split") != split or report.get("snr_db") != SNR):
         raise ValueError(f"{channel}/{group}/{split}: requires a complete formal report")
     model = report["effective_model_config"]
@@ -77,7 +77,7 @@ def summarize(reports):
     for key in ("bandwidth", "precision", "noise_mode", "use_uncertainty", "use_gate"):
         if len({report["effective_model_config"][key] for report in reports.values()}) != 1:
             raise ValueError(f"A–D model setting differs: {key}")
-    return dict(complete=True, channel=channel, split=split, input_view="compensated", snr_db=SNR,
+    return dict(complete=True, channel=channel, split=split, input_view="raw", snr_db=SNR,
         data_identity=reference["data_identity"], curves=curves,
         paired_ber_difference={f"{a}_minus_{b}": paired(reports[a]["per_snr"], reports[b]["per_snr"])
                                for a, b in (("B", "A"), ("C", "A"), ("D", "B"), ("D", "C"))},

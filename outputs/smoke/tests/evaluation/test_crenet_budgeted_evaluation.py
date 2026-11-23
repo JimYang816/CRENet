@@ -73,7 +73,7 @@ def test_comparison_predicts_before_labels_and_preserves_shared_fixed_csi(tmp_pa
                           initial_soft_damping=.8)
         checkpoint = tmp_path/"model.pt"
         with CompactDataset(directory/"train.h5") as dataset:
-            atomic_save(checkpoint, dict(schema=SCHEMA, input_view="compensated", model_config=model.config,
+            atomic_save(checkpoint, dict(schema=SCHEMA, input_view="raw", model_config=model.config,
                 identity=dict(data=DataIdentity({name: directory/name
                     for name in ("train.h5", "validation.h5", "model.h5")}).files),
                 feedback_layout=FEEDBACK_LAYOUT, inference_code=source_fingerprint(INFERENCE_CODE),

@@ -1,4 +1,4 @@
-"""DPSS on the full 5632-sample P-D-D-P frame, including all four CPs."""
+"""DPSS on the full four-symbol frame, including all four CPs."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -56,14 +56,17 @@ def build_model(c):
     if not np.isfinite(bandwidth) or not 0 < bandwidth < c["fs_baseband"]/2:
         raise ValueError("DPSS half bandwidth must be finite and within the baseband Nyquist limit")
     nw = total*bandwidth/c["fs_baseband"]
-    basis, eigenvalues = dpss(total, nw, Kmax=min(total, int(np.ceil(2*nw))+24),
+    requested = int(c["dpss_expected_count"])
+    if not 1 <= requested <= total:
+        raise ValueError("Invalid fixed DPSS order")
+    basis, eigenvalues = dpss(total, nw, Kmax=min(total, max(requested, int(np.ceil(2*nw))+24)),
                              sym=True, norm=2, return_ratios=True)
     # The exact sum over all DPSS eigenvalues equals 2NW.
     tails = np.maximum(1-np.cumsum(eigenvalues)/(2*nw), 0)
     good = np.flatnonzero(tails <= c["dpss_tail_ratio"])
     if not len(good):
         raise RuntimeError("Insufficient DPSS eigenvalues for requested tail threshold")
-    count = int(good[0]+1)
-    if count != c["dpss_expected_count"]:
+    count = requested if c.get("frame_structure") == "DDDD" else int(good[0]+1)
+    if count != requested or tails[count-1] > c["dpss_tail_ratio"]:
         raise ValueError("Fixed DPSS configuration generated an unexpected basis count")
     return DPSSModel(basis[:count].T.copy(), bandwidth, c["dpss_tail_ratio"], c["delay_length"], c)

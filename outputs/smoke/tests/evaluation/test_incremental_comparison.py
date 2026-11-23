@@ -124,8 +124,8 @@ def test_dfe_addition_reuses_existing_detectors_and_supports_selective_force(exp
     assert cached["curves"]["MMSE-DFE"]["provenance"]["reused"]
     with pytest.raises(ValueError, match="Invalid parameters"):
         resolve_parameters({"mmse_dfe": {"iterations": 10}})
-    with pytest.raises(ValueError, match="compensated CSI"):
-        experiment.run("raw-dfe", algorithm_parameters={"mmse_dfe": {}}, input_view="raw")
+    with pytest.raises(ValueError, match="unmodified"):
+        experiment.run("retired-dfe", algorithm_parameters={"mmse_dfe": {}}, input_view="compensated")
 
 
 def test_dd_ce_cache_preserves_paired_metrics_and_skips_inference(experiment, monkeypatch):
@@ -148,8 +148,8 @@ def test_dd_ce_cache_preserves_paired_metrics_and_skips_inference(experiment, mo
         cached = experiment.run("dd-cached", algorithm_parameters=parameters)
         assert cached["curves"]["DD-DPSS"]["provenance"]["reused"]
         assert cached["nmse"]["dd_mean_nmse_db"] == extended["nmse"]["dd_mean_nmse_db"]
-    with pytest.raises(ValueError, match="compensated CSI"):
-        experiment.run("raw-dd", algorithm_parameters=parameters, input_view="raw")
+    with pytest.raises(ValueError, match="unmodified"):
+        experiment.run("retired-dd", algorithm_parameters=parameters, input_view="compensated")
 
 
 def test_ber_figure_draws_all_curves_with_stable_styles(tmp_path, monkeypatch):
@@ -186,7 +186,7 @@ def test_independent_source_edits_invalidate_only_the_owner(experiment, monkeypa
 
 @pytest.mark.parametrize("reference,before,after,expected", [
     ("src.algorithms.likelihood:likelihood_batch", "h = whitener @", "h = 1.0*whitener @", {"full_matrix_lmmse"}),
-    ("src.evaluation.inputs", "channel = reference+alpha*", "channel = reference+1.0*alpha*", {a.identifier for a in ALGORITHMS}),
+    ("src.evaluation.inputs", "channel = raw", "channel = 1.0*raw", {a.identifier for a in ALGORITHMS}),
 ])
 def test_shared_computation_invalidates_only_actual_dependents(experiment, monkeypatch, reference, before, after, expected):
     experiment.run()
@@ -376,10 +376,10 @@ def test_plot_only_removes_retired_curves_from_historical_reports(experiment, mo
     experiment.data.rename(experiment.root/"unavailable-data")
     monkeypatch.setattr(comparison, "prepare_batch", forbid)
     with pytest.raises(ValueError, match="CSI view"):
-        replot(experiment.root/"run", output=experiment.root/"current", expected_view="raw")
+        replot(experiment.root/"run", output=experiment.root/"current", expected_view="compensated")
     assert not (experiment.root/"current").exists()
     updated = replot(experiment.root/"run", output=experiment.root/"current", expected_channel=original["channel"],
-                     expected_view="compensated")
+                     expected_view="raw")
     assert json.loads((experiment.root/"run/metrics.json").read_text(encoding="utf-8")) == historical
     assert set(updated["curves"]) == {"Single-tap LMMSE", "Full-matrix LMMSE"}
     assert updated["comparison_algorithms"] == list(original["curves"])

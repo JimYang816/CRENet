@@ -1,5 +1,7 @@
 # NOF1 / NCS1 七算法统一评测
 
+> 本文记录旧 P-D-D-P / 参考辅助补偿条件下的设计或结果，仅供历史参考。当前实验使用 D-D-D-D 帧和未经补偿的 CSI；范围及运行方式见 [四数据符号 LMMSE 小实验](four_data_lmmse.md)。
+
 主比较包含 Single-tap LMMSE、Full-matrix LMMSE、MMSE-DFE、DD-DPSS、UDNet、OAMP-Net2 和 CRENet。统一入口为 `scripts.evaluate.compare`，配置为 `configs/evaluation/ber_comparison.json`。CRENet 默认采用8层联合 CSI 修正与 MMSE 展开。各方法的实现见 [CRENet 算法设计](crenet_algorithm_design.md)、[MMSE-DFE](mmse_dfe.md)、[软判决 DPSS-LMMSE 重估](dd_ce_lmmse.md) 和 [OAMP-Net2](additional_equalizers.md)。
 
 ## 数据与指标

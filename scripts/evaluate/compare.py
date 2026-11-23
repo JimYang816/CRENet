@@ -1,4 +1,4 @@
-"""Run configured equalizers on identical complete compensated-CSI test splits."""
+"""Run configured equalizers on identical raw-CSI test splits."""
 from __future__ import annotations
 from src.common.numerics import default_device
 
@@ -23,7 +23,7 @@ def main():
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--channel", choices=("NOF1", "NCS1"))
     parser.add_argument("--baselines-only", action="store_true", help="Run configured traditional equalizers without learned checkpoints")
-    parser.add_argument("--input-view", choices=("raw", "compensated"))
+    parser.add_argument("--input-view", choices=("raw",))
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--force", nargs="+", choices=(*IDENTIFIERS, "crenet", "all"), default=[],
                        help="Recompute selected detectors; all also refreshes OAMP-Net2 and CRENet")
@@ -46,7 +46,7 @@ def main():
                     replot(output/channel.lower())
                 else:
                     replot(args.from_run/channel.lower(), output=output/channel.lower(), expected_channel=channel,
-                           expected_view=args.input_view or config.get("input_view", "compensated"),
+                           expected_view=args.input_view or config.get("input_view", "raw"),
                            required_algorithms=config.get("algorithms", {}))
         return
     with threadpool_limits(args.threads):
@@ -69,7 +69,7 @@ def main():
             evaluator(dataset, output/channel.lower(), backend,
                      batch_size=args.batch_size if args.batch_size is not None else config["batch_size"],
                      algorithm_parameters=config.get("algorithms"), force=args.force,
-                     cache_dir=cache_dir, input_view=args.input_view or config.get("input_view", "compensated"), **extra)
+                     cache_dir=cache_dir, input_view=args.input_view or config.get("input_view", "raw"), **extra)
 
 
 if __name__ == "__main__":

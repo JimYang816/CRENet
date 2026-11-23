@@ -15,6 +15,10 @@ VALIDATION_SCHEMA = "pddp-fixed-validation-v1"
 ESTIMATION_MODE = "full_frame_joint_no_feedback_v1"
 
 
+def frame_data_indices(c):
+    return tuple(range(SYMBOL_COUNT)) if c.get("frame_structure") == "DDDD" else DATA_SYMBOL_INDICES
+
+
 def load_pdd_config(path=None):
     c = load_config(path or ROOT/"configs/data/ncs1/pddp.json")
     if c.get("channel", "NCS1") not in ("NCS1", "NOF1"):

@@ -6,7 +6,6 @@ from pathlib import Path
 import torch
 
 from src.algorithms.crenet.model import FEEDBACK_LAYOUT, CRENet
-from src.algorithms.crenet.legacy_identity import matches_renamed_checkpoint
 from src.evaluation.fingerprints import source_fingerprint
 from src.data.contract import DEFAULT_INPUT_VIEW
 
@@ -38,8 +37,7 @@ def load_model(path, device="cpu", *, input_view=INPUT_VIEW):
     payload = torch.load(Path(path), map_location="cpu", weights_only=True)
     current_code = source_fingerprint(INFERENCE_CODE)
     current = payload.get("schema") == SCHEMA and payload.get("inference_code") == current_code
-    migrated = matches_renamed_checkpoint(payload, current_code)
-    if (not (current or migrated) or payload.get("input_view") != input_view
+    if (not current or payload.get("input_view") != input_view
             or payload.get("feedback_layout") != FEEDBACK_LAYOUT
             or payload.get("training_scope") != "one_channel_all_snr_D1_D2"):
         raise ValueError("CRENet checkpoint input view/feedback layout/code identity mismatch")

@@ -18,8 +18,8 @@ def resolve_config(path=DEFAULT_CONFIG, *, channel, stage="joint", output=None):
     config["model"].update(overrides.get("model", {}))
     controls = config["training"]
     controls.update(overrides.get("training", {}))
-    if config.get("input_view") != "compensated":
-        raise ValueError("Current CRENet training requires accepted compensated CSI")
+    if config.get("input_view") != "raw":
+        raise ValueError("CRENet training requires unmodified receiver CSI")
     if config["model"].get("detector_mode") != "budgeted" or controls.get("detector_parameters") != "all":
         raise ValueError("Current CRENet requires residual unfolding with all physical and neural parameters")
     root = Path(output or config["output"])

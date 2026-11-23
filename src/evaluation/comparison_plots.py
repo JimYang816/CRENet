@@ -44,7 +44,7 @@ def plot_ber(report, path):
         ax.grid(True, which="major", alpha=.28)
         ax.grid(True, which="minor", alpha=.12)
         ax.legend(loc="best", framealpha=.95)
-        view = report.get("input_view", "compensated")
+        view = report.get("input_view", "raw")
         caption = f'{report["frame_count"]:,} frames / SNR  |  {report["bits_per_snr"]:,} bits / SNR  |  CSI view: {view}'
         if report.get("smoke"):
             caption = "SMOKE TEST | "+caption

@@ -52,8 +52,8 @@ def linear_options(resolved, group):
 
 def preflight(config_path, trained_root):
     config = json.loads(config_path.read_text(encoding="utf-8"))
-    if config.get("input_view") != "compensated" or set(config["datasets"]) != {"NOF1", "NCS1"}:
-        raise ValueError("Formal ablation requires both accepted compensated datasets")
+    if config.get("input_view") != "raw" or set(config["datasets"]) != {"NOF1", "NCS1"}:
+        raise ValueError("Formal ablation requires both matching raw datasets")
     checkpoints = {}
     for ch in config["datasets"]:
         for branch in ("fixed", "joint"):
@@ -68,7 +68,7 @@ def preflight(config_path, trained_root):
                               ("train.h5", "validation.h5", "test.h5", "model.h5")})
         guards[channel] = guard
         for split, frames in (("train", 525), ("validation", 75), ("test", 600)):
-            with CompactDataset(directory/(split+".h5"), input_view="compensated") as ds:
+            with CompactDataset(directory/(split+".h5"), input_view="raw") as ds:
                 if (ds.channel != channel or ds.split != split or ds.frame_count != frames
                         or ds.snr_db.tolist() != SNR or len(ds._indices) != 512 or ds._config.get("smoke")):
                     raise ValueError(f"{channel}/{split}: not the accepted complete dataset")

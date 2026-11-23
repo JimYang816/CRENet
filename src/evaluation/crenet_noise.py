@@ -72,7 +72,7 @@ def compare_noise(dataset_path, checkpoint, run, backend, *, batch_size=2, frame
         times = {mode: np.zeros(timing_repeats) for mode in models}
         preparation, blocks, batches = 0., 0, 0
         maximum_probability_difference = 0.
-        with CompactDataset(dataset_path, input_view="compensated") as dataset, torch.inference_mode():
+        with CompactDataset(dataset_path, input_view="raw") as dataset, torch.inference_mode():
             validate_dataset(payload, dataset)
             if dataset.split != "test":
                 raise ValueError("Noise comparison requires the independent test split")
@@ -141,7 +141,7 @@ def compare_noise(dataset_path, checkpoint, run, backend, *, batch_size=2, frame
                         model_construction_seconds=setup[mode], cold_first_batch_seconds=cold[mode]))
             full, diagonal = modes["full"], modes["diagonal"]
             report = dict(schema="crenet-paired-noise-comparison-v1", complete=True, smoke=True,
-                channel=dataset.channel, split=dataset.split, input_view="compensated", precision=precision,
+                channel=dataset.channel, split=dataset.split, input_view="raw", precision=precision,
                 checkpoint=str(checkpoint.resolve()), checkpoint_sha256=checkpoint_hash,
                 trained_noise_mode=payload["model_config"].get("noise_mode", "full"),
                 dataset=str(dataset.path.resolve()), data_identity=identity.files,

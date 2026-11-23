@@ -97,7 +97,7 @@ def main(argv=None):
                     attempt['complete'] = True
                     return
                 metadata = provenance(c, manifest, run/'frozen_prior.h5')
-                metadata.update(protocol=SCHEMA, reference_assisted_construction=True,
+                metadata.update(protocol=SCHEMA, reference_assisted_prior=True, reference_assisted_csi_adjustment=False,
                                 random_stream='SeedSequence([master, split, record, start_ms, 0=payload/1=noise, independent_repeat]); public=[master,11]')
                 if metadata['dirty'] and not args.smoke:
                     raise RuntimeError('Formal generation requires clean committed source')

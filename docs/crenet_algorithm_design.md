@@ -1,5 +1,7 @@
 # 不完美 CSI 下联合信道修正与 MMSE 深度展开的水声 OFDM 均衡算法
 
+> 本文记录旧 P-D-D-P / 参考辅助补偿条件下的设计或结果，仅供历史参考。当前实验使用 D-D-D-D 帧和未经补偿的 CSI；范围及运行方式见 [四数据符号 LMMSE 小实验](four_data_lmmse.md)。
+
 本文按当前实现同步：修正网络采用 `14(2B+1)+5` 通道反馈，均衡层采用带 CSI 加载和精确方向线搜索的残差展开，并进行局部 QPSK logits 校准。主配置为 `input_view="compensated"`、`complex64`、对角噪声权重；RTX 4080 的训练数据准备与 batch/cache 设置见 [运行说明](crenet.md#6-验证与运行) 和 [训练性能历史基准](crenet_training_performance.md)。
 
 默认联合展开8层，采用A/B/C三阶段训练。正式比较包括 Single-tap LMMSE、Full-matrix LMMSE、MMSE-DFE、DD-CE + Full-matrix LMMSE、UDNet、OAMP-Net2、CRENet，统一配置见 `configs/evaluation/ber_comparison.json`。2026-10-31已完成当前正式训练、双信道全量评测及等深度A–D消融，检查点与结果目录见 [CRENet运行说明](crenet.md#3-当前正式检查点与历史预算复核)。论文主稿与图片位于 `outputs/paper/`。

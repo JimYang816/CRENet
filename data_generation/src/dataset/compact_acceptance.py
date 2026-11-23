@@ -12,7 +12,7 @@ import numpy as np
 
 from data_generation.src.config import digest
 from data_generation.src.dataset.compact_protocol import (
-    SCHEMA, SPLITS, SPLIT_CODES, validate_plan, physical_identities, sample_identities, target_nmse_db)
+    SCHEMA, SPLITS, SPLIT_CODES, validate_plan, physical_identities, sample_identities)
 from data_generation.src.dataset.compact_math import coefficient_nmse, reconstruct, projection_power
 from data_generation.src.dataset.compact_export import physical_hash
 from data_generation.src.transmitter.ofdm import make_frame
@@ -30,8 +30,8 @@ def _assert_close(actual, expected, message, *, rtol=2e-10, atol=1e-12):
 def accept(directory, run, c, *, plots=True, hash_files=True):
     directory, run = Path(directory), Path(run)
     counts = validate_plan(c)
-    report = dict(protocol=SCHEMA, channel=c["channel"], smoke=bool(c.get("smoke")), complete=False,
-                  reference_assisted_construction=True, config_hash=digest(c), counts=counts, splits={})
+    report = dict(protocol=SCHEMA, channel=c["channel"], smoke=bool(c.get("smoke")), complete=False, input_view="raw",
+                  reference_assisted_prior=True, reference_assisted_csi_adjustment=False, config_hash=digest(c), counts=counts, splits={})
     with h5py.File(directory/"model.h5", "r") as shared:
         if "nmse_retarget_json" in shared.attrs:
             report["nmse_retarget"] = json.loads(shared.attrs["nmse_retarget_json"])
@@ -51,9 +51,7 @@ def accept(directory, run, c, *, plots=True, hash_files=True):
         noise_gain = np.trace(shared["unit_rf_noise_covariance"][:]).real/c["nfft"]
         for split in SPLITS:
             LOG.info("Disk acceptance %s %s", c["channel"], split)
-            # Dataset acceptance audits the persisted historical compensation;
-            # experiment readers choose their own (default raw) CSI view.
-            with CompactDataset(directory/f"{split}.h5", input_view="compensated") as ds:
+            with CompactDataset(directory/f"{split}.h5", input_view="raw") as ds:
                 h, model = ds._h, ds._model
                 if h.attrs["config_hash"] != digest(c):
                     raise ValueError("Acceptance configuration mismatch")
@@ -63,11 +61,10 @@ def accept(directory, run, c, *, plots=True, hash_files=True):
                     raise ValueError("Split count/window/repeat identities mismatch")
                 ns, nf = len(c["snr_db"]), ds.frame_count
                 recomputed = np.zeros((ns, nf, 2))
-                alpha = h["compensation/alpha"][:]
                 for wi, (record, start) in enumerate(expected_windows):
                     reference_stored = h["windows/reference_csi"][wi]
                     if hashlib.sha256(reference_stored.tobytes()).hexdigest().encode() != h["windows/reference_sha256"][wi]:
-                        raise ValueError("Reference CSI changed during compensation")
+                        raise ValueError("Reference CSI fingerprint mismatch")
                     reference = reference_stored.astype(complex)
                     theta = h["windows/reference_projection"][wi]
                     if split == "train":
@@ -83,7 +80,7 @@ def accept(directory, run, c, *, plots=True, hash_files=True):
                         bits = h["samples/bits"][fi]
                         variances = h["samples/rf_noise_variance"][:, fi]
                         if physical_hash(clean, standard, bits, variances).encode() != h["samples/physical_sha256"][fi]:
-                            raise ValueError("Physical observations/labels/thermal noise changed during compensation")
+                            raise ValueError("Physical observations/labels/thermal noise fingerprint mismatch")
                         expected = make_frame(c, record, start, SPLIT_CODES[split], payload_repeat=payload)
                         if not np.array_equal(expected.bits, bits):
                             raise ValueError("Payload seed/label mismatch")
@@ -104,7 +101,7 @@ def accept(directory, run, c, *, plots=True, hash_files=True):
                         raw = h["samples/raw_coefficients"][:, fi].astype(complex)
                         raw_nmse = coefficient_nmse(model, raw, reference)
                         _assert_close(raw_nmse, h["samples/raw_nmse_linear"][:, fi], "Persisted raw NMSE mismatch")
-                        recomputed[:, fi] = raw_nmse*alpha[:, None]**2
+                        recomputed[:, fi] = raw_nmse
                         residual = clean[[1, 2]]-np.einsum("dij,dj->di", reference, expected.x[[1, 2]], optimize=True)
                         _assert_close(residual, h["samples/model_residual"][fi], "Physical model residual mismatch")
                         if split == "train":
@@ -116,25 +113,16 @@ def accept(directory, run, c, *, plots=True, hash_files=True):
                     if len(payload_hashes) != repeats or len(noise_hashes) != repeats:
                         raise ValueError("Repeated payloads/noise are not independent streams")
                 means = 10*np.log10(recomputed.mean(axis=(1, 2)))
-                target = target_nmse_db(c["channel"], c["snr_db"])
-                _assert_close(h["compensation/target_nmse_db"][:], target, "Persisted NMSE target mismatch")
-                _assert_close(h["compensation/raw_mean_nmse_linear"][:],
-                              h["samples/raw_nmse_linear"][:].mean(axis=(1, 2)), "Raw mean NMSE mismatch")
-                if np.max(abs(means-target)) > .02:
-                    raise ValueError("On-disk mean NMSE misses target by more than 0.02 dB")
-                differences = np.diff(means)
-                if np.any(differences >= 0) or np.any(np.diff(differences) < -1e-8):
-                    raise ValueError("NMSE must decrease monotonically with diminishing slope")
-                if means.min() < target.min()-.02 or means.max() > target.max()+.02:
-                    raise ValueError("NMSE outside target interval")
+                if not np.all(np.isfinite(means)):
+                    raise ValueError("Nonfinite measured CSI NMSE")
                 # Explicit full-matrix reconstruction checks complement the exact Gram identity used for all samples.
                 for si in range(ns):
                     for fi in sorted(set((0, nf-1))):
                         inputs = ds.model_input(si, fi)
                         audit = ds.audit(si, fi)
                         _assert_close(audit["true_nmse_linear"], recomputed[si, fi], "Direct reconstructed full CSI NMSE mismatch", rtol=2e-8)
-                        forbidden = {"reference_csi", "raw_csi", "compensation_alpha", "true_nmse_linear", "true_error", "raw_coefficients"}
-                        if forbidden & set(inputs) or forbidden & set(inputs["uncertainty"]):
+                        forbidden = {"reference_csi", "raw_csi", "true_nmse_linear", "true_error", "raw_coefficients"}
+                        if forbidden & set(inputs):
                             raise ValueError("Audit fields leaked into default model inputs")
                         labels = ds.labels(fi)
                         known = inputs["known"][[1, 2]]
@@ -145,13 +133,11 @@ def accept(directory, run, c, *, plots=True, hash_files=True):
                         y_data, h_data = data_system(inputs)
                         _assert_close(h_data, inputs["csi"][..., ds._indices], "Data column extraction mismatch")
                         _assert_close(y_data, inputs["observations"][[1, 2]]-np.einsum("dij,dj->di", inputs["csi"], known), "Pilot cancellation mismatch")
-                        # Cancellation uses the compensated CSI, not stale raw-CSI derived inputs.
                         _assert_close(y_data-np.einsum("dij,dj->di", h_data, labels["symbols"]),
                                       inputs["observations"][[1, 2]]-np.einsum("dij,dj->di", inputs["csi"], tx),
                                       "Pilot/data decomposition mismatch")
                 report["splits"][split] = dict(mean_nmse_db=means.tolist(), mean_nmse_db_display=[f"{v:.2f}" for v in means],
-                         target_nmse_db=target.tolist(), maximum_target_error_db=float(np.max(abs(means-target))),
-                         alpha=h["compensation/alpha"][:].tolist(), checked_frames=nf,
+                         checked_frames=nf,
                          checked_d_blocks=ns*nf*2, full_matrix_spot_checks=ns*len(set((0, nf-1))))
         _assert_close(train_numerator, calibration["coefficient_error_energy_sum"][:], "Training numerator mismatch")
         _assert_close(train_denominator, calibration["proxy_trace_sum"][:], "Training trace denominator mismatch")
@@ -192,20 +178,19 @@ def plot_report(directory, run, c, report):
     fig, ax = plt.subplots(figsize=(6.4, 4.2), layout="constrained")
     for split in SPLITS:
         ax.plot(c["snr_db"], report["splits"][split]["mean_nmse_db"], "o-", label=split)
-    ax.plot(c["snr_db"], target_nmse_db(c["channel"], c["snr_db"]), "k--", label="target")
     ax.set(xlabel="SNR (dB)", ylabel="Mean NMSE (dB)", title=c["channel"]+" | mean(linear per-D NMSE)")
     ax.grid(True, alpha=.3)
     ax.legend()
     fig.savefig(run/"nmse_snr.png", dpi=160)
     plt.close(fig)
     figures = ["nmse_snr.png"]
-    with CompactDataset(Path(directory)/"test.h5", input_view="compensated") as ds:
+    with CompactDataset(Path(directory)/"test.h5", input_view="raw") as ds:
         for si, snr in enumerate(c["snr_db"]):
             audit = ds.audit(si, 0)
-            fields = (audit["reference_csi"], audit["compensated_csi"], audit["true_error"])
+            fields = (audit["reference_csi"], audit["raw_csi"], audit["true_error"])
             peak = float(np.max(abs(fields[0])**2))
             fig, axes = plt.subplots(2, 3, figsize=(12, 7), layout="constrained")
-            for col, (field, title) in enumerate(zip(fields, ("Reference CSI", "Compensated CSI", "CSI error"))):
+            for col, (field, title) in enumerate(zip(fields, ("Reference CSI", "Raw CSI", "CSI error"))):
                 for d in range(2):
                     db = 10*np.log10(np.maximum(abs(field[d])**2/peak, 1e-8))
                     im = axes[d, col].imshow(db, origin="lower", vmin=-80, vmax=0, aspect="auto", cmap="viridis")
@@ -220,7 +205,7 @@ def plot_report(directory, run, c, report):
     lines = ["<!doctype html><html lang='zh'><meta charset='utf-8'><title>数据验收</title>",
              "<style>body{max-width:1100px;margin:2em auto;font-family:sans-serif}img{max-width:100%}pre{white-space:pre-wrap}</style>",
              f"<h1>{html.escape(c['channel'])} 数据验收 {'CPU smoke' if c.get('smoke') else '正式数据'}</h1>",
-             "<p>协议 watermark-pddp-compact-v2；使用参考辅助 CSI 构造。协方差为接收机模型代理。未运行均衡器、训练或 BER。</p>",
+             "<p>协议 watermark-pddp-compact-raw-v3；CSI 为接收机原始估计。协方差为接收机模型代理。未运行均衡器、训练或 BER。</p>",
              "<p>NMSE 为逐 D 块线性误差的算术平均再转 dB。所有热力图使用同一固定测试窗口的参考峰值，色标 −80 至 0 dB。</p>",
              "<pre>"+html.escape(json.dumps({k: report[k] for k in ("counts", "splits", "gamma", "checks", "total_file_bytes")}, indent=2, ensure_ascii=False))+"</pre>"]
     lines += [f"<img src='{name}' alt='{name}'>" for name in figures]

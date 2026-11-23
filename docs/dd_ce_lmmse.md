@@ -1,5 +1,7 @@
 # DD-DPSS 软判决数据辅助信道重估
 
+> 本文记录旧 P-D-D-P / 参考辅助补偿条件下的设计或结果，仅供历史参考。当前实验使用 D-D-D-D 帧和未经补偿的 CSI；范围及运行方式见 [四数据符号 LMMSE 小实验](four_data_lmmse.md)。
+
 主对比中的 DD-DPSS（配置标识 `dd_ce_lmmse`）使用相同的 Full-matrix LMMSE 做两次检测，中间用第一次检测得到的 QPSK 软符号均值，在接收机的 DPSS 先验子空间内更新一次 CSI。与固定 CSI 的 Full-matrix LMMSE 配对，可以比较这次更新对 BER 和信道估计精度的影响。水声 OFDM 中将检测数据作为虚拟导频的背景见 [Radosevic 等，Allerton 2011](https://doi.org/10.1109/Allerton.2011.6120229)。
 
 1. 以已验收的完整 compensated CSI 矩阵 $H_0$ 消除已知导频，用全部接收行、数据列和完整热噪声协方差求 LMMSE。设 $G$ 和 $b$ 为按噪声协方差白化并计入噪声方差的 Gram 矩阵与匹配滤波输出。令 $V=(I+G)^{-1}$、$\hat s=Vb$。在标量等效高斯观测近似下，第 $j$ 个单位能量 QPSK 符号的后验均值为

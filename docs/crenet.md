@@ -1,5 +1,7 @@
 # CRENet：当前统一算法与运行方式
 
+> 本文记录旧 P-D-D-P / 参考辅助补偿条件下的设计或结果，仅供历史参考。当前实验使用 D-D-D-D 帧和未经补偿的 CSI；范围及运行方式见 [四数据符号 LMMSE 小实验](four_data_lmmse.md)。
+
 当前设计为 **8层残差 MMSE Unfolding + 共享带状 CSI 修正器**。NOF1、NCS1 都学习逐层物理参数和局部神经校准网络，分别训练权重。公式、参数和冻结测试见 [算法设计](crenet_algorithm_design.md)。
 
 ## 1. 输入与模型

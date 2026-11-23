@@ -1,5 +1,7 @@
 # ICC 论文指标图绘制
 
+> 本文记录旧 P-D-D-P / 参考辅助补偿条件下的设计或结果，仅供历史参考。当前实验使用 D-D-D-D 帧和未经补偿的 CSI；范围及运行方式见 [四数据符号 LMMSE 小实验](four_data_lmmse.md)。
+
 绘图脚本读取 `configs/evaluation/ber_comparison.json` 的 `output` 指向的双信道七算法报告。当前结果位于 `outputs/experiment/equalizer_comparison_dd_ce_20261102/{nof1,ncs1}/metrics.json`；脚本只读取已有结果，不运行训练或推理。
 
 ## 查看图形

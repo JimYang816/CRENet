@@ -27,8 +27,8 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     config = json.loads(args.config.read_text(encoding="utf-8"))
-    if config.get("input_view", "compensated") != "compensated":
-        parser.error("Default CRENet evaluation is fixed to the accepted compensated CSI")
+    if config.get("input_view", "raw") != "raw":
+        parser.error("CRENet evaluation requires raw receiver CSI")
     torch.set_num_threads(args.threads)
     with threadpool_limits(args.threads):
         evaluate(Path(config["datasets"][args.channel])/"test.h5", args.checkpoint, args.run,

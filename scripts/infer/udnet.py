@@ -27,7 +27,7 @@ def main():
     parser.add_argument("--frames", default="0", help="Comma-separated sorted frame indices")
     parser.add_argument("--d", type=int, choices=(1, 2), default=1)
     parser.add_argument("--device", choices=("cpu", "cuda"), default=default_device())
-    parser.add_argument("--input-view", choices=("raw", "compensated"), default="compensated")
+    parser.add_argument("--input-view", choices=("raw",), default="raw")
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()

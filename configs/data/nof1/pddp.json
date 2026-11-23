@@ -2,7 +2,7 @@
   "channel": "NOF1",
   "frame_structure": "PDDP",
   "learning_dataset": {
-    "protocol": "watermark-pddp-compact-v2",
+    "protocol": "watermark-pddp-compact-raw-v3",
     "records": {
       "train": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 17, 18, 20, 22, 24, 25, 26, 28, 30, 32, 33, 34, 36, 38, 40, 41, 42, 44, 46, 48, 49, 50],
       "validation": [13, 21, 29, 37, 45],

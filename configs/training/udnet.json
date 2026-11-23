@@ -1,12 +1,12 @@
 {
   "datasets": {
-    "NOF1": "data/processed/nof1_compact_20261026_final",
-    "NCS1": "data/processed/ncs1_compact_20261026_nmse"
+    "NOF1": "data/processed/nof1_dddd",
+    "NCS1": "data/processed/ncs1_dddd"
   },
-  "output": "outputs/experiment/udnet_compensated",
+  "output": "outputs/experiment/udnet_dddd_raw",
   "model": {"layers": 22, "window_size": 32, "hidden_size": 48},
   "training": {
-    "input_view": "compensated",
+    "input_view": "raw",
     "epochs": 200,
     "patience": 20,
     "learning_rate": 0.001,
@@ -15,7 +15,7 @@
     "frame_batch_size": 8
   },
   "evaluation": {
-    "input_view": "compensated",
+    "input_view": "raw",
     "batch_size": 8,
     "window_batch_size": 2000,
     "algorithm_parameters": {

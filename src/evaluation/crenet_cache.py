@@ -73,13 +73,13 @@ def evaluate(dataset_path, checkpoint, run, backend, *, batch_size=8, cache_dir=
     if config["detector_mode"] == "budgeted":
         references += ("src.algorithms.crenet.inference",)
     code = source_fingerprint(references)
-    with CompactDataset(dataset_path, input_view="compensated") as dataset:
+    with CompactDataset(dataset_path, input_view="raw") as dataset:
         validate_dataset(payload, dataset)
         if dataset.split != "test":
             raise ValueError("Cached CRENet comparison requires the test split")
         guard = DataIdentity({name: dataset.path.parent/name for name in
                               ("test.h5", "model.h5", "train.h5", "validation.h5")})
-        expected = dict(channel=dataset.channel, split="test", input_view="compensated",
+        expected = dict(channel=dataset.channel, split="test", input_view="raw",
             smoke=bool(payload.get("smoke")) or bool(dataset._config.get("smoke")),
             checkpoint_sha256=checkpoint_hash, model_config=config, effective_model_config=effective_config,
             data_identity=guard.files, code=code, snr_db=dataset.snr_db.tolist(), operator_backend="dense",

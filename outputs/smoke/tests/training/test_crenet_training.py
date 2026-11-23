@@ -77,7 +77,7 @@ def test_two_rate_learning_updates_hidden_head_and_physics(experiment):
     configure_stage(model, "A", detector_parameters="all")
     initial = cpu_state(model)
     optimizer = _optimizer(model, "A", .001, neural_learning_rate_scale=.01)
-    with CompactDataset(directory/"train.h5", input_view="compensated") as dataset:
+    with CompactDataset(directory/"train.h5", input_view="raw") as dataset:
         for _ in range(2):
             run_epoch(model, dataset, "cpu", stage="A", batch_size=1, frame_limit=1,
                       optimizer=optimizer, loss_options=dict(objective="bit_ce", final_weight=.9))
@@ -126,7 +126,7 @@ def test_three_stages_resume_and_never_open_test(experiment, monkeypatch, resume
     a = torch.load(complete, weights_only=True)
     b = torch.load(resumed, weights_only=True)
     assert [h["stage"] for h in a["history"]] == ["A", "B", "B", "C"]
-    assert a["input_view"] == "compensated"
+    assert a["input_view"] == "raw"
     assert a["model_config"]["precision"] == "complex64"
     assert a["feedback_layout"] == FEEDBACK_LAYOUT
     assert all(value.dtype == (torch.complex64 if value.is_complex() else torch.float32)
@@ -310,7 +310,7 @@ def test_stage_b_continuation_rejects_wrong_source(experiment):
 
 def test_checkpoints_reject_old_schema_or_wrong_compact_feature_layout(tmp_path):
     model = CRENet(layers=2, bandwidth=16)
-    payload = dict(schema=SCHEMA, input_view="compensated", feedback_layout=FEEDBACK_LAYOUT,
+    payload = dict(schema=SCHEMA, input_view="raw", feedback_layout=FEEDBACK_LAYOUT,
         training_scope="one_channel_all_snr_D1_D2", inference_code=source_fingerprint(INFERENCE_CODE),
         model_config=model.config, model=cpu_state(model))
     path = tmp_path / "model.pt"
@@ -339,7 +339,7 @@ def test_compact_pipeline_preserves_inputs_metrics_and_updates(experiment, prefe
     original = CRENet(layers=2, bandwidth=2, window_size=8, center_size=4, noise_mode="diagonal")
     with torch.no_grad():
         original.corrector.head.weight[:10].normal_(std=.01)
-    with CompactDataset(directory/"train.h5", input_view="raw" if candidate_backend == "dpss" else "compensated") as dataset:
+    with CompactDataset(directory/"train.h5", input_view="raw" if candidate_backend == "dpss" else "raw") as dataset:
         for stage in "ABC":
             models = [deepcopy(original), deepcopy(original)]
             metrics = []

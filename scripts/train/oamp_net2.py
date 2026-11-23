@@ -1,4 +1,4 @@
-"""Train channel-specific OAMP-Net2 models on the fixed compensated-CSI splits."""
+"""Train channel-specific OAMP-Net2 models on raw-CSI splits."""
 from __future__ import annotations
 from src.common.numerics import default_device
 

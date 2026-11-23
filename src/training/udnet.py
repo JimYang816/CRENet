@@ -111,7 +111,7 @@ def run_epoch(model, cache, device, batch_size, *, optimizer=None, generator=Non
 
 def _train(data_directory, run, backend, *, model_config=None, epochs=200, patience=20,
            learning_rate=.001, seed=20261027, batch_size=None, frame_batch_size=8,
-           frame_limit=None, resume=False, stop_after_epochs=None, input_view="compensated"):
+           frame_limit=None, resume=False, stop_after_epochs=None, input_view="raw"):
     if (not isinstance(epochs, int) or epochs < 1 or not isinstance(patience, int) or patience < 1
             or learning_rate <= 0 or not np.isfinite(learning_rate)
             or (batch_size is not None and (not isinstance(batch_size, int) or batch_size < 1))):

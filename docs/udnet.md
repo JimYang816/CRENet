@@ -1,5 +1,7 @@
 # UDNet 实现与估计 CSI 数据适配
 
+> 本文记录旧 P-D-D-P / 参考辅助补偿条件下的设计或结果，仅供历史参考。当前实验使用 D-D-D-D 帧和未经补偿的 CSI；范围及运行方式见 [四数据符号 LMMSE 小实验](four_data_lmmse.md)。
+
 ## 依据与范围
 
 依据 Hao Zhao 等《Model-Driven Based Deep Unfolding Equalizer for Underwater Acoustic OFDM Communications》，IEEE TVT 72(5), 2023，DOI `10.1109/TVT.2022.3230143`，式（13）—（15）、图 5 和滑动结构实现。核对的本地论文为 `D:/SCI/paper/EPNet/UDNet.pdf`，SHA256 为 `fdd19460d502fe01f4be8abf8cd45199e99f64a42d62c9601e69fe5beb252eee`。

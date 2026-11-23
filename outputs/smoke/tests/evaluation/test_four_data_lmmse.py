@@ -1,20 +1,24 @@
 """Exercise the fixed four-data setup and the actual detector contracts."""
 from inspect import signature
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 from scipy import linalg
 
-from data_generation.src.config import ROOT
-from data_generation.src.receiver.chain import taps_to_matrix
+from data_generation.src.config import ROOT, load_config
+from data_generation.src.receiver.chain import ReceiverChain, taps_to_matrix
+from data_generation.src.receiver.dpss import build_model
 from data_generation.src.receiver.pdd import JointEstimator, symbol_layout
 from src.common.numerics import DenseBackend
 from src.evaluation.four_data_lmmse import channel_config, detect, load_run_config, model_basis
+from data_generation.src.transmitter.ofdm import window_indices
 from src.evaluation.four_data_q_sweep import make_frame, masks
 
 
 def test_four_data_parameters_and_independent_test_records():
     options = load_run_config(ROOT/"configs/evaluation/four_data_lmmse.json")
+    assert load_config()["frame_structure"] == "DDDD"
     assert set(options["prior_records"]).isdisjoint(options["test_records"])
     for channel in options["channels"]:
         c = channel_config(channel)
@@ -31,6 +35,7 @@ def test_four_data_parameters_and_independent_test_records():
         basis, concentration = model_basis(c)
         assert basis.shape == (5632, 32)
         np.testing.assert_allclose(basis.T@basis, np.eye(32), atol=2e-13)
+        np.testing.assert_allclose(build_model(c).basis, basis, rtol=0, atol=2e-12)
         assert np.all(np.diff(concentration) <= 1e-12)
 
 
@@ -45,6 +50,17 @@ def test_four_data_noise_floor_uses_data_frame_power():
     variance = np.array([1., 3.])
     actual = estimator.effective_noise_variances(y, variance)
     np.testing.assert_allclose(actual, variance+.03*(8-variance))
+
+
+def test_receiver_snr_uses_all_four_data_windows():
+    c = channel_config("NOF1")
+    clean = np.zeros(4*(c["nfft"]+c["cp"])+2*c["guard_samples"])
+    for symbol in range(4):
+        clean[window_indices(c, symbol)] = symbol+1
+    chain = SimpleNamespace(c=c, noise_gain=1, receive=lambda x: x)
+    _, variance, power = ReceiverChain.noise(chain, clean, 11, 2, 2)
+    assert power == pytest.approx((1+4+9+16)/4)
+    np.testing.assert_allclose(variance, power/10**(np.asarray(c["snr_db"])/10))
 
 
 @pytest.fixture

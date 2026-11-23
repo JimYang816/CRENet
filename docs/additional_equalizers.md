@@ -1,5 +1,7 @@
 # OAMP-Net2 与七算法统一评测
 
+> 本文记录旧 P-D-D-P / 参考辅助补偿条件下的设计或结果，仅供历史参考。当前实验使用 D-D-D-D 帧和未经补偿的 CSI；范围及运行方式见 [四数据符号 LMMSE 小实验](four_data_lmmse.md)。
+
 主对比为 Single-tap LMMSE、Full-matrix LMMSE、
 MMSE-DFE、DD-CE + Full-matrix LMMSE、UDNet、OAMP-Net2、CRENet。MMSE-DFE 的计算与固定检测顺序见 [说明](mmse_dfe.md)。保持已验收数据文件、物理记录划分、
 compensated CSI、导频、接收观测、QPSK 映射及 BER 定义不变。

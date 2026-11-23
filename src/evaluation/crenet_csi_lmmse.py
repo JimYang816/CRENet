@@ -154,7 +154,7 @@ def evaluate(dataset_path, candidate_report, run, *, batch_size=2, lambda_h=.01)
         code = source_fingerprint(CODE)
         backend = DenseBackend("cpu")
         started = time.perf_counter()
-        with CompactDataset(dataset_path, input_view="compensated") as dataset, torch.inference_mode():
+        with CompactDataset(dataset_path, input_view="raw") as dataset, torch.inference_mode():
             bits = validate_candidate(candidate, dataset, guard)
             model, payload = load_model(checkpoint, "cpu")
             validate_dataset(payload, dataset)
@@ -218,7 +218,7 @@ def evaluate(dataset_path, candidate_report, run, *, batch_size=2, lambda_h=.01)
                     errors={name: errors[vi][:, selected].sum(axis=(1, 2)).tolist()
                             for vi, name in enumerate(VARIANTS)}))
             report = dict(schema="crenet-csi-full-matrix-lmmse-validation-v1", complete=True,
-                channel=dataset.channel, split="validation", input_view="compensated", frame_count=count,
+                channel=dataset.channel, split="validation", input_view="raw", frame_count=count,
                 smoke=bool(candidate.get("smoke")) or bool(dataset._config.get("smoke")),
                 snr_db=dataset.snr_db.tolist(), dataset=str(dataset_path.resolve()), lambda_h=lambda_h,
                 checkpoint=str(checkpoint.resolve()), checkpoint_sha256=candidate["checkpoint_sha256"],

@@ -1,5 +1,7 @@
 # MMSE-DFE
 
+> 本文记录旧 P-D-D-P / 参考辅助补偿条件下的设计或结果，仅供历史参考。当前实验使用 D-D-D-D 帧和未经补偿的 CSI；范围及运行方式见 [四数据符号 LMMSE 小实验](four_data_lmmse.md)。
+
 实现位于 `src/algorithms/mmse_dfe/detector.py`，标识为 `mmse_dfe`，图例为 **MMSE-DFE**。
 这是固定 CSI 的完整矩阵块判决反馈均衡器，无需训练、没有可调检测参数。
 检测顺序固定为数据列从末列到首列，不使用最优排序或测试标签选序。

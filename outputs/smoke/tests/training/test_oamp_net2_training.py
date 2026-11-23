@@ -66,15 +66,15 @@ def test_training_does_not_open_test_data_and_resume_is_exact(experiment, monkey
     assert [row["validation_loss"] for row in a["history"]] == [row["validation_loss"] for row in b["history"]]
     assert [row["validation_by_snr"] for row in a["history"]] == [row["validation_by_snr"] for row in b["history"]]
     assert set(a["identity"]["data"]) == {"train.h5", "validation.h5", "model.h5"}
-    assert a["training_scope"] == "one_channel_all_snr_D1_D2" and a["input_view"] == "compensated"
+    assert a["training_scope"] == "one_channel_all_snr_D1_D2" and a["input_view"] == "raw"
     assert a["training_blocks"] == 2*2*2
     load_model(resumed)
-    raw = dict(a, input_view="raw")
-    torch.save(raw, root/"raw.pt")
+    retired = dict(a, input_view="compensated")
+    torch.save(retired, root/"retired.pt")
     with pytest.raises(ValueError, match="identity mismatch"):
-        load_model(root/"raw.pt")
+        load_model(root/"retired.pt")
     with pytest.raises(ValueError, match="controls"):
-        train(directory, root/"bad-view", backend, input_view="raw")
+        train(directory, root/"bad-view", backend, input_view="compensated")
     cache_path = next(path for path in (root/"full/features").glob("train_*") if path.is_dir())
     cached = np.load(cache_path/"projected_matched.npy")
     expected = cached.flat[0]
@@ -119,8 +119,8 @@ def test_label_free_inference_complete_evaluation_and_cache_reuse(experiment, mo
         again = evaluate(directory/"test.h5", checkpoint, root/"again", backend, **dict(options, batch_size=1))
     assert again["curves"]["OAMP-Net2"]["provenance"]["reused"]
     assert again["curves"]["OAMP-Net2"]["errors"] == report["curves"]["OAMP-Net2"]["errors"]
-    with pytest.raises(ValueError, match="compensated"):
-        evaluate(directory/"test.h5", checkpoint, root/"invalid", backend, input_view="raw")
+    with pytest.raises(ValueError, match="raw"):
+        evaluate(directory/"test.h5", checkpoint, root/"invalid", backend, input_view="compensated")
     with pytest.raises(ValueError, match="test split"):
         evaluate(directory/"validation.h5", checkpoint, root/"invalid-split", backend)
 
@@ -138,7 +138,7 @@ def test_unified_algorithms_equal_test_counts_and_offline_replot(experiment, mon
     model = CRENet(layers=2, bandwidth=2, window_size=6, center_size=3, hidden_size=4, precision="complex128")
     crenet = root/"crenet.pt"
     with CompactDataset(directory/"train.h5") as dataset:
-        atomic_save(crenet, dict(schema=SCHEMA, input_view="compensated", model_config=model.config,
+        atomic_save(crenet, dict(schema=SCHEMA, input_view="raw", model_config=model.config,
             feedback_layout=FEEDBACK_LAYOUT, inference_code=source_fingerprint(INFERENCE_CODE),
             model=cpu_state(model), training_scope="one_channel_all_snr_D1_D2", channel=dataset.channel,
             data_schema=str(dataset._h.attrs["schema"]), model_identity=str(dataset._h.attrs["model_identity"]),
@@ -148,7 +148,7 @@ def test_unified_algorithms_equal_test_counts_and_offline_replot(experiment, mon
         batch_size=2, cache_dir=root/"cache", algorithm_parameters={"mmse_dfe": {}, "dd_ce_lmmse": {}}, bootstrap_samples=16)
     assert tuple(report["curves"]) == ORDER
     assert all(curve["total_bits"] == [64, 64] for curve in report["curves"].values())
-    assert report["input_view"] == "compensated"
+    assert report["input_view"] == "raw"
     assert len(report["nmse"]["corrected_mean_nmse_db"]) == 2
     assert len(report["nmse"]["dd_mean_nmse_db"]) == 2
     assert (root/"unified/report.html").is_file()
@@ -178,20 +178,20 @@ def test_unified_algorithms_equal_test_counts_and_offline_replot(experiment, mon
                and row["peak_process_rss_bytes"] > 0 for row in rows)
     assert {row["algorithm"] for row in rows if row["parameters"] == 0} == {"single_tap_mmse", "full_matrix_lmmse", "mmse_dfe", "dd_ce_lmmse"}
     assert {row["algorithm"] for row in rows if row["parameters"] > 0} == {"udnet", "oamp_net2", "crenet"}
-    assert efficiency["reference_assisted_csi_construction"]
+    assert not efficiency["reference_assisted_csi_construction"]
     assert efficiency["initial_provenance_validation_seconds"] > 0
     assert "train.h5" not in efficiency["data_identity"]
     for row in rows:
         assert row["setup_and_prediction_seconds"] == pytest.approx(
             row["setup_seconds"] + row["reconstruction_and_all_iterations_seconds"])
-    assert json.loads((root/"efficiency.json").read_text(encoding="utf-8"))["input_view"] == "compensated"
+    assert json.loads((root/"efficiency.json").read_text(encoding="utf-8"))["input_view"] == "raw"
     assert next(row for row in rows if row["algorithm"] == "oamp_net2")["parameters"] == 12
     with pytest.raises(FileNotFoundError, match="Missing oamp_net2"):
         unified(directory/"test.h5", root/"missing", backend, checkpoints={"oamp_net2": root/"missing.pt"})
     assert not (root/"missing/metrics.json").exists()
-    wrong = dict(report, input_view="raw")
+    wrong = dict(report, input_view="compensated")
     (root/"wrong.json").write_text(json.dumps(wrong), encoding="utf-8")
-    with pytest.raises(ValueError, match="compensated CSI comparison report"):
+    with pytest.raises(ValueError, match="raw CSI comparison report"):
         benchmark(directory/"test.h5", root/"wrong.json", crenet, udnet, algorithms=("full_matrix_lmmse",))
 
 

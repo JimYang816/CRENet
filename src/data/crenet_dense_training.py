@@ -1,4 +1,4 @@
-"""Selected-view CSI construction with full reference support on the device.
+"""Raw CSI construction on the device.
 
 Reproduce the legacy complex128 tap expansion and 2-D FFT, then cast the
 complete matrix to the requested model precision. No operator approximation.
@@ -19,10 +19,7 @@ class DenseCoefficients:
     coefficients: torch.Tensor
     basis: torch.Tensor
     dtype: torch.dtype
-    reference: torch.Tensor | None = None
-    alpha: float = 1.
-
-    def dense(self, device, *, basis=None, reference=None, non_blocking=False):
+    def dense(self, device, *, basis=None, non_blocking=False):
         values = (self.basis.to(device=device, non_blocking=non_blocking)
                   if basis is None else basis)
         coefficients = self.coefficients.to(device=device, non_blocking=non_blocking)
@@ -36,17 +33,13 @@ class DenseCoefficients:
         matrix = torch.fft.fft(matrix, dim=-2, norm="ortho")
         matrix = torch.fft.ifft(matrix, dim=-1, norm="ortho")
         matrix = torch.fft.fftshift(matrix, dim=(-2, -1))
-        if self.reference is not None:
-            reference = (self.reference if reference is None else reference).to(
-                device=device, dtype=torch.complex128, non_blocking=non_blocking)
-            matrix = reference + self.alpha*(matrix-reference)
         return matrix.to(self.dtype)
 
 
 def dense_input_batches(dataset, *, batch_size, frame_limit=None, precision="complex64",
                         snr_indices=None, frame_indices=None, reference_cache=None, sampling_seed=None):
-    if dataset.input_view not in ("raw", "compensated"):
-        raise ValueError("Unknown CRENet CSI input view")
+    if dataset.input_view != "raw":
+        raise ValueError("CRENet requires unmodified receiver CSI")
     if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size < 1:
         raise ValueError("Invalid CRENet batch size")
     dtype, real = precision_dtypes(precision)
@@ -69,9 +62,6 @@ def dense_input_batches(dataset, *, batch_size, frame_limit=None, precision="com
                                                     dtype=numpy_complex), dtype=dtype))
     known = [torch.as_tensor(np.asarray(dataset._known[d+1], dtype=numpy_complex), dtype=dtype) for d in range(2)]
     h = dataset._h
-    # The small frame-to-window map supports arbitrary frame order; HDF5 fancy
-    # indexing itself requires sorted indices and must not reorder the batch.
-    window_indices = h["samples/window_index"][:] if dataset.input_view == "compensated" else None
     for si, block, indices in batch_schedule(frames, selected, batch_size, sampling_seed=sampling_seed):
         coefficients, observations, variances = [], [], []
         for frame in indices:
@@ -80,21 +70,8 @@ def dense_input_batches(dataset, *, batch_size, frame_limit=None, precision="com
             observations.append(h["samples/clean_observations"][frame, block+1]
                 + np.sqrt(variance)*h["samples/standard_noise"][frame, block+1])
             variances.append(variance)
-        reference, alpha = None, 1.
-        if dataset.input_view == "compensated":
-            windows = window_indices[indices]
-            if reference_cache is None:
-                reference = torch.as_tensor(np.stack([
-                    np.asarray(h["windows/reference_csi"][int(window), block], dtype=np.complex128)
-                    for window in windows]))
-            else:
-                # Saved complex64 values promote exactly to complex128 on the
-                # device; the compensation formula and full support are intact.
-                reference = torch.cat([reference_cache.get_full(dataset,
-                    int(window), block, precision) for window in windows])
-            alpha = float(h["compensation/alpha"][si])
         inputs = dict(shared, initial_channel=DenseCoefficients(torch.as_tensor(np.stack(coefficients)),
-            bases[block], dtype, reference, alpha), observations=torch.as_tensor(np.asarray(observations, dtype=numpy_complex)),
+            bases[block], dtype), observations=torch.as_tensor(np.asarray(observations, dtype=numpy_complex)),
             rf_variance=torch.as_tensor(np.asarray(variances, dtype=numpy_real), dtype=real),
             known=known[block].expand(len(indices), -1))
         yield inputs, [(si, frame, block) for frame in indices]

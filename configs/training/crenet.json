@@ -1,10 +1,10 @@
 {
   "datasets": {
-    "NOF1": "data/processed/nof1_compact_20261026_final",
-    "NCS1": "data/processed/ncs1_compact_20261026_nmse"
+    "NOF1": "data/processed/nof1_dddd",
+    "NCS1": "data/processed/ncs1_dddd"
   },
-  "output": "outputs/experiment/crenet_current",
-  "input_view": "compensated",
+  "output": "outputs/experiment/crenet_dddd_raw",
+  "input_view": "raw",
   "model": {
     "layers": 8,
     "bandwidth": 16,

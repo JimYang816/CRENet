@@ -226,7 +226,7 @@ def run(source, output, archive_path, smoke, backend):
     test = {}
     for channel in ("NOF1", "NCS1"):
         ranked = sorted(validation[channel], key=lambda row: (row["mean_ber"], row["q"]))
-        # Q16 was the compensated-CSI winner and Q24 is a fixed reference.
+        # Q16 and Q24 are fixed reference orders.
         test_orders = sorted({selected["by_channel"][channel], selected["shared"], ranked[1]["q"], 16, 24})
         test[channel] = [evaluate_candidate(channel, source, output, metadata, q, "test", backend)
                          for q in test_orders]

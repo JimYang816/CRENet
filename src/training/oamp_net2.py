@@ -64,14 +64,14 @@ def run_epoch(model, cache, device, batch_size, *, optimizer=None, generator=Non
 
 def _train(data_directory, run, backend, *, model_config=None, epochs=200, patience=20,
            learning_rate=.001, seed=20261030, batch_size=8, frame_batch_size=8,
-           frame_limit=None, resume=False, stop_after_epochs=None, input_view="compensated"):
+           frame_limit=None, resume=False, stop_after_epochs=None, input_view="raw"):
     integers = (epochs, patience, batch_size, frame_batch_size)
     if (any(not isinstance(value, int) or isinstance(value, bool) or value < 1 for value in integers)
-            or not np.isfinite(learning_rate) or learning_rate <= 0 or input_view != "compensated"
+            or not np.isfinite(learning_rate) or learning_rate <= 0 or input_view != "raw"
             or (frame_limit is not None and (backend.device != "cpu" or not isinstance(frame_limit, int)
                 or isinstance(frame_limit, bool) or frame_limit < 1))
             or (stop_after_epochs is not None and (not isinstance(stop_after_epochs, int) or stop_after_epochs < 1))):
-        raise ValueError("Invalid OAMP-Net2 training controls; use compensated CSI and CPU-only smoke limits")
+        raise ValueError("Invalid OAMP-Net2 training controls; use raw CSI and CPU-only smoke limits")
     run, directory = Path(run), Path(data_directory)
     latest, best = run/"latest.pt", run/"best.pt"
     if not resume and (latest.exists() or best.exists()):

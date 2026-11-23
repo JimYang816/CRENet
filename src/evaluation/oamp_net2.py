@@ -31,10 +31,10 @@ def score_oamp_net2(dataset, frames, d, result):
 
 
 def _evaluate(dataset_path, checkpoint, run, backend, *, batch_size=8, cache_dir=None,
-              algorithm_parameters=None, input_view="compensated", force=False):
-    if (input_view != "compensated" or not isinstance(batch_size, int)
+              algorithm_parameters=None, input_view="raw", force=False):
+    if (input_view != "raw" or not isinstance(batch_size, int)
             or isinstance(batch_size, bool) or batch_size < 1):
-        raise ValueError("OAMP-Net2 evaluation requires compensated CSI and a positive batch size")
+        raise ValueError("OAMP-Net2 evaluation requires raw CSI and a positive batch size")
     checkpoint, run = Path(checkpoint), Path(run)
     checkpoint_sha = file_sha256(checkpoint)
     model, payload = load_model(checkpoint, backend.device)
@@ -104,7 +104,7 @@ def _evaluate(dataset_path, checkpoint, run, backend, *, batch_size=8, cache_dir
             best_validation_loss=payload["best_loss"], training_scope=payload["training_scope"],
             parameters=payload["parameters"], paper_doi=payload["paper_doi"],
             selection="train/validation final-layer squared vector error; test excluded",
-            csi="fixed compensated CSI; thermal covariance; detector only, no JCESD")
+            csi="fixed raw receiver CSI; thermal covariance; detector only, no JCESD")
         publish_report(run, report)
         return report
 

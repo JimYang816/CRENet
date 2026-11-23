@@ -1,4 +1,4 @@
-"""Benchmark all six compensated-CSI detectors in fresh processes."""
+"""Benchmark raw-CSI detectors in fresh processes."""
 from __future__ import annotations
 from src.common.numerics import default_device
 

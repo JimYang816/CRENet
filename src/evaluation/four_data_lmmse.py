@@ -33,7 +33,7 @@ CODE_FILES = (
     "data_generation/src/receiver/dpss.py", "data_generation/src/transmitter/ofdm.py",
     "data_generation/src/channel/watermark/replay.py", "src/algorithms/single_tap_mmse/equalizer.py",
     "src/algorithms/full_matrix_lmmse/equalizer.py", "src/algorithms/likelihood.py", "src/algorithms/interface.py",
-    "src/common/numerics.py", "src/common/experiment.py", "data_generation/src/config.py",
+    "src/common/numerics.py", "src/common/experiment.py", "data_generation/src/config.py", "data_generation/src/pdd.py",
 )
 
 

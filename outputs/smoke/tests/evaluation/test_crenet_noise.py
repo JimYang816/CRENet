@@ -39,8 +39,8 @@ def small_comparison(tmp_path):
                 model.corrector.head.weight[:10].normal_(std=.002)
             checkpoint = tmp_path / "crenet.pt"
             state = cpu_state(model)
-            with CompactDataset(directory / "train.h5", input_view="compensated") as dataset:
-                atomic_save(checkpoint, dict(schema=SCHEMA, input_view="compensated", model_config=model.config,
+            with CompactDataset(directory / "train.h5", input_view="raw") as dataset:
+                atomic_save(checkpoint, dict(schema=SCHEMA, input_view="raw", model_config=model.config,
                     feedback_layout=FEEDBACK_LAYOUT,
                     inference_code=source_fingerprint(INFERENCE_CODE), model=state,
                     training_scope="one_channel_all_snr_D1_D2", channel=dataset.channel,

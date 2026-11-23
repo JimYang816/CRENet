@@ -36,8 +36,8 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     configuration = json.loads(args.config.read_text(encoding="utf-8"))
-    if configuration.get("input_view", "compensated") != "compensated":
-        parser.error("Default CRENet training is fixed to the accepted compensated CSI")
+    if configuration.get("input_view", "raw") != "raw":
+        parser.error("CRENet training requires unmodified receiver CSI")
     if args.threads < 1:
         parser.error("--threads must be positive")
     output = resolve_output_root(configuration["output"], args.output, smoke=args.max_frames is not None)

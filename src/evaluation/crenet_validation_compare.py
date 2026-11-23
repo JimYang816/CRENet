@@ -32,9 +32,9 @@ CODE = ("src.evaluation.crenet_validation_compare", "src.evaluation.inputs",
 
 def validate_candidate(report, dataset, identity):
     if (not report.get("complete") or report.get("split") != "validation"
-            or report.get("input_view") != "compensated" or dataset.split != "validation"
-            or dataset.input_view != "compensated" or report.get("channel") != dataset.channel):
-        raise ValueError("Comparison requires a complete compensated-CSI validation report and matching channel")
+            or report.get("input_view") != "raw" or dataset.split != "validation"
+            or dataset.input_view != "raw" or report.get("channel") != dataset.channel):
+        raise ValueError("Comparison requires a complete raw-CSI validation report and matching channel")
     for name in ("validation.h5", "model.h5"):
         if report.get("data_identity", {}).get(name) != identity.files[name]:
             raise ValueError("Candidate and LMMSE data identity differ: " + name)
@@ -112,7 +112,7 @@ def evaluate(dataset_path, candidate_report, run, *, batch_size=2):
         code = source_fingerprint(CODE)
         backend = DenseBackend("cpu")
         started = time.perf_counter()
-        with CompactDataset(dataset_path, input_view="compensated") as dataset:
+        with CompactDataset(dataset_path, input_view="raw") as dataset:
             bits_per_snr = validate_candidate(candidate, dataset, guard)
             whitener = make_whitener(dataset._shared["unit_rf_noise_covariance"][:], backend)
             count, nsnr = dataset.frame_count, len(dataset.snr_db)
@@ -146,7 +146,7 @@ def evaluate(dataset_path, candidate_report, run, *, batch_size=2):
                     total_bits=int(4 * selected.sum() * len(dataset._indices))))
             rows = candidate["per_snr"]
             result = dict(schema="crenet-validation-lmmse-comparison-v1", complete=True,
-                channel=dataset.channel, split="validation", input_view="compensated", frame_count=count,
+                channel=dataset.channel, split="validation", input_view="raw", frame_count=count,
                 smoke=bool(candidate.get("smoke")) or bool(dataset._config.get("smoke")),
                 snr_db=dataset.snr_db.tolist(), dataset=str(dataset_path.resolve()),
                 candidate_report=str(candidate_report.resolve()), data_identity=guard.files,

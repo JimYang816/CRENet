@@ -1,4 +1,4 @@
-"""One compensated-CSI report for the configured traditional/learned detectors."""
+"""One raw-CSI report for the configured traditional/learned detectors."""
 from __future__ import annotations
 
 import html
@@ -42,9 +42,9 @@ def _preflight(dataset_path, checkpoints, backend):
 
 
 def evaluate(dataset_path, run, backend, *, checkpoints=None, batch_size=8, cache_dir=None,
-             algorithm_parameters=None, force=(), input_view="compensated", bootstrap_samples=2000):
-    if input_view != "compensated":
-        raise ValueError("Unified experiment requires compensated CSI")
+             algorithm_parameters=None, force=(), input_view="raw", bootstrap_samples=2000):
+    if input_view != "raw":
+        raise ValueError("Unified experiment requires raw CSI")
     checkpoints = dict(checkpoints or {})
     forced = {force} if isinstance(force, str) else set(force)
     smoke = _preflight(dataset_path, checkpoints, backend)
@@ -83,7 +83,7 @@ def evaluate(dataset_path, run, backend, *, checkpoints=None, batch_size=8, cach
         for name, component in components.items():
             component_data = {key: component["data_identity"].get(key) for key in guard.files}
             if (component_data != guard.files or component["snr_db"] != baseline["snr_db"]
-                    or component.get("input_view") != "compensated"):
+                    or component.get("input_view") != "raw"):
                 raise RuntimeError(f"{name} comparison data/view/SNR identity mismatch")
             for label in set(component["curves"]).intersection(report["curves"]):
                 if component["curves"][label]["total_bits"] != report["curves"][label]["total_bits"]:
@@ -118,7 +118,7 @@ def _write_html(run, report):
                         for label, field in nmse_fields if field in report["nmse"])
     body = f'''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>{report['channel']} 均衡算法对比</title>
 <style>body{{font:16px/1.7 system-ui;max-width:1100px;margin:32px auto;padding:0 20px}}img{{max-width:100%}}table{{border-collapse:collapse;width:100%}}td,th{{border:1px solid #ccd5dc;padding:8px}}</style>
-<h1>{report['channel']}：统一均衡评测</h1><p>固定测试划分、compensated CSI、D1/D2，共 {report['bits_per_snr']:,} 比特 / SNR。模型选择仅使用训练集和验证集。</p>
+<h1>{report['channel']}：统一均衡评测</h1><p>固定测试划分、原始估计 CSI、D1/D2，共 {report['bits_per_snr']:,} 比特 / SNR。模型选择仅使用训练集和验证集。</p>
 <table><tr><th>算法 BER</th>{headings}</tr>{rows}</table><img src="ber_snr.png">
 <table><tr><th>CSI 平均 NMSE (dB)</th>{headings}</tr>{nmse_rows}</table><img src="nmse_snr.png">
 <p>零误码用空心三角在 0.5 / 测试比特数处显示。输入与各算法修正后的 CSI 均按逐帧、逐 D 的完整矩阵线性相对误差先平均，再转为 dB。</p>

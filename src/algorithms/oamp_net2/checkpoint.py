@@ -1,4 +1,4 @@
-"""Compensated-CSI, channel-bound OAMP-Net2 checkpoints."""
+"""Raw-CSI, channel-bound OAMP-Net2 checkpoints."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,11 +19,11 @@ INFERENCE_CODE = PREPROCESS_CODE+("src.algorithms.oamp_net2.model",
 def load_model(path, device="cpu"):
     payload = torch.load(Path(path), map_location="cpu", weights_only=True)
     if (payload.get("schema") != SCHEMA or payload.get("paper_doi") != PAPER_DOI
-            or payload.get("input_view") != "compensated"
+            or payload.get("input_view") != "raw"
             or payload.get("preprocessing") != PREPROCESSING
             or payload.get("inference_code") != source_fingerprint(INFERENCE_CODE)
             or payload.get("training_scope") != "one_channel_all_snr_D1_D2"):
-        raise ValueError("OAMP-Net2 checkpoint model/preprocessing/compensated CSI identity mismatch")
+        raise ValueError("OAMP-Net2 checkpoint model/preprocessing/raw CSI identity mismatch")
     model = OAMPNet2(**payload["model_config"]).to(device=device)
     model.load_state_dict(payload["model"], strict=True)
     if any(not torch.isfinite(value).all() for value in model.state_dict().values()):
@@ -33,8 +33,8 @@ def load_model(path, device="cpu"):
 
 
 def validate_dataset(payload, dataset):
-    if dataset.input_view != "compensated" or payload.get("input_view") != dataset.input_view:
-        raise ValueError("OAMP-Net2 requires its trained compensated CSI view")
+    if dataset.input_view != "raw" or payload.get("input_view") != dataset.input_view:
+        raise ValueError("OAMP-Net2 requires its trained raw CSI view")
     if (payload["channel"] != dataset.channel
             or payload["model_identity"] != dataset._h.attrs["model_identity"]
             or payload["data_schema"] != dataset._h.attrs["schema"]

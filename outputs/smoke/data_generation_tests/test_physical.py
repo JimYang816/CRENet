@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from threadpoolctl import threadpool_limits
 
-from data_generation.src.config import load_config
+from data_generation.src.pdd import load_pdd_config as load_config
 from data_generation.src.transmitter.ofdm import carrier_masks, make_frame, qpsk, decisions, ifft, fft, overhead, receive_symbols
 from data_generation.src.channel.watermark.replay import Sounding, direct_convolution
 from data_generation.src.receiver.chain import (ReceiverChain, resample, resample_operator, taps_to_matrix,

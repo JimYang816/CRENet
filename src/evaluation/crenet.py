@@ -142,7 +142,7 @@ def coverage(data_directory, run, *, bandwidths=(16,), batch_size=2, frame_limit
         raise ValueError("Bandwidths must be nonnegative integers")
     directory, run = Path(data_directory), Path(run)
     run.mkdir(parents=True, exist_ok=True)
-    result = dict(schema="crenet-local-error-coverage-v1", input_view="compensated", precision=precision,
+    result = dict(schema="crenet-local-error-coverage-v1", input_view="raw", precision=precision,
                   bandwidths=list(bandwidths),
                   definition="sum |H_init-H_ref|^2 inside |physical row-column|<=B / full error energy",
                   splits={})
@@ -282,7 +282,7 @@ def evaluate(dataset_path, checkpoint, run, backend, *, batch_size=2, frame_limi
             initial_nmse = sum(row["mean_nmse_linear"][0]*row["blocks"] for row in per_snr)/blocks
             final_nmse = sum(row["mean_nmse_linear"][-1]*row["blocks"] for row in per_snr)/blocks
             elapsed = time.perf_counter()-started
-            report = dict(schema=SCHEMA, complete=True, input_view="compensated", channel=dataset.channel,
+            report = dict(schema=SCHEMA, complete=True, input_view="raw", channel=dataset.channel,
                 operator_backend=operator_backend,
                 smoke=bool(payload.get("smoke")) or frame_limit is not None or bool(dataset._config.get("smoke")),
                 split=dataset.split, dataset=str(Path(dataset_path).resolve()), snr_db=dataset.snr_db.tolist(),
@@ -319,7 +319,7 @@ def evaluate(dataset_path, checkpoint, run, backend, *, batch_size=2, frame_limi
                 raise ValueError("Baseline publication is supported only for formal test scoring")
             from src.evaluation.comparison import evaluate as baseline_evaluate
             baseline = baseline_evaluate(dataset_path, run/"baselines", backend, batch_size=batch_size,
-                input_view="compensated", algorithm_parameters=baseline_parameters, cache_dir=cache_dir)
+                input_view="raw", algorithm_parameters=baseline_parameters, cache_dir=cache_dir)
             report["curves"] = dict(baseline["curves"], **report["curves"])
             report["baselines"] = baseline
             report["comparison_precision"] = dict(crenet=precision+"/"+real_precision,
@@ -327,7 +327,7 @@ def evaluate(dataset_path, checkpoint, run, backend, *, batch_size=2, frame_limi
             if udnet_checkpoint is not None:
                 from src.evaluation.udnet import evaluate as udnet_evaluate
                 udnet = udnet_evaluate(dataset_path, udnet_checkpoint, run/"udnet", backend,
-                    input_view="compensated", batch_size=batch_size, cache_dir=cache_dir,
+                    input_view="raw", batch_size=batch_size, cache_dir=cache_dir,
                     algorithm_parameters=baseline_parameters)
                 report["curves"]["UDNet"] = udnet["curves"]["UDNet"]
                 report["udnet_checkpoint"] = str(Path(udnet_checkpoint).resolve())
@@ -346,7 +346,7 @@ def plot_report(report, run):
             values = np.array(curve["ber"])
             shown = np.where(values > 0, values, .5/np.array(curve["total_bits"]))
             ax.semilogy(snr, shown, "o-", label=name)
-        ax.set(xlabel="SNR (dB)", ylabel="BER", title=report["channel"]+" | compensated CSI")
+        ax.set(xlabel="SNR (dB)", ylabel="BER", title=report["channel"]+" | raw CSI")
         ax.grid(True, which="both", alpha=.25)
         ax.legend()
         fig.savefig(run/"ber_snr.png", dpi=180)

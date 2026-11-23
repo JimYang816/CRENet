@@ -151,7 +151,7 @@ def _timing_worker(options):
     monitor = _Monitor(cuda)
     intervals, result = [], {}
     try:
-        with CompactDataset(Path(options["data_directory"])/"train.h5", input_view="raw" if options["operator_backend"] == "dpss" else "compensated") as dataset:
+        with CompactDataset(Path(options["data_directory"])/"train.h5", input_view="raw") as dataset:
             if dataset.split != "train":
                 raise ValueError("Training performance trials require the train split")
             model = _model(options, dataset)
@@ -220,7 +220,7 @@ def _equivalence_worker(options):
     device = options["device"]
     cache = ReferenceCache(options["reference_cache_mib"]*2**20)
     gradients, curves = [], {"dense_reference": [], "prefetch": []}
-    with CompactDataset(Path(options["data_directory"])/"validation.h5", input_view="raw" if options["operator_backend"] == "dpss" else "compensated") as dataset:
+    with CompactDataset(Path(options["data_directory"])/"validation.h5", input_view="raw") as dataset:
         if dataset.split != "validation":
             raise ValueError("Numerical/configuration checks require validation, never test")
         model = _model(options, dataset)

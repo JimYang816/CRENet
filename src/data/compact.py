@@ -12,7 +12,7 @@ from data_generation.src.dataset.compact_math import reconstruct
 from data_generation.src.receiver.dpss import DPSSModel
 from data_generation.src.transmitter.ofdm import qpsk
 from src.data.uncertainty import CovarianceProxy
-from src.data.contract import DEFAULT_INPUT_VIEW, validate_compensated_contract
+from src.data.contract import DEFAULT_INPUT_VIEW
 
 
 def data_system(inputs):
@@ -31,8 +31,8 @@ class CompactDataset:
     """
 
     def __init__(self, path, *, input_view=DEFAULT_INPUT_VIEW):
-        if input_view not in ("raw", "compensated"):
-            raise ValueError("Unknown CSI input view")
+        if input_view != "raw":
+            raise ValueError("Only unmodified receiver-estimated CSI is supported")
         self.input_view = input_view
         self.path = Path(path)
         self._h = h5py.File(self.path, "r")
@@ -41,7 +41,7 @@ class CompactDataset:
             h = self._h
             if h.attrs.get("schema") != SCHEMA:
                 raise ValueError("Compact dataset protocol mismatch; historical v1 data cannot be mixed")
-            if (not h.attrs.get("complete") or not h.attrs.get("compensated")
+            if (not h.attrs.get("complete") or not h.attrs.get("raw_complete")
                     or not np.all(h["windows/complete"][:]) or not np.all(h["samples/complete"][:])):
                 raise ValueError("Compact dataset is incomplete")
             if h.attrs.get("model_file") != "model.h5":
@@ -59,8 +59,6 @@ class CompactDataset:
                             for g in m["prior/blocks"].values()]
             self.snr_db = h["snr_db"][:]
             self.channel, self.split = h.attrs["channel"], h.attrs["split"]
-            if self.input_view == DEFAULT_INPUT_VIEW:
-                validate_compensated_contract(self)
             self._known = m["known"][:]
             self._masks = {k: v[:] for k, v in m["masks"].items()}
             self._indices = np.flatnonzero(self._masks["data"])
@@ -95,15 +93,6 @@ class CompactDataset:
         if not 0 <= si < len(self.snr_db) or not 0 <= fi < self.frame_count:
             raise IndexError((si, fi))
 
-    def _channels(self, si, fi):
-        h = self._h
-        wi = int(h["samples/window_index"][fi])
-        reference = h["windows/reference_csi"][wi].astype(complex)
-        coefficients = h["samples/raw_coefficients"][si, fi].astype(complex)
-        raw = reconstruct(self._model, coefficients)
-        alpha = float(h["compensation/alpha"][si])
-        return reference, raw, reference+alpha*(raw-reference), coefficients, alpha
-
     def _proxy(self, si, fi, scale):
         m = self._shared
         return CovarianceProxy(self._blocks, m["estimator/gain"], m["estimator/values"][:],
@@ -111,9 +100,7 @@ class CompactDataset:
                                (self._model.count, self._model.length), scale)
 
     def model_input(self, snr_index, frame_index):
-        if self.input_view == "raw":
-            return self.raw_model_input(snr_index, frame_index)
-        return self.compensated_model_input(snr_index, frame_index)
+        return self.raw_model_input(snr_index, frame_index)
 
     def raw_model_input(self, snr_index, frame_index):
         """Receiver-only input: no reference CSI, labels, alpha or audit reads."""
@@ -129,32 +116,6 @@ class CompactDataset:
                     known=self._known.copy(), masks={k: v.copy() for k, v in self._masks.items()},
                     data_indices=self._indices.copy(), pilot_indices=np.flatnonzero(self._masks["pilot"]),
                     carrier_positions=np.arange(self._config["nfft"]))
-
-    def compensated_model_input(self, snr_index, frame_index):
-        """Accepted default CSI with the user's fixed per-SNR NMSE targets."""
-        si, fi = snr_index, frame_index
-        self._check_indices(si, fi)
-        h, m = self._h, self._shared
-        _, _, compensated, _, alpha = self._channels(si, fi)
-        variance = float(h["samples/rf_noise_variance"][si, fi])
-        observations = h["samples/clean_observations"][fi]+np.sqrt(variance)*h["samples/standard_noise"][fi]
-        gamma = float(m["training_calibration/gamma"][si])
-        # Only calibrated interfaces/powers enter model inputs; no audit fields.
-        uncertainty = dict(coefficient_covariance=self._proxy(si, fi, alpha**2*gamma),
-                           dpss_basis=m["basis"][:], delay_length=self._model.length,
-                           sampled_dpss_basis=self._model.sampled_basis.reshape(4, self._config["nfft"], self._model.count)[[1, 2]],
-                           coefficient_shape=(self._model.count, self._model.length),
-                           coefficient_order="q_major_delay_minor",
-                           fft_convention="fftshift, orthonormal complex FFT",
-                           csi_residual_power=alpha**2*m["training_calibration/projection_residual_power"][:],
-                           model_residual_power=m["training_calibration/model_residual_power"][:],
-                           semantics="receiver_model_covariance_proxy")
-        return dict(input_view="compensated", observations=observations, csi=compensated,
-                    noise=dict(rf_variance=variance, unit_rx_covariance=m["unit_rf_noise_covariance"][:],
-                               actual_snr_db=h["samples/actual_snr_db"][si, fi]),
-                    known=self._known.copy(), masks={k: v.copy() for k, v in self._masks.items()},
-                    data_indices=self._indices.copy(), pilot_indices=np.flatnonzero(self._masks["pilot"]),
-                    uncertainty=uncertainty)
 
     def labels(self, frame_index):
         if not 0 <= frame_index < self.frame_count:
@@ -176,10 +137,12 @@ class CompactDataset:
         self._check_indices(si, fi)
         h = self._h
         wi = int(h["samples/window_index"][fi])
-        reference, raw, comp, coefficients, alpha = self._channels(si, fi)
-        error = comp-reference
-        return dict(reference_csi=reference, raw_csi=raw, compensated_csi=comp, true_error=error,
-                    raw_coefficients=coefficients, compensation_alpha=alpha,
+        reference = h["windows/reference_csi"][wi].astype(complex)
+        coefficients = h["samples/raw_coefficients"][si, fi].astype(complex)
+        raw = reconstruct(self._model, coefficients)
+        error = raw-reference
+        return dict(reference_csi=reference, raw_csi=raw, true_error=error,
+                    raw_coefficients=coefficients,
                     true_nmse_linear=np.sum(abs(error)**2, axis=(1, 2))/np.sum(abs(reference)**2, axis=(1, 2)),
                     model_residual=h["samples/model_residual"][fi],
                     reference_projection=h["windows/reference_projection"][wi],

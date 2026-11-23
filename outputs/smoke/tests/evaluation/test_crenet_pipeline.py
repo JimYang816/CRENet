@@ -43,7 +43,7 @@ def test_channel_models_have_same_architecture_and_positive_neural_learning_rate
     assert all(c["training"]["neural_learning_rate_scale"] > 0 for c in configs)
 
 
-@pytest.mark.parametrize("mutation", ("scalar", "old_detector", "raw"))
+@pytest.mark.parametrize("mutation", ("scalar", "old_detector", "compensated"))
 def test_current_workflow_rejects_retired_training_modes_before_data_access(tmp_path, mutation):
     config = json.loads(DEFAULT_CONFIG.read_text())
     if mutation == "scalar":
@@ -51,7 +51,7 @@ def test_current_workflow_rejects_retired_training_modes_before_data_access(tmp_
     elif mutation == "old_detector":
         config["model"]["detector_mode"] = "unfolded"
     else:
-        config["input_view"] = "raw"
+        config["input_view"] = "compensated"
     path = tmp_path/"config.json"
     path.write_text(json.dumps(config))
     with pytest.raises(ValueError):
