@@ -10,7 +10,7 @@ import numpy as np
 
 from src.algorithms.dpss_bomp.estimator import GroupOMP, build_dictionary, whiten_observations
 from src.common.experiment import file_sha256, write_json
-from src.evaluation.dpss_channel_comparison import _omp_predict, _window_inputs, restore_receiver_lmmse
+from src.evaluation.dpss_channel_comparison import ReferenceScore, _omp_predict, _window_inputs, restore_receiver_lmmse
 from src.evaluation.fingerprints import DataIdentity, numerical_environment
 from src.data.compact import CompactDataset
 
@@ -139,6 +139,25 @@ def run(datasets, source_output, destination, backend, windows=10, repeats=3):
                 for name in names:
                     elapsed[name].append(1000*total[name]/frame_count)
             active_refit = _audit_active_refit(omp, rows, whiteners, receiver, *batches[0], eta, k, backend)
+            # Probe whether the coarse-selected ridge remains sensible at the
+            # larger frozen group count.  This is a small validation screen,
+            # not a replacement for full validation-based selection.
+            eta_grid = [eta/10, eta, eta*10]
+            ridge_scores = {str(value): [] for value in eta_grid}
+            for batch_index, (obs, variance) in enumerate(batches):
+                effective = receiver.effective_noise_variances(obs, variance)
+                predictions = {str(value): _omp_predict(omp, obs, effective, value, [k], rows, whiteners, backend)[k]
+                               for value in eta_grid}
+                for offset, wi in enumerate(selected_windows[2*batch_index:2*batch_index+2]):
+                    reference = ds._h["windows/reference_csi"][int(wi)]
+                    score = ReferenceScore(ds._model, reference)
+                    start = offset*len(ds.snr_db)
+                    stop = start+len(ds.snr_db)
+                    for value, coefficients in predictions.items():
+                        ridge_scores[value].append(score.nmse(coefficients[start:stop]))
+            ridge_screen = {value: dict(mean_nmse_linear=float(np.mean(values)),
+                                       mean_nmse_db_by_snr=(10*np.log10(np.mean(values, axis=(0, 2)))).tolist())
+                            for value, values in ridge_scores.items()}
             channels[channel] = dict(group_count=k, ridge_multiplier=eta, validation_window_indices=selected_windows.tolist(),
                 timed_frames_per_repeat=frame_count, repeats=repeats,
                 milliseconds_per_frame={name: dict(median=float(statistics.median(values)), repeats=values)
@@ -146,6 +165,7 @@ def run(datasets, source_output, destination, backend, windows=10, repeats=3):
                 lmmse32_relative_coefficient_error=dict(mean=float(np.mean(coefficient_errors)), max=float(np.max(coefficient_errors))),
                 lmmse32_relative_dpss_channel_error=dict(mean=float(np.mean(channel_errors)), max=float(np.max(channel_errors))),
                 omp_active_refit_audit=active_refit,
+                ridge_screening=ridge_screen,
                 input_files=identity.files)
             identity.assert_unchanged()
         del receiver, single, dictionary, transforms, omp
@@ -153,7 +173,8 @@ def run(datasets, source_output, destination, backend, windows=10, repeats=3):
     report = dict(complete=True, source_metrics_sha256=file_sha256(source_output/"metrics.json"),
                   definition="warm synchronized estimation time on identical receiver-only validation observations; "
                              "same group settings and batch sizes; alternating execution order; setup, detector and scoring excluded",
-                  note="LMMSE complex64 is an additional precision/timing audit, not the primary test curve",
+                  note="LMMSE complex64 is an additional precision/timing audit, not the primary test curve; "
+                       "ridge screening uses a small validation subset and does not alter the frozen selection",
                   environment=numerical_environment(backend), channels=channels)
     write_json(destination, report)
     return report
