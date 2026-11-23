@@ -1,0 +1,44 @@
+{
+  "source_directory": "/home/fay/JimYang/EPNet/data/processed/ncs1_compact_20261026_final",
+  "directory": "/home/fay/JimYang/EPNet/data/processed/ncs1_compact_20261026_nmse",
+  "code": {
+    "commit": "58f4df65e3db488cefd7874174a06a48870c8173",
+    "dirty": ""
+  },
+  "source_model_identity": "584e45ef99dac466678bb2fe79e8e7b80be67b99802efc6f73734fc775bea63b",
+  "generation_provenance": {
+    "commit": "ce1d8648a8568be2742fee4224a4aa78ea827f05",
+    "dirty": "",
+    "config_hash": "00fac3dae3165fe88a9c593778b287d53a98eb89e13bee26ccc163a6b5d0dda5",
+    "archive_sha256": "3cf9e3a9b116b525f9b52c098018383665ca24f3a9ab05bc53b7716b1b3c5cc1",
+    "frozen_prior_sha256": "2f732257dd886120b49ecb9f654886e8afa885921ba0b9df0d69ee2076095250",
+    "environment": {
+      "python": "3.10.20",
+      "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+      "packages": {
+        "numpy": "2.2.6",
+        "scipy": "1.15.3",
+        "h5py": "3.16.0",
+        "matplotlib": "3.10.9",
+        "torch": "2.5.1+cu121",
+        "threadpoolctl": "3.6.0"
+      }
+    },
+    "seed": 20261025,
+    "random_stream": "SeedSequence([master, split, record, start_ms, 0=payload/1=noise, independent_repeat]); public=[master,11]",
+    "numerical_precision": "complex128 construction; complex64 persisted CSI",
+    "protocol": "watermark-pddp-compact-v2",
+    "reference_assisted_construction": true
+  },
+  "target_nmse_db": [
+    -6.2,
+    -8.050961918675961,
+    -9.173627072313455,
+    -9.854557908585587,
+    -10.267563337928399,
+    -10.518063793452596,
+    -10.67
+  ],
+  "reference_assisted_construction": true,
+  "raw_data_regenerated": false
+}

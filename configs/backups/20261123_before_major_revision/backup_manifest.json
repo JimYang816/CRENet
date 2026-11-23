@@ -1,0 +1,90 @@
+{
+  "date_singapore": "2026-11-23",
+  "source_commit": "efb847c14e97c5fcd0e6c829795b5101b9190ecb",
+  "current_configs": 6,
+  "json_canonicalization": "UTF-8; json.dumps(sort_keys=True,separators=(comma,colon),ensure_ascii=False)",
+  "config_files": [
+    {
+      "path": "active/data/ncs1/pddp.json",
+      "sha256_canonical_json": "2c2e0c0a1cd8b8408e4601d12cdfc814e6436718963b9b3d7b6b6a157f4f2e4b"
+    },
+    {
+      "path": "active/data/nof1/pddp.json",
+      "sha256_canonical_json": "422d589087b014928fb9de74fbb5346da3562967e6205c82313f8860566b83f5"
+    },
+    {
+      "path": "active/evaluation/ber_comparison.json",
+      "sha256_canonical_json": "d6db80bafb3df5b054fb816dca825d7635ae9b7612a7fb8aa00dd301845f26b8"
+    },
+    {
+      "path": "active/training/crenet.json",
+      "sha256_canonical_json": "c233c95ab86868215ab9648d8f8abef9688f4d0da981e33b573634d3db5cf59c"
+    },
+    {
+      "path": "active/training/oamp_net2.json",
+      "sha256_canonical_json": "4f001cb47f5b875398fbc3a3cad0f29d08a8eae694563434ede91f6b8fa061ee"
+    },
+    {
+      "path": "active/training/udnet.json",
+      "sha256_canonical_json": "b2bf1ee9a7c38b1aba0976e51b020daba6a9a34bc97fc2a90ce02eabb36c7d44"
+    },
+    {
+      "path": "formal_runs/icr_ad_current_20261031_133445/launch.json",
+      "sha256_canonical_json": "985018f58bf2bb73e08b10d558fc257fd4a51edd158889cf9d83bab57d01ae53"
+    },
+    {
+      "path": "formal_runs/icr_ad_current_20261031_133445/manifest.json",
+      "sha256_canonical_json": "376e0b597075daa45e3e70b1b5cba03235d37a12b04e6a30ace5c480ff9a7d72"
+    },
+    {
+      "path": "formal_runs/icr_ad_current_20261031_133445/training_config.json",
+      "sha256_canonical_json": "041d97fbe8c085ceb44b9dc8000d209d7450f65ea23cee1f144546639ca85872"
+    },
+    {
+      "path": "formal_runs/icr_full_20261031_095549/comparison_config.json",
+      "sha256_canonical_json": "b2c3407b5a6f7b8f144982c239fe04dc5154b0b3fcce5af405b40fc03387eb43"
+    },
+    {
+      "path": "formal_runs/icr_full_20261031_095549/launch.json",
+      "sha256_canonical_json": "7d24c8ff4183df15f581ec8553f2c65c757791c35f83959116b8ec1a71d3b184"
+    },
+    {
+      "path": "formal_runs/icr_full_20261031_095549/manifest.json",
+      "sha256_canonical_json": "21bdd34f122643796c8c6fe9d633178ed970ac1a9cae8b8fe2f6a16174bb1e3c"
+    },
+    {
+      "path": "formal_runs/icr_full_20261031_095549/training_config.json",
+      "sha256_canonical_json": "041d97fbe8c085ceb44b9dc8000d209d7450f65ea23cee1f144546639ca85872"
+    },
+    {
+      "path": "formal_runs/icr_full_20261031_095549/udnet_config.json",
+      "sha256_canonical_json": "4513c7378d76a17897a0cec866036a943f33e37b1afc20fbb77e9112f6bd7c3e"
+    },
+    {
+      "path": "formal_runs/ncs1_compact_20261026_final/frozen_parameters.json",
+      "sha256_canonical_json": "abed2a1c475e2fdbf70d9c2523b3f45efebc1c690e2f821f1c155efb4901a3cd"
+    },
+    {
+      "path": "formal_runs/ncs1_compact_20261026_nmse/retarget_config.json",
+      "sha256_canonical_json": "847f27a3ec31bf7cf53499b8d7840bf176c54bfc90ac5087f4277df10368ec94"
+    },
+    {
+      "path": "formal_runs/nof1_compact_20261026_final/frozen_parameters.json",
+      "sha256_canonical_json": "abed2a1c475e2fdbf70d9c2523b3f45efebc1c690e2f821f1c155efb4901a3cd"
+    },
+    {
+      "path": "formal_runs/oamp_net2_compensated/ncs1/effective_identity.json",
+      "sha256_canonical_json": "008ff3cc62b58fea43c86e7016d9cafbf43ed0f016a951a6e3fcb3708385dc41"
+    },
+    {
+      "path": "formal_runs/oamp_net2_compensated/nof1/effective_identity.json",
+      "sha256_canonical_json": "b948574ee4ee8bffffac89eee238aa8ae40d3c05d5f70a2107b74c8bc4ebb747"
+    }
+  ],
+  "source_archive": {
+    "path": "outputs/experiment/archive/config_provenance_20261123_before_major_revision/source_efb847c.tar.gz",
+    "sha256": "3db09aa9e9858cbaa7a41ed31f171bc915967e8ba158165807b32eda422fd7cf",
+    "scope": "tracked files at source_commit"
+  },
+  "formal_provenance_archive": "outputs/experiment/archive/config_provenance_20261123_before_major_revision"
+}

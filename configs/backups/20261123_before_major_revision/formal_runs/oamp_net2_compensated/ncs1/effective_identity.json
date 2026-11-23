@@ -1,0 +1,93 @@
+{
+  "data": {
+    "train.h5": {
+      "sha256": "eb18191d94b80406a2077439d7c3a452de0e7153eac127aa9273eaffe9b92548",
+      "bytes": 7751822425
+    },
+    "validation.h5": {
+      "sha256": "bb980d24098ccfd58776a06713f93864ff211c8020c4260ae2dcd561a46ee3c5",
+      "bytes": 1107389477
+    },
+    "model.h5": {
+      "sha256": "0175b8e13527846861ef8545fef0591ea546837308f04be2a545dc47079f2e74",
+      "bytes": 558244286
+    }
+  },
+  "code": {
+    "data_generation.src.receiver.dpss:DPSSModel": "e7bd79721a946c29a5a5ae0412e152bfc5eb03d7b579b22a8a0d48475168735e",
+    "src.algorithms.interface": "71ba135e11ed0f594cc12251d63466d6c4105dda0f3ef548d110dcaba0eb5d81",
+    "src.algorithms.likelihood:batch_likelihood": "f74e2c61adbe073dc9432f987bfffe86bb0e7ecf8d346dabe58ec9098e75a4e2",
+    "src.algorithms.likelihood:likelihood_batch": "d7730e1f2c234bb5a66e2fd34da0d828bd52116bb37d61b494637a769208dc59",
+    "src.algorithms.likelihood:make_whitener": "e1984ac35d3c1de8d7332bb2528ab5425490d838862c8e889bda6e126d65fde0",
+    "src.algorithms.oamp_net2.checkpoint": "4b199ff9b0c3a597f6b45f318a872ac352e223c871ea9be595719ba45b25eba3",
+    "src.algorithms.oamp_net2.inference": "65474fe566cdcb21fe07f8115ff4280258e13f2b1844ae5fe4ca9b086fb943fc",
+    "src.algorithms.oamp_net2.model": "4504616db68674f3517a8412681242f58088cccf84d9638476de5a7cc94d8f22",
+    "src.common.experiment": "978a1d628810b9a15684091dcab1c2b5427fe2751cee0853d306d6f84180c804",
+    "src.common.numerics": "c43dc2516064c33be1b209c3edf521e33ce51116465fdfafbbcea2b26cf04690",
+    "src.common.torch_checkpoint": "aaa16e68431e47d4b6c482cd9b6b6b74bca4912f6456598d8c31667a3ba272aa",
+    "src.data.compact:CompactDataset": "28e544c2bbc7573ebe76a68e4b6f0308694271956528398bf8854a81222e62b3",
+    "src.data.contract": "fa7e36c5b216e82b450c90844d985b4f8db948399354eb0705f099007b7964ed",
+    "src.data.oamp_net2": "ef0074c7ee85ee4efddac0d8f57ea7c9bd84f49d51dddcadc5153f528a217da8",
+    "src.data.oamp_net2_cache": "78fc8a6830246ba8dff7b3bae426c390cc085c65c08e512c937a3aa6e4d5f238",
+    "src.evaluation.fingerprints": "857bdb681f4294327c973243374908287f144878ead33d91dfd9104d940d54ff",
+    "src.evaluation.inputs": "f63f75dbbc2c69324d9828bb31f57291c959acb04526f9e18e6447d5b1fe3bc8",
+    "src.evaluation.result_cache": "7900ae41b9eed67501b8fa4626d863e3d37f0b4d191a0ce5eac88f3daeab6081",
+    "src.training.oamp_net2": "58c12f49c9717e82de36edf296a413df73a316d0297145cea1700de9a3a7820f",
+    "src.training.oamp_net2_supervision": "2a75de4d5b6a360007eebad255f669b1b08a2394ce395241a4bcb119b5ace4e3"
+  },
+  "controls": {
+    "epochs": 200,
+    "patience": 20,
+    "learning_rate": 0.001,
+    "seed": 20261030,
+    "batch_size": 8,
+    "frame_limit": null,
+    "model": {
+      "layers": 10,
+      "variance_floor": 5e-13
+    },
+    "input_view": "compensated",
+    "optimizer": "Adam",
+    "loss": "mean_example_squared_vector_norm_final_layer",
+    "training_scope": "one_channel_all_snr_D1_D2"
+  },
+  "environment": {
+    "python": "3.10.20",
+    "system": "Linux",
+    "machine": "x86_64",
+    "backend": "cuda",
+    "precision": "complex128/float64",
+    "packages": {
+      "numpy": "2.2.6",
+      "scipy": "1.15.3",
+      "h5py": "3.16.0",
+      "torch": "2.5.1+cu121"
+    },
+    "blas": [
+      {
+        "internal_api": "openblas",
+        "prefix": "libscipy_openblas",
+        "version": "0.3.28",
+        "architecture": "Haswell",
+        "threading_layer": "pthreads"
+      },
+      {
+        "internal_api": "openblas",
+        "prefix": "libscipy_openblas",
+        "version": "0.3.29",
+        "architecture": "Haswell",
+        "threading_layer": "pthreads"
+      }
+    ],
+    "cuda": {
+      "runtime": "12.1",
+      "cudnn": 90100,
+      "device": "NVIDIA GeForce RTX 4080",
+      "capability": [
+        8,
+        9
+      ]
+    },
+    "torch": "2.5.1+cu121"
+  }
+}

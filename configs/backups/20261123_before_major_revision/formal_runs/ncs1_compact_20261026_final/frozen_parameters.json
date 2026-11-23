@@ -1,0 +1,8 @@
+{
+  "bandwidth_hz": 15.686274509803921,
+  "tail_ratio": 1e-05,
+  "count": 34,
+  "length": 736,
+  "block_size": 32,
+  "basis_sha256": "b3f726fe19585776913ad7c5f8a86edde87d4c7c986181cdc552280b2fe3add7"
+}

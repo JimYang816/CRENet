@@ -1,0 +1,27 @@
+{
+  "pid": 866500,
+  "run": "/home/fay/JimYang/EPNet/outputs/runs/icr_full_20261031_095549",
+  "commit": "96d10cb0a047ebad6903b0873268773da2ee4821",
+  "command": [
+    "/home/fay/JimYang/EPNet/.venv/bin/python",
+    "-u",
+    "-m",
+    "scripts.run.icr_experiment",
+    "--output",
+    "/home/fay/JimYang/EPNet/outputs/runs/icr_full_20261031_095549",
+    "--device",
+    "cuda",
+    "--threads",
+    "4"
+  ],
+  "environment": {
+    "OMP_NUM_THREADS": "4",
+    "MKL_NUM_THREADS": "4",
+    "OPENBLAS_NUM_THREADS": "4",
+    "NUMEXPR_NUM_THREADS": "4",
+    "CUDA_VISIBLE_DEVICES": "0",
+    "PYTHONUNBUFFERED": "1"
+  },
+  "gpu_before_launch": "NVIDIA GeForce RTX 4080, 73, 16376, 0",
+  "free_disk_gib": 74.17298889160156
+}

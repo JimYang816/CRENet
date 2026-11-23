@@ -1,0 +1,30 @@
+{
+  "unit": "epnet-icr-ad-current-20261031_133445.service",
+  "output": "/home/fay/JimYang/EPNet/outputs/runs/icr_ad_current_20261031_133445",
+  "commit": "6793d6d0d303a320fc8d81f43dea81b4fe8b6572",
+  "command": [
+    "/home/fay/JimYang/EPNet/.venv/bin/python",
+    "-u",
+    "-m",
+    "scripts.run.icr_ablation",
+    "--trained-root",
+    "/home/fay/JimYang/EPNet/outputs/runs/icr_full_20261031_095549",
+    "--output",
+    "/home/fay/JimYang/EPNet/outputs/runs/icr_ad_current_20261031_133445",
+    "--device",
+    "cuda",
+    "--threads",
+    "4",
+    "--resume"
+  ],
+  "environment": {
+    "OMP_NUM_THREADS": "4",
+    "MKL_NUM_THREADS": "4",
+    "OPENBLAS_NUM_THREADS": "4",
+    "NUMEXPR_NUM_THREADS": "4",
+    "CUDA_VISIBLE_DEVICES": "0",
+    "PYTHONUNBUFFERED": "1"
+  },
+  "restart_policy": "on-failure, 30s, at most 3 rapid starts per 10min",
+  "service_message": "Running as unit: epnet-icr-ad-current-20261031_133445.service\n"
+}
