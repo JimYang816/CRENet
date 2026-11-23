@@ -1,6 +1,8 @@
 {
   "group_counts": [1, 2, 4, 8, 12, 16, 24, 32],
-  "ridge_multipliers": [0.1, 1.0, 10.0],
+  "ridge_multipliers": [0.1, 1.0, 10.0, 100.0, 1000.0],
+  "extension_group_counts": [32, 48, 64, 80],
+  "micro_batch_size": 14,
   "source_files": [
     "src/algorithms/dpss_bomp/estimator.py",
     "src/evaluation/dpss_channel_comparison.py",

@@ -33,6 +33,9 @@ def main():
     counts, ridge = config["group_counts"], config["ridge_multipliers"]
     if counts != sorted(set(counts)) or not counts or counts[0] < 1 or not ridge or any(x <= 0 for x in ridge):
         parser.error("Invalid validation candidate grid")
+    extension = config.get("extension_group_counts", counts)
+    if extension != sorted(set(extension)) or not extension or extension[0] < 1 or config.get("micro_batch_size", 1) < 1:
+        parser.error("Invalid extended group grid or micro-batch size")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     with threadpool_limits(args.threads):
         backend = DenseBackend(args.device)

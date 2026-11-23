@@ -193,11 +193,11 @@ def _open_state(path, identity, split, nsnr, nframes, nwindows, etas, groups):
     return state
 
 
-def _evaluate_split(ds, output, identity, receiver, omp, rows, whiteners, config, backend, selected=None):
+def _evaluate_split(ds, output, identity, receiver, omp, rows, whiteners, config, backend, selected=None, suffix=""):
     split, nframes, nsnr = ds.split, ds.frame_count, len(ds.snr_db)
     nwindows = len(ds._h["windows/record"])
     etas, groups = config["ridge_multipliers"], config["group_counts"]
-    path = output/f"{ds.channel.lower()}_{split}.h5"
+    path = output/f"{ds.channel.lower()}_{split}{suffix}.h5"
     detector = FullMatrixDetector(ds, backend) if split == "test" else None
     with _open_state(path, identity, split, nsnr, nframes, nwindows, etas, groups) as state:
         for wi in range(nwindows):
@@ -205,12 +205,20 @@ def _evaluate_split(ds, output, identity, receiver, omp, rows, whiteners, config
                 continue
             ids, obs, variance = _window_inputs(ds, wi)
             repeats = len(ids)
-            effective = receiver.effective_noise_variances(obs, variance)
+            batch_size = config.get("micro_batch_size", len(variance))
             # These predictors cannot receive reference CSI or labels.
             def lmmse():
-                return receiver.estimate_coefficients(obs, ds._known, ds._masks, variance)
+                return np.concatenate([receiver.estimate_coefficients(obs[j:j+batch_size], ds._known, ds._masks,
+                                       variance[j:j+batch_size]) for j in range(0, len(variance), batch_size)])
             def omp_one(eta, points):
-                return _omp_predict(omp, obs, effective, eta, points, rows, whiteners, backend)
+                # Charge the same receiver-side noise-floor calculation to both
+                # estimators; LMMSE performs it inside estimate_coefficients.
+                batches = []
+                for j in range(0, len(variance), batch_size):
+                    y, v = obs[j:j+batch_size], variance[j:j+batch_size]
+                    effective = receiver.effective_noise_variances(y, v)
+                    batches.append(_omp_predict(omp, y, effective, eta, points, rows, whiteners, backend))
+                return {k: np.concatenate([result[k] for result in batches]) for k in points}
             omp_results = []
             omp_time = 0.
             choices = etas if split == "validation" else [selected["ridge_multiplier"]]
@@ -227,7 +235,9 @@ def _evaluate_split(ds, output, identity, receiver, omp, rows, whiteners, config
             if split == "test":
                 omp_c = omp_results[0][selected["group_count"]]
                 for coefficients in (lmmse_c, omp_c):
-                    symbols, seconds = _timed(backend, lambda: detector.detect(coefficients, obs, variance))
+                    symbols, seconds = _timed(backend, lambda: np.concatenate([
+                        detector.detect(coefficients[j:j+batch_size], obs[j:j+batch_size], variance[j:j+batch_size])
+                        for j in range(0, len(variance), batch_size)]))
                     detections.append(symbols)
                     detector_times.append(seconds)
             # Supervision is accessed only after all receiver outputs are computed.
@@ -335,12 +345,27 @@ def run(datasets, output, config, backend):
             if any(not np.array_equal(a, b) for a, b in zip(rows, receiver.rows)):
                 raise ValueError("Group OMP and LMMSE use different observation rows")
             validation = _evaluate_split(val, output, token, receiver, omp, rows, whiteners, config, backend)
-            selected = select_validation(validation, config)
+            coarse = select_validation(validation, config)
+            extended = dict(config, ridge_multipliers=[coarse["ridge_multiplier"]],
+                            group_counts=config.get("extension_group_counts", config["group_counts"]))
+            extension_token = digest(dict(base=token, phase="extended_group_grid", controls=extended))
+            validation_extended = _evaluate_split(val, output, extension_token, receiver, omp, rows, whiteners,
+                                                  extended, backend, suffix="_extended")
+            more = select_validation(validation_extended, extended)
+            winner = more if more["score_linear"] < coarse["score_linear"] else coarse
+            selected = dict(group_count=winner["group_count"], ridge_multiplier=winner["ridge_multiplier"],
+                objective=winner["objective"], score_linear=winner["score_linear"],
+                search="coarse ridge/group grid, then expanded group grid at coarse-selected ridge",
+                coarse=coarse, extended=more,
+                grid_boundary_group_count=bool(winner["group_count"] == max(extended["group_counts"])),
+                grid_boundary_ridge=coarse["grid_boundary_ridge"])
             selected_path = output/f"{channel.lower()}_selection.json"
             if selected_path.exists() and json.loads(selected_path.read_text(encoding="utf-8")) != selected:
                 raise ValueError("Frozen validation selection changed")
             write_json(selected_path, selected)
-            LOG.info("%s validation selected K=%d eta=%g", channel, selected["group_count"], selected["ridge_multiplier"])
+            LOG.info("%s validation selected K=%d eta=%g (group boundary=%s, ridge boundary=%s)",
+                     channel, selected["group_count"], selected["ridge_multiplier"],
+                     selected["grid_boundary_group_count"], selected["grid_boundary_ridge"])
             test_path = _evaluate_split(test, output, token, receiver, omp, rows, whiteners, config, backend, selected)
             reports[channel] = collect_test(test_path, channel, test.snr_db, selected,
                                             dict(joint_lmmse=setup_lmmse, group_omp=setup_omp), len(test._indices))
@@ -359,7 +384,7 @@ def run(datasets, output, config, backend):
                  noise="both estimators use receiver-derived effective noise; OMP whitens thermal noise but does not model data ICI covariance",
                  equalizer="same full-matrix LMMSE with colored thermal covariance for each estimate",
                  nmse="10 log10(mean over frames and D blocks of per-block full-matrix relative squared error)",
-                 timing="synchronized estimator-only wall time including selection, whitening and coefficient transfer; test estimator order alternates by window; setup and equalization reported separately; no labels or reference scoring",
+                 timing="synchronized estimator-only wall time including selection, noise-floor calculation, whitening and coefficient transfer; same micro-batches for both; test estimator order alternates by window; setup and equalization reported separately; no labels or reference scoring",
                  environment=numerical_environment(backend), channels=reports)
     write_json(output/"metrics.json", final)
     _publish(output, final)
