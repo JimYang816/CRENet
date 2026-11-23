@@ -24,4 +24,15 @@ OMP 的组数和岭正则倍数从 `configs/evaluation/dpss_channel_comparison.j
 
 估计时间使用 GPU 同步墙钟，包含当前观测的选择、噪声下限计算、白化、组搜索、全部系数拟合和估计系数返回；两方法使用相同微批大小，测试窗口交替先运行两种估计器。初始化和共同均衡时间单独报告，不包含标签、参考 CSI 和指标计算。LMMSE 初始化读取已有冻结谱和增益，OMP 初始化构造并白化导频字典，耗时口径需在比较时说明。
 
+GPU 主实验的 OMP 字典和拟合使用 `complex64`，沿用接收机基线的 LMMSE 系数求解及两者共同的均衡器使用 `complex128`；主实验的估计时间因此不是等精度比较。完成后可在冻结参数的验证观测上补充配对计时：
+
+```bash
+/home/fay/anaconda3/envs/jimyang/bin/python -m scripts.evaluate.dpss_precision_timing \
+  --source outputs/experiment/dpss_bomp_<run_id>
+/home/fay/anaconda3/envs/jimyang/bin/python -m scripts.evaluate.dpss_bomp_paired \
+  --source outputs/experiment/dpss_bomp_<run_id>
+```
+
+前者分别计时 `complex64` OMP、`complex64` LMMSE 和 `complex128` LMMSE，并报告两种 LMMSE 精度的系数及信道差异；它不替代主测试曲线。后者按物理记录配对自助重采样，给出 BER 差值和 NMSE 分贝差值的区间；区间不涵盖模型选择或其他随机种子的不确定性。
+
 输出包括验证参数选择、完整测试 NMSE–SNR 与 BER–SNR、估计耗时、逐窗口可恢复状态和输入身份。运行结束后应检查参数是否落在搜索网格边界；若是，只能在该网格内解释选型，不能据此推断更大组数或其他正则参数的性能。

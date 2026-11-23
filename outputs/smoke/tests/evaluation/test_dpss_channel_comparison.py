@@ -70,3 +70,19 @@ def test_cuda_detector_matches_full_frequency_domain_cpu(tmp_path):
         expected = FullMatrixDetector(ds, DenseBackend()).detect(coefficients, observations, variances)
         got = FullMatrixDetector(ds, DenseBackend("cuda")).detect(coefficients, observations, variances)
         np.testing.assert_allclose(got, expected, rtol=1e-10, atol=1e-10)
+
+
+@pytest.mark.skipif(os.environ.get("CRENET_TEST_CUDA") != "1", reason="explicit server GPU verification")
+def test_lmmse_float32_matches_frozen_receiver_formula(tmp_path):
+    from src.evaluation.dpss_precision_timing import LMMSEFloat32
+    config, prior, chain, archive = fixture()
+    folder, logs = tmp_path/"data", tmp_path/"log"
+    logs.mkdir()
+    generate(folder, logs, config, archive, chain, prior, DenseBackend(), {"commit": "test"})
+    with CompactDataset(folder/"test.h5") as ds:
+        receiver = restore_receiver_lmmse(ds, DenseBackend("cuda"))
+        observations = ds._h["samples/clean_observations"][:2]
+        variances = ds._h["samples/rf_noise_variance"][2, :2]
+        expected = receiver.estimate_coefficients(observations, ds._known, ds._masks, variances)
+        actual = LMMSEFloat32(receiver).estimate(observations, variances)
+        np.testing.assert_allclose(actual, expected, rtol=2e-4, atol=3e-6)
