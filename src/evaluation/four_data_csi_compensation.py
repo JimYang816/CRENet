@@ -251,7 +251,7 @@ def finish(output, metadata, reports):
             ax.plot(report["snr_db"], report["target_nmse_db"], "x--", color="black", markersize=9, label="Preset target")
         ax.plot(report["snr_db"], report["mean_compensated_nmse_db"], "o-", color="#2166AC",
                 label=f"Reference-{assisted_label}")
-        ax.text(.03, .50, "Reference CSI: NMSE = 0 (−∞ dB)", transform=ax.transAxes,
+        ax.text(.03, .05, "Reference CSI: NMSE = 0 (−∞ dB)", transform=ax.transAxes,
                 bbox=dict(facecolor="white", edgecolor="0.8", alpha=.95), fontsize=9)
         ax.set(title=channel, xlabel="SNR (dB)", ylabel="Mean full-matrix CSI NMSE (dB)", xticks=report["snr_db"])
         ax.grid(alpha=.25)

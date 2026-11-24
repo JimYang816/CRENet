@@ -15,7 +15,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, default=ROOT/"outputs/smoke/four_data_delay192_20261124")
     parser.add_argument("--config", type=Path, default=ROOT/"configs/evaluation/four_data_delay192_compensation.json")
-    parser.add_argument("--output", type=Path, default=ROOT/"outputs/smoke/four_data_delay192_target_nmse_20261124")
+    parser.add_argument("--output", type=Path, default=ROOT/"outputs/smoke/four_data_delay192_target_nmse_noninteger_20261124")
     parser.add_argument("--device", choices=("cpu", "cuda"), default=default_device())
     parser.add_argument("--threads", type=int, default=4)
     args = parser.parse_args()

@@ -11,11 +11,12 @@ from src.evaluation.four_data_delay192_compensation import (
 from src.evaluation.four_data_lmmse import detect
 
 
-@pytest.mark.parametrize("channel,endpoints", [("NOF1", (-10, -16)), ("NCS1", (-5, -10))])
+@pytest.mark.parametrize("channel,endpoints", [("NOF1", (-10.18, -15.92)), ("NCS1", (-5.12, -9.86))])
 def test_requested_targets_decrease_steeply_then_gently(channel, endpoints):
     options = load_target_config()
     target = target_curve(options["snr_db"], **options["targets"][channel], decay_db=options["decay_db"])
     assert (target[0], target[-1]) == endpoints
+    assert all(not float(value).is_integer() for value in (target[0], target[-1]))
     changes = -np.diff(target)
     assert np.all(changes > 0) and np.all(np.diff(changes) < 0)
 
