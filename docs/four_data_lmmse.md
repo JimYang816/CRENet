@@ -76,6 +76,46 @@ NOF1 的 192 个选点分布在物理索引 45–501 内，包含非连续位置
 
 完整 0–30 dB 指标见 `summary.csv`；本次每信道仅 5 帧，属于小样本诊断。
 
+## 192 点原始 CSI 的目标 NMSE 参考辅助实验
+
+入口为 `scripts/evaluate/four_data_delay192_compensation.py`，目标配置为
+`configs/evaluation/four_data_delay192_compensation.json`。使用上一节保存的 192 点原始估计链路、
+25 个独立先验窗口与 5 个测试帧，固定相同的数据和噪声，对参考矩阵辅助补偿后的两种 LMMSE 重新评测。
+不修改原始实验；输出到 `outputs/smoke/four_data_delay192_target_nmse_20261124/`。
+
+目标曲线采用尺度 10 dB 的归一化指数下降：
+`t(s) = t(0) + [t(30)-t(0)] * [1-exp(-s/10)] / [1-exp(-3)]`。
+因此 SNR 每增加 5 dB，目标 NMSE 的改善幅度逐步减小，且起止值严格匹配要求：
+
+| SNR / dB | NOF1 目标平均 NMSE / dB | NCS1 目标平均 NMSE / dB |
+| ---: | ---: | ---: |
+| 0 | -10.0000 | -5.0000 |
+| 5 | -12.4845 | -7.0704 |
+| 10 | -13.9914 | -8.3262 |
+| 15 | -14.9054 | -9.0879 |
+| 20 | -15.4598 | -9.5498 |
+| 25 | -15.7961 | -9.8300 |
+| 30 | -16.0000 | -10.0000 |
+
+每条信道、每个 SNR 使用一个公共误差系数
+`alpha(s) = sqrt(10**[t(s)/10] / mean_raw_linear_NMSE(s))`，
+构造 `H_assisted = H_ref + alpha(s) * (H_raw - H_ref)`。
+`H_raw` 先按实际时延位置补零到参考矩阵的完整 1024 点支撑，包含所有原始遗漏抽头的误差。
+同一 SNR 的所有帧、所有符号共用系数，保留帧间相对误差；不将每个符号单独归一到相同 NMSE。
+平均值仍按完整矩阵的逐帧/逐符号线性 NMSE 先平均，再取 dB。
+
+该构造明确使用测试参考 CSI，补偿后的矩阵可包含原 192 个位置以外的参考分量，
+属于理想参考辅助敏感性实验，不能作为实际接收机的 CSI 估计性能。
+运行时校验源物理数据身份、冻结支撑和计算代码，重估原始 CSI 并复核原始/参考误码，
+同时核验误差缩放恒等式及各 SNR 实际平均 NMSE 与目标的偏差。
+
+```bash
+python -m scripts.evaluate.four_data_delay192_compensation --device cuda --threads 4
+```
+
+输出 BER-SNR 与 NMSE-SNR 的 PNG/PDF、`summary.csv`、逐帧误码与来源记录。
+图中包含原始、参考辅助与理想参考对照；CSV 额外记录目标 NMSE 和公共误差系数。
+
 ## NCS1 的固定 192 点时延支撑
 
 当前 NCS1 支撑实验仅使用 `configs/evaluation/ncs1_delay_support.json` 与

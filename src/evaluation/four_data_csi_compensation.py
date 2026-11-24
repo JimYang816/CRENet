@@ -205,21 +205,25 @@ def finish(output, metadata, reports):
     write_json(output / "metrics.json", dict(complete=True, metadata=metadata, channels=reports))
     keys = tuple(f"{view}_{algorithm}" for view in ("raw", "compensated", "reference")
                  for algorithm in ("single", "full"))
+    has_targets = all("target_nmse_db" in report for report in reports.values())
+    extra_columns = ["target_nmse_db", "error_scale"] if has_targets else []
     with (output / "summary.csv").open("w", encoding="utf-8-sig", newline="") as stream:
         writer = csv.writer(stream)
         writer.writerow(["channel", "snr_db", "bits"] + [field for key in keys for field in (f"{key}_errors", f"{key}_ber")]
-                        + ["raw_nmse_db", "compensated_nmse_db", "reference_nmse_linear", "reference_nmse_db"])
+                        + ["raw_nmse_db", "compensated_nmse_db", "reference_nmse_linear", "reference_nmse_db"] + extra_columns)
         for channel, report in reports.items():
             for i, snr in enumerate(report["snr_db"]):
                 row = [channel, snr, report["bits_per_snr"]]
                 for key in keys:
                     row += [report["curves"][key]["bit_errors"][i], report["curves"][key]["ber"][i]]
-                writer.writerow(row + [report["mean_raw_nmse_db"][i], report["mean_compensated_nmse_db"][i], 0, "-inf"])
+                extra = [report["target_nmse_db"][i], report["error_scales"][i]] if has_targets else []
+                writer.writerow(row + [report["mean_raw_nmse_db"][i], report["mean_compensated_nmse_db"][i], 0, "-inf"] + extra)
+    assisted_label = metadata.get("assisted_label", "assisted (+5 dB)")
     styles = (("raw_single", "Single / raw", "#D77A22", "o", ":"),
-              ("compensated_single", "Single / assisted (+5 dB)", "#D77A22", "o", "-"),
+              ("compensated_single", f"Single / {assisted_label}", "#D77A22", "o", "-"),
               ("reference_single", "Single / reference", "#D77A22", "o", "--"),
               ("raw_full", "Full / raw", "#2166AC", "s", ":"),
-              ("compensated_full", "Full / assisted (+5 dB)", "#2166AC", "s", "-"),
+              ("compensated_full", f"Full / {assisted_label}", "#2166AC", "s", "-"),
               ("reference_full", "Full / reference", "#2166AC", "s", "--"))
     fig, axes = plt.subplots(1, 2, figsize=(12.8, 4.8), layout="constrained")
     for ax, (channel, report) in zip(axes, reports.items(), strict=True):
@@ -236,21 +240,23 @@ def finish(output, metadata, reports):
                yscale="log", xticks=report["snr_db"])
         ax.grid(alpha=.25, which="both")
         ax.legend(fontsize=8)
-    fig.suptitle("CP=256, Q=24 | raw vs reference-assisted CSI vs reference | zero errors at half-count floor")
+    fig.suptitle(metadata.get("ber_plot_title", "CP=256, Q=24 | raw vs reference-assisted CSI vs reference | zero errors at half-count floor"))
     fig.savefig(output / "ber_snr.png", dpi=180)
     fig.savefig(output / "ber_snr.pdf")
     plt.close(fig)
     fig, axes = plt.subplots(1, 2, figsize=(11.4, 4.3), layout="constrained")
     for ax, (channel, report) in zip(axes, reports.items(), strict=True):
         ax.plot(report["snr_db"], report["mean_raw_nmse_db"], "o:", color="#777777", label="Raw CSI")
+        if has_targets:
+            ax.plot(report["snr_db"], report["target_nmse_db"], "x--", color="black", markersize=9, label="Preset target")
         ax.plot(report["snr_db"], report["mean_compensated_nmse_db"], "o-", color="#2166AC",
-                label="Reference-assisted CSI (+5 dB)")
+                label=f"Reference-{assisted_label}")
         ax.text(.03, .50, "Reference CSI: NMSE = 0 (−∞ dB)", transform=ax.transAxes,
                 bbox=dict(facecolor="white", edgecolor="0.8", alpha=.95), fontsize=9)
         ax.set(title=channel, xlabel="SNR (dB)", ylabel="Mean full-matrix CSI NMSE (dB)", xticks=report["snr_db"])
         ax.grid(alpha=.25)
         ax.legend(fontsize=9)
-    fig.suptitle("4D, CP=256 | 512 data + 256 pilots | 12 Hz / Q=24 / L=176")
+    fig.suptitle(metadata.get("nmse_plot_title", "4D, CP=256 | 512 data + 256 pilots | 12 Hz / Q=24 / L=176"))
     fig.savefig(output / "nmse_snr.png", dpi=180)
     fig.savefig(output / "nmse_snr.pdf")
     plt.close(fig)

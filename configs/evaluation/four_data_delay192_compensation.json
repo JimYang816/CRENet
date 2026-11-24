@@ -1,0 +1,12 @@
+{
+  "channels": ["NOF1", "NCS1"],
+  "snr_db": [0, 5, 10, 15, 20, 25, 30],
+  "curve": "normalized_exponential",
+  "decay_db": 10,
+  "targets": {
+    "NOF1": {"start_db": -10, "end_db": -16},
+    "NCS1": {"start_db": -5, "end_db": -10}
+  },
+  "scope": "mean_full_matrix_nmse_per_snr",
+  "reference_assisted": true
+}
