@@ -116,6 +116,18 @@ python -m scripts.evaluate.four_data_delay192_compensation --device cuda --threa
 输出 BER-SNR 与 NMSE-SNR 的 PNG/PDF、`summary.csv`、逐帧误码与来源记录。
 图中包含原始、参考辅助与理想参考对照；CSV 额外记录目标 NMSE 和公共误差系数。
 
+本次计算代码为 `4705763`，本地 15 项检查及服务器 40 项回归检查通过。
+原始/理想参考误码与上一轮完全一致，原始物理数据哈希未变；7 个 SNR 的补偿平均 NMSE
+均达到预设目标，最大绝对偏差约 `3.6e-15 dB`。核验记录见结果目录的 `verification.json`。
+每信道仍为 5 帧、每 SNR 为 20,480 bit。30 dB 结果为：
+
+| 信道 | 补偿平均 NMSE | 补偿 Single-tap BER | 补偿 Full-matrix BER | 原始 Full-matrix BER |
+| --- | ---: | ---: | ---: | ---: |
+| NOF1 | -16.0000 dB | 0.0163086 | 0.00693359 | 0.0269531 |
+| NCS1 | -10.0000 dB | 0.142236 | 0.0171387 | 0.136328 |
+
+BER/NMSE 图、完整 CSV 和逐帧结果已带回本地同名目录；完整源物理数据保留在服务器原始实验目录。
+
 ## NCS1 的固定 192 点时延支撑
 
 当前 NCS1 支撑实验仅使用 `configs/evaluation/ncs1_delay_support.json` 与
