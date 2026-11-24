@@ -172,8 +172,8 @@ def evaluate(channel, source, output, metadata, baseline, backend):
             expected_nmse = ALPHA**2 * nmse
             if not np.allclose(corrected_nmse, expected_nmse, rtol=1e-10, atol=1e-14):
                 raise ValueError(f"{channel}: compensated full-matrix NMSE is not 5 dB below raw NMSE")
-            max_nmse_relative_error = max(max_nmse_relative_error,
-                                          float(np.max(np.abs(corrected_nmse - expected_nmse) / expected_nmse)))
+            max_nmse_relative_error = max(max_nmse_relative_error, float(np.max(
+                np.abs(corrected_nmse - expected_nmse) / np.maximum(expected_nmse, 1e-300))))
             single, full = detect(corrected, observations[i], known, variances[i], noise, layout["data"], backend)
             errors = [np.count_nonzero(decisions(x) != bits[None], axis=(-1, -2)) for x in (single, full)]
             frames.append(dict(old, compensated_single_errors=errors[0].tolist(),
@@ -245,7 +245,7 @@ def finish(output, metadata, reports):
         ax.plot(report["snr_db"], report["mean_raw_nmse_db"], "o:", color="#777777", label="Raw CSI")
         ax.plot(report["snr_db"], report["mean_compensated_nmse_db"], "o-", color="#2166AC",
                 label="Reference-assisted CSI (+5 dB)")
-        ax.text(.03, .05, "Reference CSI: NMSE = 0 (−∞ dB)", transform=ax.transAxes,
+        ax.text(.03, .50, "Reference CSI: NMSE = 0 (−∞ dB)", transform=ax.transAxes,
                 bbox=dict(facecolor="white", edgecolor="0.8", alpha=.95), fontsize=9)
         ax.set(title=channel, xlabel="SNR (dB)", ylabel="Mean full-matrix CSI NMSE (dB)", xticks=report["snr_db"])
         ax.grid(alpha=.25)
