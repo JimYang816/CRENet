@@ -1,4 +1,4 @@
-"""Compare NCS1 continuous L176 and the configured fixed discrete support."""
+"""Evaluate NCS1 with the fixed 192-tap physical delay support."""
 from __future__ import annotations
 
 import argparse
@@ -14,11 +14,8 @@ from src.evaluation.ncs1_delay_support import load_study_config, run
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=ROOT/"configs/evaluation/ncs1_delay_support.json")
-    counts = parser.add_mutually_exclusive_group()
-    counts.add_argument("--tap-count", type=int, help="Override the configured count; 64 repeats the earlier four-candidate study")
-    counts.add_argument("--sweep-counts", nargs="+", type=int, help="Increasing nested counts starting with the configured anchor, e.g. 176 184 192 208")
     parser.add_argument("--archive", type=Path, default=ROOT/"data/raw/watermark/WatermarkV1.zip")
-    parser.add_argument("--output", type=Path, default=ROOT/"outputs/smoke/ncs1_delay176")
+    parser.add_argument("--output", type=Path, default=ROOT/"outputs/smoke/ncs1_delay192")
     parser.add_argument("--device", choices=("cpu", "cuda"), default=default_device())
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--smoke", action="store_true", help="Two independent prior windows, one test frame, three SNRs")
@@ -30,7 +27,7 @@ def main():
         backend = DenseBackend(args.device)
         if backend.torch:
             backend.torch.set_num_threads(args.threads)
-        study = load_study_config(args.config, tap_count=args.tap_count, sweep_counts=args.sweep_counts)
+        study = load_study_config(args.config)
         run(output, args.archive.resolve(), backend, args.smoke, study=study)
 
 

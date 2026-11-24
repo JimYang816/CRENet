@@ -10,7 +10,7 @@ from scipy import sparse
 from types import SimpleNamespace
 
 from data_generation.src.receiver.chain import full_frame_kernels
-from data_generation.src.receiver.delay_support import SelectedDelayDPSSModel, delay_candidates, profile_full_frame
+from data_generation.src.receiver.delay_support import SelectedDelayDPSSModel, profile_full_frame
 from data_generation.src.receiver.estimation import FrozenPrior
 from data_generation.src.receiver.pdd import JointEstimator, selected_components
 from data_generation.src.config import ROOT, digest, load_config
@@ -88,7 +88,7 @@ def test_selected_covariance_matches_literal_four_data_design_and_unknown_data_i
     np.testing.assert_allclose(estimated.ravel(), expected_coeff, atol=4e-13)
 
 
-def test_omitted_taps_are_included_in_nmse_and_support_is_chosen_from_power():
+def test_omitted_taps_are_included_in_full_matrix_nmse():
     rng, model, _ = fixture()
     truth = rng.normal(size=(4, 16, 16))+1j*rng.normal(size=(4, 16, 16))
     selected = rng.normal(size=(2, 4, 16, 4))+1j*rng.normal(size=(2, 4, 16, 4))
@@ -96,14 +96,6 @@ def test_omitted_taps_are_included_in_nmse_and_support_is_chosen_from_power():
     dense[..., model.delays] = selected
     expected = np.sum(abs(dense-truth[None])**2, axis=(2, 3))/np.sum(abs(truth)**2, axis=(1, 2))[None]
     np.testing.assert_allclose(full_nmse(selected, truth, model.delays), expected, atol=4e-16)
-    power = np.zeros(256)
-    power[80:112], power[200:232] = 2, 1
-    supports = delay_candidates(power)
-    np.testing.assert_array_equal(supports["selected64"], np.r_[80:112, 200:232])
-    np.testing.assert_array_equal(supports["window64"], np.arange(48, 112))
-    assert len(supports["first64"]) == 64 and len(supports["dense176"]) == 176
-    tied = delay_candidates(np.ones(256))
-    np.testing.assert_array_equal(tied["selected64"], np.arange(64))
 
 
 def test_full_frame_profile_matches_explicit_physical_kernels_including_boundaries():
@@ -119,13 +111,13 @@ def test_full_frame_profile_matches_explicit_physical_kernels_including_boundari
     np.testing.assert_allclose(power, np.mean(abs(taps)**2, axis=0), atol=9e-16)
 
 
-def test_default_176_support_is_frozen_independent_and_extends_beyond_the_old_prefix(tmp_path):
+def test_default_192_support_is_frozen_independent_and_keeps_physical_positions(tmp_path):
     study = load_study_config()
     support = study["frozen_support"]
     c = load_config(ROOT/"configs/data/ncs1/dddd.json")
-    assert study["tap_count"] == support["tap_count"] == len(support["indices"]) == 176
+    assert study["tap_count"] == support["tap_count"] == len(support["indices"]) == 192
     assert support["frame_config_sha256"] == digest(c)
-    assert min(support["indices"]) == 33 and max(support["indices"]) == 220
+    np.testing.assert_array_equal(support["indices"], np.arange(32, 224))
     assert {record for record, _ in support["prior_windows"]} == set(c["prior_records"])
     assert not ({record for record, _ in support["prior_windows"]} & set(c["learning_dataset"]["records"]["test"]))
     path = tmp_path/"physical.h5"
@@ -134,12 +126,9 @@ def test_default_176_support_is_frozen_independent_and_extends_beyond_the_old_pr
         h.create_dataset("prior_power", data=np.ones((2, 1024)))
         h.create_group("test")
     supports, report = freeze_supports(path, tmp_path, study)
-    assert set(supports) == {"dense176", "selected176"}
-    np.testing.assert_array_equal(supports["dense176"], np.arange(176))
-    np.testing.assert_array_equal(supports["selected176"], support["indices"])
-    assert report["candidates"]["selected176"]["span"] == 221
-    legacy = load_study_config(tap_count=64)
-    assert legacy["tap_count"] == 64 and legacy["frozen_support"] is None
+    assert set(supports) == {"selected192"}
+    np.testing.assert_array_equal(supports["selected192"], support["indices"])
+    assert report["candidates"]["selected192"]["span"] == 224
 
 
 def test_study_rejects_duplicate_frozen_delays(tmp_path):
@@ -155,21 +144,12 @@ def test_study_rejects_duplicate_frozen_delays(tmp_path):
         load_study_config(config_path)
 
 
-def test_larger_tap_sweep_is_nested_and_keeps_the_frozen_anchor(tmp_path):
-    counts = [176, 184, 192, 208]
-    study = load_study_config(sweep_counts=counts)
-    path = tmp_path/"physical.h5"
-    with h5py.File(path, "w") as h:
-        h.create_dataset("prior_power", data=np.ones((2, 1024)))
-    supports, _ = freeze_supports(path, tmp_path, study)
-    previous = set(study["frozen_support"]["indices"])
-    for count in counts:
-        indices = supports[f"selected{count}"]
-        assert len(indices) == count and len(set(indices)) == count
-        assert previous.issubset(indices)
-        assert np.all(np.diff(indices) > 0)
-        previous = set(indices)
-    assert load_study_config(tap_count=208)["frozen_support"] is None
-    for bad in ([176, 176], [184, 192], [176, 192, 184], [176, 1025], [176, True]):
-        with pytest.raises(ValueError, match="Sweep counts"):
-            load_study_config(sweep_counts=bad)
+@pytest.mark.parametrize("count", [64, 176, 184, 208, 192.0, True])
+def test_study_rejects_other_tap_configurations(tmp_path, count):
+    study = load_study_config()
+    study.pop("frozen_support")
+    study["tap_count"] = count
+    path = tmp_path/"obsolete.json"
+    path.write_text(json.dumps(study), encoding="utf-8")
+    with pytest.raises(ValueError, match="fixed 192-tap"):
+        load_study_config(path)

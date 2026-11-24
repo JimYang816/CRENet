@@ -52,18 +52,6 @@ class SelectedDelayDPSSModel(DPSSModel):
         return self.expand_taps(super().reconstruct(coefficients, symbol))
 
 
-def delay_candidates(power, count=64, baseline_length=176):
-    """Freeze support using independent prior power only; ties prefer low delay."""
-    power = np.asarray(power, float)
-    if (power.ndim != 1 or not 1 <= count <= baseline_length <= len(power)
-            or not np.all(np.isfinite(power)) or np.any(power < 0) or power.sum() <= 0):
-        raise ValueError("Invalid delay power or support sizes")
-    best_start = int(np.argmax(np.convolve(power, np.ones(count), mode="valid")))
-    return dict(dense176=np.arange(baseline_length), first64=np.arange(count),
-                window64=np.arange(best_start, best_start+count),
-                selected64=np.sort(np.argsort(-power, kind="stable")[:count]))
-
-
 def profile_full_frame(receiver, sounding, start, basis):
     """Fit every circular-delay column and profile unprojected physical energy.
 

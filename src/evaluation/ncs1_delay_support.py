@@ -1,4 +1,4 @@
-"""Paired NCS1 study using a fixed physical support from independent priors."""
+"""NCS1 evaluation using the fixed 192-delay independent-prior receiver."""
 from __future__ import annotations
 
 import csv
@@ -13,7 +13,7 @@ import numpy as np
 from data_generation.src.channel.watermark.replay import WatermarkArchive
 from data_generation.src.config import ROOT, digest, load_config
 from data_generation.src.receiver.delay_support import (
-    SelectedDelayDPSSModel, delay_candidates, profile_full_frame,
+    SelectedDelayDPSSModel, profile_full_frame,
 )
 from data_generation.src.receiver.estimation import FrozenPrior, input_windows
 from data_generation.src.receiver.pdd import JointEstimator
@@ -25,53 +25,38 @@ from src.evaluation.four_data_q_sweep import BlockedReceiver, make_frame
 
 CODE = (*CODE_FILES, "data_generation/src/receiver/delay_support.py",
         "src/evaluation/ncs1_delay_support.py", "scripts/evaluate/ncs1_delay_support.py",
-        "configs/evaluation/ncs1_delay_support.json", "configs/data/ncs1/delay_support176.json")
+        "configs/evaluation/ncs1_delay_support.json", "configs/data/ncs1/delay_support192.json")
 
 
-def load_study_config(path=None, *, tap_count=None, sweep_counts=None):
+def load_study_config(path=None):
     path = Path(path or ROOT/"configs/evaluation/ncs1_delay_support.json")
     study = json.loads(path.read_text(encoding="utf-8"))
-    if tap_count is not None and tap_count != study["tap_count"]:
-        study.update(tap_count=tap_count, support_file=None)
     count = study.get("tap_count")
-    if (study.get("channel") != "NCS1" or study.get("baseline_length") != 176
-            or isinstance(count, bool) or not isinstance(count, int) or not 1 <= count <= 1024):
-        raise ValueError("NCS1 study requires an integer tap count from 1 to 1024 and a continuous L176 baseline")
-    counts = sweep_counts if sweep_counts is not None else study.get("sweep_counts")
-    if counts is not None:
-        if (not isinstance(counts, (list, tuple)) or len(counts) < 2
-                or any(isinstance(k, bool) or not isinstance(k, int) or not 1 <= k <= 1024 for k in counts)
-                or counts[0] != count or any(a >= b for a, b in zip(counts[:-1], counts[1:]))):
-            raise ValueError("Sweep counts must start with the configured tap count and increase strictly within 1..1024")
-        study["sweep_counts"] = list(counts)
-    study["frozen_support"] = None
-    if study.get("support_file"):
-        support_path = Path(study["support_file"])
-        if not support_path.is_absolute():
-            support_path = ROOT/support_path
-        support = json.loads(support_path.read_text(encoding="utf-8"))
-        indices = np.asarray(support.get("indices", []))
-        if (support.get("schema") != "ncs1-frozen-delay-support-v1" or support.get("channel") != "NCS1"
-                or support.get("tap_count") != count or indices.shape != (count,)
-                or not np.issubdtype(indices.dtype, np.integer) or np.any(np.diff(indices) <= 0)
-                or indices[0] < 0 or indices[-1] >= 1024 or not support.get("prior_windows")):
-            raise ValueError("Frozen support must contain the configured number of sorted unique physical delays")
-        study["frozen_support"] = support
+    if (study.get("channel") != "NCS1" or isinstance(count, bool) or not isinstance(count, int) or count != 192
+            or not study.get("support_file") or "baseline_length" in study or "sweep_counts" in study):
+        raise ValueError("NCS1 requires the fixed 192-tap support without alternative configurations")
+    support_path = Path(study["support_file"])
+    if not support_path.is_absolute():
+        support_path = ROOT/support_path
+    support = json.loads(support_path.read_text(encoding="utf-8"))
+    indices = np.asarray(support.get("indices", []))
+    if (support.get("schema") != "ncs1-frozen-delay-support-v1" or support.get("channel") != "NCS1"
+            or support.get("tap_count") != count or indices.shape != (count,)
+            or not np.issubdtype(indices.dtype, np.integer) or np.any(np.diff(indices) <= 0)
+            or indices[0] < 0 or indices[-1] >= 1024 or not support.get("prior_windows")):
+        raise ValueError("Frozen support must contain 192 sorted unique physical delays")
+    study["frozen_support"] = support
     return study
 
 
 def candidate_label(name, count):
-    if name.startswith("dense") or name.startswith("first"):
-        return f"Continuous 0:{count-1} ({count} taps)"
-    if name.startswith("window"):
-        return f"Best prior window ({count} taps)"
-    return f"Prior power selection ({count} taps)"
+    return f"Estimated CSI ({count} fixed physical taps)"
 
 
 def metadata(archive_path, backend, smoke, study):
     c = load_config(ROOT/"configs/data/ncs1/dddd.json")
-    if (c["frame_structure"], c["delay_length"], c["dpss_expected_count"], c["dpss_half_bandwidth_hz"]) != ("DDDD", 176, 24, 12):
-        raise ValueError("This study requires the current DDDD / L176 / Q24 / 12 Hz baseline")
+    if (c["frame_structure"], c["dpss_expected_count"], c["dpss_half_bandwidth_hz"]) != ("DDDD", 24, 12):
+        raise ValueError("This receiver requires DDDD / Q24 / 12 Hz")
     prior_records = c["prior_records"][:2] if smoke else c["prior_records"]
     starts = [2] if smoke else c["starts_seconds"]
     tests = c["learning_dataset"]["records"]["test"][:1 if smoke else 5]
@@ -86,18 +71,19 @@ def metadata(archive_path, backend, smoke, study):
                 or not source_records.issubset(c["prior_records"]) or source_records & set(tests)
                 or any(start not in c["starts_seconds"] for _, start in support["prior_windows"])):
             raise ValueError("Frozen support does not match this physical configuration, archive or independent prior split")
+    frame_config_sha256 = digest(c)
+    c["delay_length"] = study["tap_count"]
     if smoke:
         c["snr_db"] = [0, 15, 30]
-    return dict(schema="ncs1-independent-delay-support-v2", config=c, study=study, device=backend.device,
+    return dict(schema="ncs1-fixed192-delay-support-v1", config=c, frame_config_sha256=frame_config_sha256,
+                study=study, device=backend.device,
                 smoke=smoke, prior_windows=[[r, s] for r in prior_records for s in starts],
                 test_windows=[[r, 2] for r in tests],
                 git_head=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                 code_sha256={name: file_sha256(ROOT/name) for name in CODE},
                 archive_sha256=archive_sha256, precision="complex128",
-                selection=(f"nested supports {study['sweep_counts']}, extending the configured independent-prior anchor; no test CSI"
-                           if study.get("sweep_counts") else
-                           f"{study['tap_count']} largest mean physical tap powers over independent prior windows; no test CSI"),
-                support_frozen=bool(support),
+                selection="192 frozen physical delays selected using independent prior windows only",
+                support_frozen=True,
                 prior="full-frame coefficients from the same independent windows for every candidate",
                 raw_csi=True, csi_compensation=False,
                 reference_use="test scoring and ideal detection only, after support is frozen",
@@ -170,24 +156,9 @@ def freeze_supports(path, output, study):
     with h5py.File(path, "r") as h:
         powers = h["prior_power"][:]
     power = powers.mean(axis=0)
-    count = study["tap_count"]
-    if study.get("sweep_counts"):
-        order = np.argsort(-power, kind="stable")
-        anchor = (np.asarray(study["frozen_support"]["indices"]) if study["frozen_support"]
-                  else np.sort(order[:count]))
-        remaining = order[~np.isin(order, anchor)]
-        supports = {"dense176": np.arange(176)}
-        for size in study["sweep_counts"]:
-            supports[f"selected{size}"] = np.sort(np.r_[anchor, remaining[:size-count]])
-    elif count == 64 and not study["frozen_support"]:
-        supports = delay_candidates(power)
-    else:
-        indices = (np.asarray(study["frozen_support"]["indices"]) if study["frozen_support"]
-                   else np.sort(np.argsort(-power, kind="stable")[:count]))
-        supports = {"dense176": np.arange(176), f"selected{count}": indices}
+    supports = {"selected192": np.asarray(study["frozen_support"]["indices"])}
     report = dict(selection_source="independent prior windows only", mean_power=power.tolist(),
                   frozen_support=study["frozen_support"],
-                  nested_counts=study.get("sweep_counts"),
                   candidates={name: dict(indices=idx.tolist(), count=len(idx), span=int(idx[-1])+1,
                     prior_mean_coverage=float(np.mean(powers[:, idx].sum(axis=1)/powers.sum(axis=1))),
                     prior_min_coverage=float(np.min(powers[:, idx].sum(axis=1)/powers.sum(axis=1))),
@@ -280,33 +251,17 @@ def evaluate(path, output, meta, supports, backend):
             write_json(result_path, report)
             results[name] = report
             print(f"{name}: coverage={coverage:.4%}, 30dB NMSE={nmse[-1]:.5g}, build={build_seconds:.2f}s", flush=True)
-        # One common ideal reference for all candidates, with identical observations.
-        frames, oracle_coverages, oracle_counts, active_coverages = [], [], [], []
+        # Ideal reference uses the same observations and never changes raw CSI.
+        frames = []
         for i, group in enumerate(groups):
             truth = group["truth"][:]
             single, full = detect(truth, observations[i], known, variances[i], noise, layout["data"], backend)
             bits = group["bits"][:]
             frames.append([np.count_nonzero(decisions(symbols) != bits[None], axis=(-1, -2)) for symbols in (single, full)])
-            power = np.sum(abs(truth)**2, axis=1)
-            ordered = np.sort(power, axis=-1)[:, ::-1]
-            cumulative = np.cumsum(ordered, axis=-1)/power.sum(axis=-1)[:, None]
-            oracle_coverages.extend(cumulative[:, 63].tolist())
-            active_coverages.extend(cumulative[:, meta["study"]["tap_count"]-1].tolist())
-            oracle_counts.extend([[int(np.searchsorted(row, threshold)+1) for threshold in (.90, .95, .99)] for row in cumulative])
         ideal = np.sum(frames, axis=(0, 3))
         bits_per_snr = len(groups)*4*c["data_count"]*2
         reference = {name: dict(errors=ideal[i].tolist(), ber=(ideal[i]/bits_per_snr).tolist())
                      for i, name in enumerate(("single", "full"))}
-        reference["delay_diagnostics"] = dict(
-            use="scoring-only oracle bounds; never used for support selection or raw estimation",
-            best64_mean_coverage=float(np.mean(oracle_coverages)),
-            best64_min_coverage=float(np.min(oracle_coverages)),
-            best64_max_coverage=float(np.max(oracle_coverages)),
-            configured_tap_count=meta["study"]["tap_count"],
-            configured_count_best_mean_coverage=float(np.mean(active_coverages)),
-            coverage_thresholds=[.90, .95, .99],
-            minimum_taps_mean=np.mean(oracle_counts, axis=0).tolist(),
-            minimum_taps_max=np.max(oracle_counts, axis=0).tolist())
     return results, reference
 
 
@@ -326,12 +281,7 @@ def finish(output, meta, selection, results, reference, path):
                 writer.writerow([name, snr, r["delay_count"], r["coefficient_count"],
                     selection["candidates"][name]["prior_mean_coverage"], r["test_mean_coverage"], r["test_min_coverage"],
                     r["mean_nmse_db"][i], r["curves"]["single"]["ber"][i], r["curves"]["full"]["ber"][i], r["bits_per_snr"]])
-    colors = {name: ("#222222" if name.startswith("dense") else "#D55E00" if name.startswith("first")
-                     else "#009E73" if name.startswith("window") else "#0072B2") for name in results}
-    selected_names = [name for name in results if name.startswith("selected")]
-    if len(selected_names) > 1:
-        cmap = plt.get_cmap("viridis")
-        colors.update({name: cmap(value) for name, value in zip(selected_names, np.linspace(.15, .85, len(selected_names)), strict=True)})
+    colors = {"selected192": "#0072B2"}
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.8), layout="constrained")
     for ax, algorithm in zip(axes, ("single", "full"), strict=True):
         for name, r in results.items():
@@ -368,14 +318,11 @@ def finish(output, meta, selection, results, reference, path):
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.7), layout="constrained")
     axes[0].plot(np.arange(len(native))/16, 10*np.log10(np.maximum(native/native.max(), 1e-12)))
     axes[0].set(title="Independent NCS1 recordings: native PDP", xlabel="Measured excess delay (ms)", ylabel="Relative power (dB)", ylim=(-60, 3))
-    count = max(meta["study"].get("sweep_counts", [meta["study"]["tap_count"]]))
+    count = meta["study"]["tap_count"]
     selected_name = f"selected{count}"
     indices = np.asarray(selection["candidates"][selected_name]["indices"])
     axes[1].plot(np.arange(len(power)), 10*np.log10(np.maximum(power/power.max(), 1e-12)), label="Physical receiver PDP")
     axes[1].scatter(indices, 10*np.log10(power[indices]/power.max()), s=12, color=colors[selected_name], label=f"Selected {count} taps", zorder=5)
-    if count != 176:
-        axes[1].axvline(count-.5, color="#D55E00", linestyle="--", label=f"End of first {count} taps")
-    axes[1].axvline(175.5, color=".3", linestyle=":", label="End of baseline 176 taps")
     axes[1].set(title="Full-frame receiver PDP after actual RF/FIR chain", xlabel="Receiver delay index (zero based)", ylabel="Relative power (dB)",
                 xlim=(0, max(256, indices[-1]+10)), ylim=(-60, 3))
     axes[1].legend(fontsize=8)
@@ -384,21 +331,6 @@ def finish(output, meta, selection, results, reference, path):
     for ext in ("png", "pdf"):
         fig.savefig(output/f"delay_profile.{ext}", dpi=180)
     plt.close(fig)
-    if len(selected_names) > 1:
-        fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.2), layout="constrained")
-        sizes = [results[name]["delay_count"] for name in selected_names]
-        snr = meta["config"]["snr_db"][-1]
-        axes[0].plot(sizes, [results[name]["mean_nmse_db"][-1] for name in selected_names], "o-", color="#0072B2")
-        axes[1].plot(sizes, [results[name]["curves"]["full"]["ber"][-1] for name in selected_names], "s-", color="#009E73")
-        axes[0].set(ylabel="Mean full-matrix NMSE (dB)")
-        axes[1].set(ylabel="Full-matrix LMMSE BER")
-        for ax in axes:
-            ax.set(xlabel="Number of selected physical taps", xticks=sizes)
-            ax.grid(alpha=.25)
-        fig.suptitle(f"NCS1 at {snr} dB: nested independent-prior delay supports, Q=24")
-        for ext in ("png", "pdf"):
-            fig.savefig(output/f"tap_count_tradeoff.{ext}", dpi=180)
-        plt.close(fig)
 
 
 def run(output, archive_path, backend, smoke=False, *, study=None):
