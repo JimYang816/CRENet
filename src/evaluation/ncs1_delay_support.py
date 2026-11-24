@@ -1,4 +1,4 @@
-"""Paired NCS1 study of 64 physical taps selected from independent priors."""
+"""Paired NCS1 study using a fixed physical support from independent priors."""
 from __future__ import annotations
 
 import csv
@@ -24,12 +24,44 @@ from src.evaluation.four_data_q_sweep import BlockedReceiver, make_frame
 
 
 CODE = (*CODE_FILES, "data_generation/src/receiver/delay_support.py",
-        "src/evaluation/ncs1_delay_support.py", "scripts/evaluate/ncs1_delay_support.py")
-LABELS = dict(dense176="Continuous 0:175 (176 taps)", first64="Continuous 0:63 (64 taps)",
-              window64="Best prior window (64 taps)", selected64="Prior power selection (64 taps)")
+        "src/evaluation/ncs1_delay_support.py", "scripts/evaluate/ncs1_delay_support.py",
+        "configs/evaluation/ncs1_delay_support.json", "configs/data/ncs1/delay_support176.json")
 
 
-def metadata(archive_path, backend, smoke):
+def load_study_config(path=None, *, tap_count=None):
+    path = Path(path or ROOT/"configs/evaluation/ncs1_delay_support.json")
+    study = json.loads(path.read_text(encoding="utf-8"))
+    if tap_count is not None and tap_count != study["tap_count"]:
+        study.update(tap_count=tap_count, support_file=None)
+    count = study.get("tap_count")
+    if (study.get("channel") != "NCS1" or study.get("baseline_length") != 176
+            or isinstance(count, bool) or not isinstance(count, int) or not 1 <= count <= 176):
+        raise ValueError("NCS1 study requires an integer tap count from 1 to 176 and a continuous L176 baseline")
+    study["frozen_support"] = None
+    if study.get("support_file"):
+        support_path = Path(study["support_file"])
+        if not support_path.is_absolute():
+            support_path = ROOT/support_path
+        support = json.loads(support_path.read_text(encoding="utf-8"))
+        indices = np.asarray(support.get("indices", []))
+        if (support.get("schema") != "ncs1-frozen-delay-support-v1" or support.get("channel") != "NCS1"
+                or support.get("tap_count") != count or indices.shape != (count,)
+                or not np.issubdtype(indices.dtype, np.integer) or np.any(np.diff(indices) <= 0)
+                or indices[0] < 0 or indices[-1] >= 1024 or not support.get("prior_windows")):
+            raise ValueError("Frozen support must contain the configured number of sorted unique physical delays")
+        study["frozen_support"] = support
+    return study
+
+
+def candidate_label(name, count):
+    if name.startswith("dense") or name.startswith("first"):
+        return f"Continuous 0:{count-1} ({count} taps)"
+    if name.startswith("window"):
+        return f"Best prior window ({count} taps)"
+    return f"Prior power selection ({count} taps)"
+
+
+def metadata(archive_path, backend, smoke, study):
     c = load_config(ROOT/"configs/data/ncs1/dddd.json")
     if (c["frame_structure"], c["delay_length"], c["dpss_expected_count"], c["dpss_half_bandwidth_hz"]) != ("DDDD", 176, 24, 12):
         raise ValueError("This study requires the current DDDD / L176 / Q24 / 12 Hz baseline")
@@ -38,15 +70,25 @@ def metadata(archive_path, backend, smoke):
     tests = c["learning_dataset"]["records"]["test"][:1 if smoke else 5]
     if set(prior_records) & set(tests):
         raise ValueError("Prior and test records must be disjoint")
+    archive_sha256 = file_sha256(archive_path)
+    support = study["frozen_support"]
+    if support:
+        source_records = {record for record, _ in support["prior_windows"]}
+        if (support["frame_config_sha256"] != digest(c)
+                or support["source_archive_sha256"] != archive_sha256
+                or not source_records.issubset(c["prior_records"]) or source_records & set(tests)
+                or any(start not in c["starts_seconds"] for _, start in support["prior_windows"])):
+            raise ValueError("Frozen support does not match this physical configuration, archive or independent prior split")
     if smoke:
         c["snr_db"] = [0, 15, 30]
-    return dict(schema="ncs1-independent-delay-support-v1", config=c, device=backend.device,
+    return dict(schema="ncs1-independent-delay-support-v2", config=c, study=study, device=backend.device,
                 smoke=smoke, prior_windows=[[r, s] for r in prior_records for s in starts],
                 test_windows=[[r, 2] for r in tests],
                 git_head=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                 code_sha256={name: file_sha256(ROOT/name) for name in CODE},
-                archive_sha256=file_sha256(archive_path), precision="complex128",
-                selection="64 largest mean physical tap powers over independent prior windows; no test CSI",
+                archive_sha256=archive_sha256, precision="complex128",
+                selection=f"{study['tap_count']} largest mean physical tap powers over independent prior windows; no test CSI",
+                support_frozen=bool(support),
                 prior="full-frame coefficients from the same independent windows for every candidate",
                 raw_csi=True, csi_compensation=False,
                 reference_use="test scoring and ideal detection only, after support is frozen",
@@ -114,15 +156,23 @@ def prepare(output, archive_path, meta):
     return path
 
 
-def freeze_supports(path, output):
+def freeze_supports(path, output, study):
     # This function reads independent priors only, never the test group.
     with h5py.File(path, "r") as h:
         powers = h["prior_power"][:]
     power = powers.mean(axis=0)
-    supports = delay_candidates(power)
+    count = study["tap_count"]
+    if count == 64 and not study["frozen_support"]:
+        supports = delay_candidates(power)
+    else:
+        indices = (np.asarray(study["frozen_support"]["indices"]) if study["frozen_support"]
+                   else np.sort(np.argsort(-power, kind="stable")[:count]))
+        supports = {"dense176": np.arange(176), f"selected{count}": indices}
     report = dict(selection_source="independent prior windows only", mean_power=power.tolist(),
+                  frozen_support=study["frozen_support"],
                   candidates={name: dict(indices=idx.tolist(), count=len(idx), span=int(idx[-1])+1,
                     prior_mean_coverage=float(np.mean(powers[:, idx].sum(axis=1)/powers.sum(axis=1))),
+                    prior_min_coverage=float(np.min(powers[:, idx].sum(axis=1)/powers.sum(axis=1))),
                     prior_aggregate_coverage=float(power[idx].sum()/power.sum())) for name, idx in supports.items()})
     write_json(output/"selected_support.json", report)
     return supports, report
@@ -200,10 +250,12 @@ def evaluate(path, output, meta, supports, backend):
                 errors = np.sum([frame[f"{algorithm}_errors"] for frame in frames], axis=(0, 2))
                 curves[algorithm] = dict(errors=errors.tolist(), ber=(errors/bits_per_snr).tolist())
             coverage = float(np.mean([frame["support_coverage"] for frame in frames]))
+            minimum_coverage = float(np.min([frame["support_coverage"] for frame in frames]))
             report = dict(identity=digest(dict(metadata=meta, name=name, delays=delays.tolist())),
                 frames=frames, snr_db=c["snr_db"], bits_per_snr=bits_per_snr, curves=curves,
                 mean_nmse_linear=nmse.tolist(), mean_nmse_db=(10*np.log10(nmse)).tolist(),
-                test_mean_coverage=coverage, support_only_nmse_floor_db=float(10*np.log10(max(1-coverage, 1e-300))),
+                test_mean_coverage=coverage, test_min_coverage=minimum_coverage,
+                support_only_nmse_floor_db=float(10*np.log10(max(1-coverage, 1e-300))),
                 coefficient_count=model.count*model.length, delay_count=model.length, support_span=int(delays[-1])+1,
                 cross_covariance_bytes=cross_bytes, build_seconds=build_seconds, estimate_seconds=solve_seconds,
                 estimator_diagnostics=diagnostics)
@@ -211,7 +263,7 @@ def evaluate(path, output, meta, supports, backend):
             results[name] = report
             print(f"{name}: coverage={coverage:.4%}, 30dB NMSE={nmse[-1]:.5g}, build={build_seconds:.2f}s", flush=True)
         # One common ideal reference for all candidates, with identical observations.
-        frames, oracle_coverages, oracle_counts = [], [], []
+        frames, oracle_coverages, oracle_counts, active_coverages = [], [], [], []
         for i, group in enumerate(groups):
             truth = group["truth"][:]
             single, full = detect(truth, observations[i], known, variances[i], noise, layout["data"], backend)
@@ -221,6 +273,7 @@ def evaluate(path, output, meta, supports, backend):
             ordered = np.sort(power, axis=-1)[:, ::-1]
             cumulative = np.cumsum(ordered, axis=-1)/power.sum(axis=-1)[:, None]
             oracle_coverages.extend(cumulative[:, 63].tolist())
+            active_coverages.extend(cumulative[:, meta["study"]["tap_count"]-1].tolist())
             oracle_counts.extend([[int(np.searchsorted(row, threshold)+1) for threshold in (.90, .95, .99)] for row in cumulative])
         ideal = np.sum(frames, axis=(0, 3))
         bits_per_snr = len(groups)*4*c["data_count"]*2
@@ -231,6 +284,8 @@ def evaluate(path, output, meta, supports, backend):
             best64_mean_coverage=float(np.mean(oracle_coverages)),
             best64_min_coverage=float(np.min(oracle_coverages)),
             best64_max_coverage=float(np.max(oracle_coverages)),
+            configured_tap_count=meta["study"]["tap_count"],
+            configured_count_best_mean_coverage=float(np.mean(active_coverages)),
             coverage_thresholds=[.90, .95, .99],
             minimum_taps_mean=np.mean(oracle_counts, axis=0).tolist(),
             minimum_taps_max=np.max(oracle_counts, axis=0).tolist())
@@ -246,23 +301,27 @@ def finish(output, meta, selection, results, reference, path):
                                          results=results, reference=reference))
     with (output/"summary.csv").open("w", encoding="utf-8-sig", newline="") as stream:
         writer = csv.writer(stream)
-        writer.writerow(["candidate", "snr_db", "tap_count", "coefficient_count", "prior_coverage", "test_coverage",
+        writer.writerow(["candidate", "snr_db", "tap_count", "coefficient_count", "prior_coverage", "test_coverage", "test_min_coverage",
                          "nmse_db", "single_ber", "full_ber", "bits_per_snr"])
         for name, r in results.items():
             for i, snr in enumerate(r["snr_db"]):
                 writer.writerow([name, snr, r["delay_count"], r["coefficient_count"],
-                    selection["candidates"][name]["prior_mean_coverage"], r["test_mean_coverage"],
+                    selection["candidates"][name]["prior_mean_coverage"], r["test_mean_coverage"], r["test_min_coverage"],
                     r["mean_nmse_db"][i], r["curves"]["single"]["ber"][i], r["curves"]["full"]["ber"][i], r["bits_per_snr"]])
-    colors = dict(zip(results, ("#222222", "#D55E00", "#009E73", "#0072B2"), strict=True))
+    colors = {name: ("#222222" if name.startswith("dense") else "#D55E00" if name.startswith("first")
+                     else "#009E73" if name.startswith("window") else "#0072B2") for name in results}
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.8), layout="constrained")
     for ax, algorithm in zip(axes, ("single", "full"), strict=True):
         for name, r in results.items():
             values = np.asarray(r["curves"][algorithm]["ber"])
             floor = .5/r["bits_per_snr"]
-            ax.semilogy(r["snr_db"], np.maximum(values, floor), "o-", color=colors[name], label=LABELS[name])
+            ax.semilogy(r["snr_db"], np.maximum(values, floor), "o-", color=colors[name], label=candidate_label(name, r["delay_count"]))
             zero = values == 0
             ax.scatter(np.asarray(r["snr_db"])[zero], np.full(zero.sum(), floor), facecolors="white", edgecolors=colors[name], zorder=5)
         ax.semilogy(meta["config"]["snr_db"], np.maximum(reference[algorithm]["ber"], floor), "k--", label="Ideal reference CSI")
+        zero = np.asarray(reference[algorithm]["ber"]) == 0
+        ax.scatter(np.asarray(meta["config"]["snr_db"])[zero], np.full(zero.sum(), floor),
+                   marker="D", facecolors="white", edgecolors="black", zorder=5)
         ax.set(title="Single-tap LMMSE" if algorithm == "single" else "Full-matrix LMMSE", xlabel="SNR (dB)", ylabel="BER")
         ax.grid(alpha=.25, which="both")
         ax.legend(fontsize=8)
@@ -272,7 +331,7 @@ def finish(output, meta, selection, results, reference, path):
     plt.close(fig)
     fig, ax = plt.subplots(figsize=(7.6, 4.8), layout="constrained")
     for name, r in results.items():
-        ax.plot(r["snr_db"], r["mean_nmse_db"], "o-", color=colors[name], label=LABELS[name])
+        ax.plot(r["snr_db"], r["mean_nmse_db"], "o-", color=colors[name], label=candidate_label(name, r["delay_count"]))
     ax.set(title="NCS1: mean full-matrix CSI NMSE, including omitted taps", xlabel="SNR (dB)", ylabel="Mean NMSE (dB)")
     ax.text(.03, .04, "Ideal reference: NMSE = 0 (-infinity dB)", transform=ax.transAxes, fontsize=9)
     ax.grid(alpha=.25)
@@ -287,10 +346,13 @@ def finish(output, meta, selection, results, reference, path):
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.7), layout="constrained")
     axes[0].plot(np.arange(len(native))/16, 10*np.log10(np.maximum(native/native.max(), 1e-12)))
     axes[0].set(title="Independent NCS1 recordings: native PDP", xlabel="Measured excess delay (ms)", ylabel="Relative power (dB)", ylim=(-60, 3))
-    indices = np.asarray(selection["candidates"]["selected64"]["indices"])
+    count = meta["study"]["tap_count"]
+    selected_name = f"selected{count}"
+    indices = np.asarray(selection["candidates"][selected_name]["indices"])
     axes[1].plot(np.arange(len(power)), 10*np.log10(np.maximum(power/power.max(), 1e-12)), label="Physical receiver PDP")
-    axes[1].scatter(indices, 10*np.log10(power[indices]/power.max()), s=17, color=colors["selected64"], label="Selected 64 taps", zorder=5)
-    axes[1].axvline(63.5, color=colors["first64"], linestyle="--", label="End of first 64 taps")
+    axes[1].scatter(indices, 10*np.log10(power[indices]/power.max()), s=12, color=colors[selected_name], label=f"Selected {count} taps", zorder=5)
+    if count != 176:
+        axes[1].axvline(count-.5, color="#D55E00", linestyle="--", label=f"End of first {count} taps")
     axes[1].axvline(175.5, color=".3", linestyle=":", label="End of baseline 176 taps")
     axes[1].set(title="Full-frame receiver PDP after actual RF/FIR chain", xlabel="Receiver delay index (zero based)", ylabel="Relative power (dB)",
                 xlim=(0, max(256, indices[-1]+10)), ylim=(-60, 3))
@@ -302,16 +364,17 @@ def finish(output, meta, selection, results, reference, path):
     plt.close(fig)
 
 
-def run(output, archive_path, backend, smoke=False):
+def run(output, archive_path, backend, smoke=False, *, study=None):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
-    meta = metadata(archive_path, backend, smoke)
+    study = load_study_config() if study is None else study
+    meta = metadata(archive_path, backend, smoke, study)
     manifest_path = output/"manifest.json"
     if manifest_path.exists() and json.loads(manifest_path.read_text(encoding="utf-8")) != meta:
         raise ValueError("Output directory belongs to a different support study")
     write_json(manifest_path, meta)
     path = prepare(output, archive_path, meta)
-    supports, selection = freeze_supports(path, output)
+    supports, selection = freeze_supports(path, output, study)
     results, reference = evaluate(path, output, meta, supports, backend)
     finish(output, meta, selection, results, reference, path)
     return output

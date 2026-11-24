@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+import h5py
+import json
 from scipy import linalg
 from scipy import sparse
 from types import SimpleNamespace
@@ -11,8 +13,9 @@ from data_generation.src.receiver.chain import full_frame_kernels
 from data_generation.src.receiver.delay_support import SelectedDelayDPSSModel, delay_candidates, profile_full_frame
 from data_generation.src.receiver.estimation import FrozenPrior
 from data_generation.src.receiver.pdd import JointEstimator, selected_components
+from data_generation.src.config import ROOT, digest, load_config
 from src.common.numerics import DenseBackend
-from src.evaluation.ncs1_delay_support import full_nmse
+from src.evaluation.ncs1_delay_support import freeze_supports, full_nmse, load_study_config
 
 
 def fixture():
@@ -114,3 +117,39 @@ def test_full_frame_profile_matches_explicit_physical_kernels_including_boundari
     taps = full_frame_kernels(operator, c, c["nfft"])
     np.testing.assert_allclose(coefficients, linalg.pinv(basis)@taps, atol=2e-15)
     np.testing.assert_allclose(power, np.mean(abs(taps)**2, axis=0), atol=9e-16)
+
+
+def test_default_176_support_is_frozen_independent_and_extends_beyond_the_old_prefix(tmp_path):
+    study = load_study_config()
+    support = study["frozen_support"]
+    c = load_config(ROOT/"configs/data/ncs1/dddd.json")
+    assert study["tap_count"] == support["tap_count"] == len(support["indices"]) == 176
+    assert support["frame_config_sha256"] == digest(c)
+    assert min(support["indices"]) == 33 and max(support["indices"]) == 220
+    assert {record for record, _ in support["prior_windows"]} == set(c["prior_records"])
+    assert not ({record for record, _ in support["prior_windows"]} & set(c["learning_dataset"]["records"]["test"]))
+    path = tmp_path/"physical.h5"
+    with h5py.File(path, "w") as h:
+        # A smaller smoke prior cannot silently change the frozen receiver support.
+        h.create_dataset("prior_power", data=np.ones((2, 1024)))
+        h.create_group("test")
+    supports, report = freeze_supports(path, tmp_path, study)
+    assert set(supports) == {"dense176", "selected176"}
+    np.testing.assert_array_equal(supports["dense176"], np.arange(176))
+    np.testing.assert_array_equal(supports["selected176"], support["indices"])
+    assert report["candidates"]["selected176"]["span"] == 221
+    legacy = load_study_config(tap_count=64)
+    assert legacy["tap_count"] == 64 and legacy["frozen_support"] is None
+
+
+def test_study_rejects_duplicate_frozen_delays(tmp_path):
+    study = load_study_config()
+    support = study.pop("frozen_support")
+    support["indices"][1] = support["indices"][0]
+    support_path = tmp_path/"bad_support.json"
+    support_path.write_text(json.dumps(support), encoding="utf-8")
+    study["support_file"] = str(support_path)
+    config_path = tmp_path/"study.json"
+    config_path.write_text(json.dumps(study), encoding="utf-8")
+    with pytest.raises(ValueError, match="sorted unique"):
+        load_study_config(config_path)

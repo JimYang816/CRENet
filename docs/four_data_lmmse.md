@@ -37,8 +37,8 @@ NMSE 为每帧每数据符号完整信道矩阵的线性 NMSE 先平均、再取
 ## NCS1 的 64 抽头支撑诊断
 
 ```bash
-python -m scripts.evaluate.ncs1_delay_support --device cpu --smoke --output outputs/smoke/ncs1_delay64_local
-python -m scripts.evaluate.ncs1_delay_support --device cuda --threads 4 --output outputs/smoke/ncs1_delay64
+python -m scripts.evaluate.ncs1_delay_support --tap-count 64 --device cpu --smoke --output outputs/smoke/ncs1_delay64_local
+python -m scripts.evaluate.ncs1_delay_support --tap-count 64 --device cuda --threads 4 --output outputs/smoke/ncs1_delay64
 ```
 
 该入口固定当前 CP=256、12 Hz、Q=24、512 数据和 256 导频，比较原连续 176 点、
@@ -70,6 +70,24 @@ CPU 冒烟模式仅取两帧先验和一帧测试，在 0、15、30 dB 验证链
 完整信道估计和 BER。即使在评分阶段允许为每个测试符号理想地重选 64 点，平均也仅覆盖
 80.35% 能量；理想覆盖 90%/95%/99% 能量平均至少需 106.55/138.75/176.00 点。
 这只是本次 5 帧测试的理想界，不是可实现的接收机选点方法。当前结果不支持将正式配置改为 64 点。
+
+## NCS1 的固定 176 点离散支撑实验
+
+NCS1 支撑实验默认读取 `configs/evaluation/ncs1_delay_support.json`，选择 176 个离散抽头，
+具体位置冻结在 `configs/data/ncs1/delay_support176.json`。这些位置直接取自上述 25 个独立先验窗口
+的平均物理 PDP，不因测试帧或 CPU 冒烟批次改变。配置同时记录原始归档哈希、帧配置哈希、
+源代码版本和先验窗口，运行前验证来源、数量、位置及记录划分。
+
+```bash
+python -m scripts.evaluate.ncs1_delay_support --device cpu --smoke --output outputs/smoke/ncs1_delay176_local
+python -m scripts.evaluate.ncs1_delay_support --device cuda --threads 4 --output outputs/smoke/ncs1_delay176
+```
+
+新对比仅包含连续 0–175 点与冻结的离散 176 点，两者待估系数均为 Q×L=24×176=4224。
+离散位置从索引 33 延伸到 220，重建的时延跨度为 221；不能将压缩后的 176 列当作连续 0–175 点。
+两者使用相同的 25 个先验窗口、5 个测试帧、发射数据、噪声、DPSS、模型误差项和无反馈 CSI 估计。
+平均完整矩阵 NMSE 包含所有遗漏的时延分量；输出也记录最差符号覆盖率及两种 LMMSE 的 BER。
+本配置用于当前 NCS1 支撑对比入口；两条信道共用的 `dddd.json` 帧基准和历史实验保持各自来源身份。
 
 ## 参考 CSI 辅助的 5 dB 误差补偿实验
 

@@ -1,0 +1,6 @@
+{
+  "channel": "NCS1",
+  "tap_count": 176,
+  "baseline_length": 176,
+  "support_file": "configs/data/ncs1/delay_support176.json"
+}
