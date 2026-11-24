@@ -14,7 +14,9 @@ from src.evaluation.ncs1_delay_support import load_study_config, run
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=ROOT/"configs/evaluation/ncs1_delay_support.json")
-    parser.add_argument("--tap-count", type=int, help="Override the configured count; 64 repeats the earlier four-candidate study")
+    counts = parser.add_mutually_exclusive_group()
+    counts.add_argument("--tap-count", type=int, help="Override the configured count; 64 repeats the earlier four-candidate study")
+    counts.add_argument("--sweep-counts", nargs="+", type=int, help="Increasing nested counts starting with the configured anchor, e.g. 176 184 192 208")
     parser.add_argument("--archive", type=Path, default=ROOT/"data/raw/watermark/WatermarkV1.zip")
     parser.add_argument("--output", type=Path, default=ROOT/"outputs/smoke/ncs1_delay176")
     parser.add_argument("--device", choices=("cpu", "cuda"), default=default_device())
@@ -28,7 +30,7 @@ def main():
         backend = DenseBackend(args.device)
         if backend.torch:
             backend.torch.set_num_threads(args.threads)
-        study = load_study_config(args.config, tap_count=args.tap_count)
+        study = load_study_config(args.config, tap_count=args.tap_count, sweep_counts=args.sweep_counts)
         run(output, args.archive.resolve(), backend, args.smoke, study=study)
 
 

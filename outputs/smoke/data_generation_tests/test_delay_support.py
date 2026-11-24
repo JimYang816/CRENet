@@ -153,3 +153,23 @@ def test_study_rejects_duplicate_frozen_delays(tmp_path):
     config_path.write_text(json.dumps(study), encoding="utf-8")
     with pytest.raises(ValueError, match="sorted unique"):
         load_study_config(config_path)
+
+
+def test_larger_tap_sweep_is_nested_and_keeps_the_frozen_anchor(tmp_path):
+    counts = [176, 184, 192, 208]
+    study = load_study_config(sweep_counts=counts)
+    path = tmp_path/"physical.h5"
+    with h5py.File(path, "w") as h:
+        h.create_dataset("prior_power", data=np.ones((2, 1024)))
+    supports, _ = freeze_supports(path, tmp_path, study)
+    previous = set(study["frozen_support"]["indices"])
+    for count in counts:
+        indices = supports[f"selected{count}"]
+        assert len(indices) == count and len(set(indices)) == count
+        assert previous.issubset(indices)
+        assert np.all(np.diff(indices) > 0)
+        previous = set(indices)
+    assert load_study_config(tap_count=208)["frozen_support"] is None
+    for bad in ([176, 176], [184, 192], [176, 192, 184], [176, 1025], [176, True]):
+        with pytest.raises(ValueError, match="Sweep counts"):
+            load_study_config(sweep_counts=bad)

@@ -107,6 +107,18 @@ Full-matrix BER 相对下降约 5.75%；0 dB 的 Full-matrix BER 基本相同且
 提升幅度有限，不能仅凭更高的能量覆盖宣称已解决 CSI 估计误差；这里也没有减少相对连续 L=176 的待估参数量。
 逐 SNR 的指标见 `summary.csv`，图表为 `ber_snr.png/pdf`、`nmse_snr.png/pdf` 和 `delay_profile.png/pdf`。
 
+### 增加离散抽头数的配对扫描
+
+```bash
+python -m scripts.evaluate.ncs1_delay_support --sweep-counts 176 184 192 208 --device cuda --threads 4 --output outputs/smoke/ncs1_delay_count_sweep
+```
+
+该入口在同一物理数据上比较连续 L=176 和离散 176、184、192、208 点，保持已冻结的 176 点作为公共子集，
+再按独立先验平均 PDP 排序补充抽头。所有支撑在读取测试参考 CSI 前固定；单次运行只生成一份配对物理数据。
+原来的 176 点默认配置不变。输出包含逐 SNR 的 BER、完整矩阵平均 NMSE 和能量覆盖统计，
+以及最高 SNR 下 NMSE/BER 随抽头数量变化的 `tap_count_tradeoff.png/pdf`。测试扫描只用于诊断收益，
+不自动根据这批测试帧修改默认抽头数。
+
 ## 参考 CSI 辅助的 5 dB 误差补偿实验
 
 为研究 CSI 误差降低时的均衡表现，可单独运行：
