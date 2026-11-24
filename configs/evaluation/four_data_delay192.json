@@ -1,0 +1,10 @@
+{
+  "channels": ["NOF1", "NCS1"],
+  "tap_count": 192,
+  "support_files": {
+    "NOF1": null,
+    "NCS1": "configs/data/ncs1/delay_support192.json"
+  },
+  "input_view": "raw",
+  "algorithms": ["single_tap_mmse", "full_matrix_lmmse"]
+}

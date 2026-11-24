@@ -53,8 +53,11 @@ def candidate_label(name, count):
     return f"Estimated CSI ({count} fixed physical taps)"
 
 
-def metadata(archive_path, backend, smoke, study):
-    c = load_config(ROOT/"configs/data/ncs1/dddd.json")
+def metadata(archive_path, backend, smoke, study, *, code_files=CODE):
+    channel = study["channel"]
+    if channel not in ("NOF1", "NCS1"):
+        raise ValueError("Unknown WATERMARK channel")
+    c = load_config(ROOT/f"configs/data/{channel.lower()}/dddd.json")
     if (c["frame_structure"], c["dpss_expected_count"], c["dpss_half_bandwidth_hz"]) != ("DDDD", 24, 12):
         raise ValueError("This receiver requires DDDD / Q24 / 12 Hz")
     prior_records = c["prior_records"][:2] if smoke else c["prior_records"]
@@ -66,7 +69,7 @@ def metadata(archive_path, backend, smoke, study):
     support = study["frozen_support"]
     if support:
         source_records = {record for record, _ in support["prior_windows"]}
-        if (support["frame_config_sha256"] != digest(c)
+        if (support["channel"] != channel or support["frame_config_sha256"] != digest(c)
                 or support["source_archive_sha256"] != archive_sha256
                 or not source_records.issubset(c["prior_records"]) or source_records & set(tests)
                 or any(start not in c["starts_seconds"] for _, start in support["prior_windows"])):
@@ -75,12 +78,12 @@ def metadata(archive_path, backend, smoke, study):
     c["delay_length"] = study["tap_count"]
     if smoke:
         c["snr_db"] = [0, 15, 30]
-    return dict(schema="ncs1-fixed192-delay-support-v1", config=c, frame_config_sha256=frame_config_sha256,
+    return dict(schema=f"{channel.lower()}-fixed192-delay-support-v1", config=c, frame_config_sha256=frame_config_sha256,
                 study=study, device=backend.device,
                 smoke=smoke, prior_windows=[[r, s] for r in prior_records for s in starts],
                 test_windows=[[r, 2] for r in tests],
                 git_head=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-                code_sha256={name: file_sha256(ROOT/name) for name in CODE},
+                code_sha256={name: file_sha256(ROOT/name) for name in code_files},
                 archive_sha256=archive_sha256, precision="complex128",
                 selection="192 frozen physical delays selected using independent prior windows only",
                 support_frozen=True,
@@ -100,7 +103,7 @@ def prepare(output, archive_path, meta):
                 return path
         raise ValueError("Existing physical data belong to a different study")
     c = meta["config"]
-    archive, receiver = WatermarkArchive(archive_path, "NCS1"), BlockedReceiver(c)
+    archive, receiver = WatermarkArchive(archive_path, c["channel"]), BlockedReceiver(c)
     basis, concentration = model_basis(c)
     partial = output/"physical.partial.h5"
     with h5py.File(partial, "w") as h:
@@ -297,14 +300,15 @@ def finish(output, meta, selection, results, reference, path):
         ax.set(title="Single-tap LMMSE" if algorithm == "single" else "Full-matrix LMMSE", xlabel="SNR (dB)", ylabel="BER")
         ax.grid(alpha=.25, which="both")
         ax.legend(fontsize=8)
-    fig.suptitle(f"NCS1, DDDD, Q=24 | {r['bits_per_snr']:,} bits/SNR | open markers: zero errors")
+    channel = meta["config"]["channel"]
+    fig.suptitle(f"{channel}, DDDD, Q=24 | {r['bits_per_snr']:,} bits/SNR | open markers: zero errors")
     for ext in ("png", "pdf"):
         fig.savefig(output/f"ber_snr.{ext}", dpi=180)
     plt.close(fig)
     fig, ax = plt.subplots(figsize=(7.6, 4.8), layout="constrained")
     for name, r in results.items():
         ax.plot(r["snr_db"], r["mean_nmse_db"], "o-", color=colors[name], label=candidate_label(name, r["delay_count"]))
-    ax.set(title="NCS1: mean full-matrix CSI NMSE, including omitted taps", xlabel="SNR (dB)", ylabel="Mean NMSE (dB)")
+    ax.set(title=f"{channel}: mean full-matrix CSI NMSE, including omitted taps", xlabel="SNR (dB)", ylabel="Mean NMSE (dB)")
     ax.text(.03, .04, "Ideal reference: NMSE = 0 (-infinity dB)", transform=ax.transAxes, fontsize=9)
     ax.grid(alpha=.25)
     ax.legend(fontsize=8)
@@ -317,7 +321,7 @@ def finish(output, meta, selection, results, reference, path):
     power /= power.sum()
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.7), layout="constrained")
     axes[0].plot(np.arange(len(native))/16, 10*np.log10(np.maximum(native/native.max(), 1e-12)))
-    axes[0].set(title="Independent NCS1 recordings: native PDP", xlabel="Measured excess delay (ms)", ylabel="Relative power (dB)", ylim=(-60, 3))
+    axes[0].set(title=f"Independent {channel} recordings: native PDP", xlabel="Measured excess delay (ms)", ylabel="Relative power (dB)", ylim=(-60, 3))
     count = meta["study"]["tap_count"]
     selected_name = f"selected{count}"
     indices = np.asarray(selection["candidates"][selected_name]["indices"])

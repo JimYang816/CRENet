@@ -1,6 +1,6 @@
 # 四数据符号 LMMSE 小实验
 
-本节记录双信道历史链路基准；当前 NCS1 默认采用下文的固定 192 点支撑。该历史小实验使用 `configs/data/{nof1,ncs1}/dddd.json` 与
+本节先记录 L=176 双信道历史链路基准；当前双信道 192 点小实验见下文“NOF1 与 NCS1 的离散 192 点小实验”。该历史小实验使用 `configs/data/{nof1,ncs1}/dddd.json` 与
 `configs/evaluation/four_data_lmmse.json`。两条信道使用相同的 D-D-D-D 帧、
 1024 点 FFT、256 点循环前缀、512 个数据子载波、256 个梳状导频、128 个带内保护空载波和两侧各 64 个边缘空载波。
 时间域 DPSS 基跨完整帧和循环前缀，半带宽 12 Hz，固定 Q=24、延迟支撑 L=176。
@@ -33,6 +33,33 @@ NMSE 为每帧每数据符号完整信道矩阵的线性 NMSE 先平均、再取
 当前保留的小实验结果位于 `outputs/smoke/four_data_cp256_q24_20261123/`；
 完整物理波形保留在服务器的同名目录。本轮旧 CP/Q 实验的波形、结果和对比图已清理。
 历史对比脚本仍可作为研究工具，其输入必须通过物理参数及来源校验。
+
+## NOF1 与 NCS1 的离散 192 点小实验
+
+入口为 `scripts/evaluate/four_data_delay192.py`，配置为
+`configs/evaluation/four_data_delay192.json`。两条信道均使用 192 个离散物理时延位置，
+保留 `dddd.json` 的 D-D-D-D、CP=256、512 数据、256 梳状导频以及 12 Hz / Q=24；
+运行时将估计系数的时延列数设为 192，每帧待估系数为 24×192=4608。
+`dddd.json` 中的 L=176 仅供历史入口使用，不能据此判断本入口的实际抽头数。
+
+NOF1 从记录 51–55 在 2、8、14、20、26 s 的 25 个独立先验窗口计算完整物理 PDP，
+按平均功率选择最大的 192 个位置，先冻结再估计测试 CSI。NCS1 复用
+`configs/data/ncs1/delay_support192.json`，完整运行时核对这 25 个先验窗口能否重新选出相同位置。
+两条信道分别选点，不将选中的物理位置重新排列成 0–191。
+测试采用记录 11、15、19、23、27 的 2 s 帧，扫描 0、5、10、15、20、25、30 dB，
+每条信道每个 SNR 为 20,480 bit。CSI 为接收机原始联合估计，不使用参考 CSI 补偿。
+
+```bash
+python -m scripts.evaluate.four_data_delay192 --device cpu --threads 4 --smoke --output outputs/smoke/four_data_delay192_local
+python -m scripts.evaluate.four_data_delay192 --device cuda --threads 4 --output outputs/smoke/four_data_delay192_20261124
+```
+
+CPU 冒烟模式仅用两个先验窗口、一帧测试及 0、15、30 dB；其中 NOF1 选点只用于验证流程，
+不作为完整小实验的固定支撑。完整运行在服务器进行，物理波形不传入 Git。
+输出包含双信道 `ber_snr.png/pdf`、`nmse_snr.png/pdf`、`summary.csv` 和逐帧误码；
+各信道子目录另外保存 `frozen_support192.json`、PDP、支撑覆盖、先验/测试划分及代码和数据哈希。
+平均 NMSE 对每帧每符号的完整矩阵线性误差比先平均再取 dB，计入所有未选时延的误差。
+理想参考检测使用同一发射数据和噪声，仅用于对照；BER 空心点表示零实测误码，显示在半误码计数下限。
 
 ## NCS1 的固定 192 点时延支撑
 

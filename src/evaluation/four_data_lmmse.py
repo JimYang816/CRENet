@@ -355,7 +355,9 @@ def finish(output, metadata, reports):
         ax.set(title=channel, xlabel="SNR (dB)", ylabel="Mean full-matrix CSI NMSE (dB)", xticks=r["snr_db"])
         ax.grid(alpha=.25)
         ax.legend()
-    fig.suptitle(f"4D, CP={cp}, 512 data + 256 pilots | 12 Hz / Q={order} / L=176")
+    lengths = {metadata["configs"][channel]["delay_length"] for channel in reports}
+    length_label = str(next(iter(lengths))) if len(lengths) == 1 else "channel-specific"
+    fig.suptitle(f"4D, CP={cp}, 512 data + 256 pilots | 12 Hz / Q={order} / L={length_label}")
     fig.savefig(output/"nmse_snr.png", dpi=180)
     fig.savefig(output/"nmse_snr.pdf")
     plt.close(fig)
