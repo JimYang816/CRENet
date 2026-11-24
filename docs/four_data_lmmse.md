@@ -116,6 +116,18 @@ python -m scripts.evaluate.four_data_delay192_compensation --device cuda --threa
 输出 BER-SNR 与 NMSE-SNR 的 PNG/PDF、`summary.csv`、逐帧误码与来源记录。
 图中包含原始、参考辅助与理想参考对照；CSV 额外记录目标 NMSE 和公共误差系数。
 
+当前指定端点版本的计算代码为 `7367a1a`，本地 15 项检查与服务器 40 项回归检查通过。
+7 个 SNR 的实际平均 NMSE 均达到目标，最大绝对偏差约 `3.6e-15 dB`；原始/理想参考误码
+与源实验完全一致，原始物理数据哈希未变。结果目录的 `verification.json` 保存完整核验记录。
+每信道为 5 帧、每 SNR 为 20,480 bit，端点及 30 dB 误码指标为：
+
+| 信道 | 0 dB 平均 NMSE | 30 dB 平均 NMSE | 30 dB Single-tap BER | 30 dB Full-matrix BER |
+| --- | ---: | ---: | ---: | ---: |
+| NOF1 | -9.69 dB | -16.05 dB | 0.0163086 | 0.00688477 |
+| NCS1 | -5.24 dB | -9.13 dB | 0.144531 | 0.0269043 |
+
+图、CSV 和逐帧指标已带回本地，原始完整物理数据保留在服务器。
+
 前一版非整数端点的计算代码为 `b09d43c`，已验收结果保留在
 `outputs/smoke/four_data_delay192_target_nmse_noninteger_20261124/`，用于复核先前结果。
 本节目标表与默认命令均对应当前指定端点。
