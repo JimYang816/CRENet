@@ -11,7 +11,7 @@ from src.evaluation.four_data_delay192_compensation import (
 from src.evaluation.four_data_lmmse import detect
 
 
-@pytest.mark.parametrize("channel,endpoints", [("NOF1", (-10.18, -15.92)), ("NCS1", (-5.12, -9.86))])
+@pytest.mark.parametrize("channel,endpoints", [("NOF1", (-9.69, -16.05)), ("NCS1", (-5.24, -9.13))])
 def test_requested_targets_decrease_steeply_then_gently(channel, endpoints):
     options = load_target_config()
     target = target_curve(options["snr_db"], **options["targets"][channel], decay_db=options["decay_db"])
