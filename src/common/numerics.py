@@ -1,6 +1,8 @@
 """Explicit complex128 CPU/CUDA backend; no implicit precision reduction."""
 from __future__ import annotations
 
+import sys
+
 import numpy as np
 from scipy import linalg
 
@@ -40,7 +42,11 @@ class DenseBackend:
         if self.torch:
             return self.torch.linalg.eigh(a)
         try:
-            return linalg.eigh(a, check_finite=False, driver="evd")
+            # Windows LAPACK can silently return inaccurate EVD/EV vectors
+            # even for small positive-definite complex matrices. EVR agrees
+            # with direct dense solves on that platform.
+            driver = "evr" if sys.platform == "win32" else "evd"
+            return linalg.eigh(a, check_finite=False, driver=driver)
         except linalg.LinAlgError:
             # Some Windows LAPACK builds fail divide-and-conquer on valid
             # rank-deficient complex covariances. EVR preserves the same solve.

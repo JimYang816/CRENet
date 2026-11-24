@@ -9,9 +9,12 @@ from data_generation.src.receiver.dpss import FULL_FRAME_DOMAIN
 from src.common.numerics import hermitian
 
 
-def input_windows(known, length):
+def input_windows(known, length, *, delay_indices=None):
     n = known.shape[1]
-    return ifft(known)[:, (np.arange(n)[:, None]-np.arange(length)) % n]
+    delays = np.arange(length) if delay_indices is None else np.asarray(delay_indices)
+    if delays.shape != (length,) or not np.issubdtype(delays.dtype, np.integer):
+        raise ValueError("Delay indices must contain one integer per coefficient column")
+    return ifft(known)[:, (np.arange(n)[:, None]-delays) % n]
 
 
 @dataclass
@@ -58,11 +61,14 @@ class FrozenPrior:
 
     def separable_blocks(self):
         """Retain each delay block's temporal law and within-block correlation."""
-        if not self.delay_block_size or self.delay_block_size == self.model.length:
+        if not self.delay_block_size or self.model.delays[-1] < self.delay_block_size:
             yield slice(0, self.model.length), self.temporal_covariance, self.delay_covariance
             return
-        for start in range(0, self.model.length, self.delay_block_size):
-            select = slice(start, min(start+self.delay_block_size, self.model.length))
+        # Keep the original physical delay blocks when some taps are omitted.
+        groups = self.model.delays//self.delay_block_size
+        boundaries = np.r_[0, np.flatnonzero(np.diff(groups))+1, self.model.length]
+        for start, end in zip(boundaries[:-1], boundaries[1:], strict=True):
+            select = slice(start, end)
             coeff = self.coefficients[:, :, select]
             time = np.einsum("mql,mrl->qr", coeff, coeff.conj(), optimize=True)/len(coeff)
             delay = np.einsum("mql,mqk->lk", coeff, coeff.conj(), optimize=True)/len(coeff)

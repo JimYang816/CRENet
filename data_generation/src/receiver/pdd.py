@@ -41,7 +41,8 @@ def selected_components(prior, known, masks, backend):
     covariance = backend.array(np.zeros((size, size), complex))
     cross = np.zeros((q, length, size), complex)
     v = prior.model.sampled_basis.reshape(SYMBOL_COUNT, n, q)
-    x = input_windows(known, length)
+    delays = prior.model.delays
+    x = input_windows(known, length, delay_indices=delays)
     # E[x(n-l) x(m-k)^*] = ifft(data_mask)[(n-m)-(l-k)].
     correlation = np.fft.ifft(np.fft.ifftshift(masks["data"].astype(float)))
     difference = (np.arange(n)[:, None]-np.arange(n)) % n
@@ -63,7 +64,7 @@ def selected_components(prior, known, masks, backend):
         del dz, z, factors
         # ICI from independent unknown QPSK in each D, including colored terms.
         rho = np.zeros(n, complex)
-        indices = np.arange(width)
+        indices = delays[select]
         np.add.at(rho, ((indices[:, None]-indices) % n).ravel(), delay.ravel())
         stationary = np.fft.ifft(np.fft.fft(rho)*np.fft.fft(correlation))[difference]
         for s in data_symbols:

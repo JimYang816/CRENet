@@ -23,6 +23,11 @@ class DPSSModel:
         return self.basis.shape[1]
 
     @property
+    def delays(self):
+        """Physical circular delays corresponding to the coefficient columns."""
+        return np.arange(self.length)
+
+    @property
     def sampled_basis(self):
         c = self.c
         positions = np.concatenate([s*(c["nfft"]+c["cp"])+c["cp"]-c["fft_advance"]+np.arange(c["nfft"]) for s in range(SYMBOL_COUNT)])
