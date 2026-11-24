@@ -4,12 +4,12 @@
 
 ## 文档与当前实验范围
 
-- 当前阶段先验证 D-D-D-D 帧的 Single-tap LMMSE 与 Full-matrix LMMSE，使用 `configs/data/{nof1,ncs1}/dddd.json`：循环前缀 256 点，每符号 512 数据和 256 梳状导频，DPSS 半带宽 12 Hz、固定 Q=24、L=176。小实验入口及结果定义见 `docs/four_data_lmmse.md`。
-- CSI 直接使用接收机原始估计，不根据参考 CSI 或固定 NMSE 目标调整。参考 CSI 仅用于独立先验构造、理想参考均衡、训练监督和误差评分。
-- 历史 P-D-D-P 数据集、补偿视图、训练检查点及缓存不适用于新的 D-D-D-D 帧。后续学习型算法实验须先生成并验收新帧数据，再适配四个数据符号的训练与评测代码；当前小实验不代表正式数据集已完成。
+- 当前使用 D-D-D-D 帧、FFT=1024、循环前缀 256 点、每符号 512 数据与 256 梳状导频、12 Hz / Q=24、192 个物理时延抽头。基础帧为 `configs/data/{nof1,ncs1}/dddd.json`，当前入口覆盖历史模型默认的 `delay_length=176`，实际估计和正式导出均为 192 点。入口及结果定义见 `docs/four_data_lmmse.md`。
+- `raw` 视图保留接收机原始 CSI。用户指定的正式数据默认使用 `reference_assisted` 视图：NOF1 平均 NMSE 从 -9.69 到 -16.05 dB，NCS1 从 -5.24 到 -9.13 dB，采用尺度 10 dB 的先陡后缓曲线；训练、验证、测试分别按全量线性 NMSE 均值校准。该视图明确使用完整参考矩阵，属于理想辅助数据，不能解释为真实接收机的无参考估计性能。
+- 正式新帧数据已在服务器 `data/processed/{nof1,ncs1}_dddd/` 生成并验收，入口为 `data_generation/scripts/four_data.py`，配置为 `configs/data/four_data_dataset.json`，读取器为 `src.data.FourDataDataset`。每信道训练/验证/测试含 3,675/525/4,200 个帧样本（计入 7 个 SNR，每样本 4 个数据符号）。历史 P-D-D-P 数据集、训练检查点及缓存不适用；后续学习型算法须适配四符号和新协议，禁止直接使用旧两符号训练入口。
 - CRENet 的原有8层残差 MMSE Unfolding 与论文消融方案可作为后续设计参考，但不得直接复用旧参数条件下的权重或结果。
 - `README.md` 仅保留项目简要说明及文件目录结构；未经用户明确允许，不得修改。
-- NCS1 与 NOF1 使用 `configs/data/` 中的两份 D-D-D-D 配置，共用同一实际 DPSS 时间基与延迟支撑；`pddp.json` 仅为历史帧配置。
+- NCS1 与 NOF1 使用两份 D-D-D-D 配置并共用同一实际 DPSS 时间基；各自冻结 192 个物理时延位置，保留真实索引。`pddp.json` 仅为历史帧配置。
 - 原始 WATERMARK 源包放在 `data/raw/watermark/`；生成数据、缓存和实验结果不得提交到 Git。
 
 ## 实现约定

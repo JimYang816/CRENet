@@ -65,7 +65,7 @@ NOF1 -9.69 → -16.05 dB，NCS1 -5.24 → -9.13 dB，尺度为 10 dB。
 两信道的保守未压缩存储上界合计约 49.2 GiB。
 
 ```bash
-python -m data_generation.scripts.four_data all --device cuda --threads 4 --workers 6 --worker-threads 2
+OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 /home/fay/anaconda3/envs/jimyang/bin/python -m data_generation.scripts.four_data all --device cuda --threads 4 --workers 6 --worker-threads 2
 ```
 
 每个物理窗口与帧在写入并刷新后提交完成标记，重复运行相同命令会续跑未完成部分。
@@ -85,6 +85,16 @@ with FourDataDataset("data/processed/nof1_dddd/train.h5") as dataset:
     inputs, labels = dataset[0]  # 默认参考辅助 CSI，包含四个数据符号
 # 原始接收机估计视图：FourDataDataset(path, input_view="raw")
 ```
+
+本次正式生成代码为 `ad3a007`，本地 24 项检查、服务器 49 项检查及双信道真实 CPU 冒烟通过。
+两信道共 8 个 HDF5 文件已完成生成、全量逐帧验收及 SHA-256 复核，两个信道的 DPSS 时间基哈希相同。
+NOF1 占用约 12.40 GiB，NCS1 约 5.67 GiB，合计约 18.07 GiB。
+训练、验证、测试各自的 7 个 SNR 平均 NMSE 均达到上述曲线。
+
+服务器首次准备模型时发生 SciPy/OpenBLAS 外部崩溃，未写入样本；统一库线程数后恢复并全部验收通过。
+实际成功运行使用 `OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4`，
+主进程 4 线程、6 个物理工作进程、每工作进程 2 线程。恢复记录见 `runtime.json`，数值库版本与环境见
+`numerical_runtime.json`；总验收为运行目录的 `verification.json`。
 
 ## 历史 L=176 链路基准
 
