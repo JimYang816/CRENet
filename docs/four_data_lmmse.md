@@ -23,7 +23,7 @@
 | `configs/evaluation/ncs1_delay_support.json` | 共用接收机及原始实验代码身份的依赖 |
 
 训练、统一评测、历史 P-D-D-P/L=176 入口仍引用其独立配置；`configs/backups/` 保存正式模型的参数来源。
-依赖审计确认现有 13 份独立配置与 20 份备份均有保留用途，当前没有孤立的端点备选配置。
+清理时依赖审计确认 13 份独立配置与 20 份备份均有保留用途，没有孤立的端点备选配置。
 本轮清理旧结果目录内的运行配置快照及缓存，所有保留配置的 SHA-256 均未变化。
 
 本地清理 3 个目录，服务器清理 13 个目录，服务器释放约 438 MiB。
@@ -34,6 +34,57 @@
 `cleanup_configuration_local.json` 与 `cleanup_configuration_remote.json`。
 清理后本地 15 项与服务器 40 项现有检查通过，原始物理数据身份、当前目标曲线和独立 PDP 来源均复核通过；
 验证临时目录已随测随清。
+
+## 正式 D-D-D-D 训练、验证与测试数据
+
+正式入口为 `data_generation/scripts/four_data.py`，协议选项为 `configs/data/four_data_dataset.json`。
+沿用上述物理帧、独立 25 窗口先验及两信道冻结的 192 个物理抽头，直接复用已验收原始小实验的先验。
+原始 CSI 的联合估计不读取本窗口参考矩阵；参考矩阵用于独立误差评分和用户指定的参考辅助补偿。
+默认输入视图为 `reference_assisted`，并保留显式 `raw` 视图。
+
+每信道按现有 `learning_dataset` 划分 35/5/10 条记录，窗口起点为 2、4、…、30 s。
+训练、验证、测试记录互斥，且与先验记录 51–55 和保留的 CSI 验收记录 56–60 互斥。
+所有测试重复均有独立的发射数据和噪声种子；同一帧在各 SNR 下使用配对的标准噪声。
+
+| 划分 | 物理窗口 | 每窗口重复 | 帧数 / SNR | 含 7 个 SNR 的帧样本数 |
+| --- | ---: | ---: | ---: | ---: |
+| train | 525 | 1 | 525 | 3,675 |
+| validation | 75 | 1 | 75 | 525 |
+| test | 150 | 4 | 600 | 4,200 |
+
+每个样本包含 4 个数据符号、4,096 bit。三套数据都使用当前目标配置的 7 点曲线：
+NOF1 -9.69 → -16.05 dB，NCS1 -5.24 → -9.13 dB，尺度为 10 dB。
+默认 `compensation_calibration=per_split`，每个划分按其完整线性 NMSE 均值计算公共 SNR 误差系数，
+同一 SNR 的所有帧和符号共用系数。各划分独立完成参考辅助校准，测试参考信息不参与训练划分的系数计算。
+此视图属于明确标记的理想参考辅助数据，不能解释为真实接收机的无参考 CSI 估计性能。
+
+正式文件写入 `data/processed/{nof1,ncs1}_dddd/`，每个目录包含 `model.h5`、`train.h5`、
+`validation.h5`、`test.h5` 和验收 `manifest.json`。完整 1024 点物理参考抽头以 complex64 每窗口存一次，
+原始估计以 24×192 complex64 系数存储；补偿矩阵按参考、原始系数和冻结误差系数重建，保留全部延迟位置。
+物理构造和估计使用 complex128，所有验收与补偿使用落盘精度定义的参考和原始系数，避免精度口径不一致。
+两信道的保守未压缩存储上界合计约 49.2 GiB。
+
+```bash
+python -m data_generation.scripts.four_data all --device cuda --threads 4 --workers 6 --worker-threads 2
+```
+
+每个物理窗口与帧在写入并刷新后提交完成标记，重复运行相同命令会续跑未完成部分。
+运行身份固定生成代码哈希、当前配置、原始信道归档和独立先验来源；参数变化须使用新的运行身份与输出目录。
+验收与运行记录写入 `outputs/experiment/dddd_delay192_assisted_20261124/{nof1,ncs1}/`，
+总验收清单为同一运行目录的 `dataset_manifest.json`。
+
+验收逐窗口检查完整参考哈希，逐帧检查数据、噪声、随机种子、SNR、完整矩阵 NMSE 和补偿均值，
+并通过显式完整矩阵检查四个符号的载波/标签/导频消除。BER-SNR 对每个划分均匀抽取最多 16 帧做诊断，
+报告明确记录样本身份和比特数；NMSE-SNR 汇总该划分的全部帧。
+
+四符号读取接口与历史 P-D-D-P 接口分离，历史两数据符号训练器须适配后再用于本数据：
+
+```python
+from src.data import FourDataDataset
+with FourDataDataset("data/processed/nof1_dddd/train.h5") as dataset:
+    inputs, labels = dataset[0]  # 默认参考辅助 CSI，包含四个数据符号
+# 原始接收机估计视图：FourDataDataset(path, input_view="raw")
+```
 
 ## 历史 L=176 链路基准
 

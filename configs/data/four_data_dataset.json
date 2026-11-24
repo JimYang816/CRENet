@@ -1,0 +1,10 @@
+{
+  "schema": "watermark-dddd-delay192-compact-v1",
+  "channels": ["NOF1", "NCS1"],
+  "source_study": "outputs/smoke/four_data_delay192_20261124",
+  "target_config": "configs/evaluation/four_data_delay192_compensation.json",
+  "compensation_calibration": "per_split",
+  "default_input_view": "reference_assisted",
+  "ber_diagnostic_frames_per_split": 16,
+  "reference_dtype": "complex64"
+}
