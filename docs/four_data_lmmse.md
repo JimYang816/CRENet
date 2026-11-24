@@ -1,5 +1,42 @@
 # 四数据符号 LMMSE 小实验
 
+## 当前配置与保留结果
+
+当前使用 D-D-D-D、FFT=1024、CP=256、512 数据与 256 梳状导频、12 Hz / Q=24，
+两条信道均估计 192 个物理时延抽头。原始 CSI 和参考辅助结果分别保留在：
+
+| 用途 | 目录 |
+| --- | --- |
+| 双信道 192 点原始 CSI、基线指标与完整物理数据 | `outputs/smoke/four_data_delay192_20261124/` |
+| 当前指定端点的参考辅助指标、图表与核验记录 | `outputs/smoke/four_data_delay192_target_nmse_specified_20261124/` |
+
+参考辅助目标为 NOF1 -9.69 → -16.05 dB、NCS1 -5.24 → -9.13 dB，使用尺度 10 dB 的先陡后缓指数曲线。
+它包含测试参考矩阵的完整支撑，属于理想辅助敏感性实验；原始 CSI 基线保持不变。
+直接复现依赖为：
+
+| 配置 | 用途 |
+| --- | --- |
+| `configs/data/{nof1,ncs1}/dddd.json` | 两条信道的基础物理帧和数据划分 |
+| `configs/data/ncs1/delay_support192.json` | 冻结的 NCS1 物理选点与独立先验来源 |
+| `configs/evaluation/four_data_delay192.json` | 双信道 192 点原始 CSI 实验 |
+| `configs/evaluation/four_data_delay192_compensation.json` | 当前指定端点与补偿曲线 |
+| `configs/evaluation/ncs1_delay_support.json` | 共用接收机及原始实验代码身份的依赖 |
+
+训练、统一评测、历史 P-D-D-P/L=176 入口仍引用其独立配置；`configs/backups/` 保存正式模型的参数来源。
+依赖审计确认现有 13 份独立配置与 20 份备份均有保留用途，当前没有孤立的端点备选配置。
+本轮清理旧结果目录内的运行配置快照及缓存，所有保留配置的 SHA-256 均未变化。
+
+本地清理 3 个目录，服务器清理 13 个目录，服务器释放约 438 MiB。
+旧端点、L=176、固定 5 dB 以及单 NCS1 重复小实验已清理，测试源码与正式模型来源继续保留。
+单 NCS1 的先验与当前原始数据一致，独立选点来源已迁入
+`outputs/smoke/four_data_delay192_20261124/ncs1/support_selection_provenance.json`。
+逐文件删除清单、哈希和保留项校验见指定端点结果目录的
+`cleanup_configuration_local.json` 与 `cleanup_configuration_remote.json`。
+清理后本地 15 项与服务器 40 项现有检查通过，原始物理数据身份、当前目标曲线和独立 PDP 来源均复核通过；
+验证临时目录已随测随清。
+
+## 历史 L=176 链路基准
+
 本节先记录 L=176 双信道历史链路基准；当前双信道 192 点小实验见下文“NOF1 与 NCS1 的离散 192 点小实验”。该历史小实验使用 `configs/data/{nof1,ncs1}/dddd.json` 与
 `configs/evaluation/four_data_lmmse.json`。两条信道使用相同的 D-D-D-D 帧、
 1024 点 FFT、256 点循环前缀、512 个数据子载波、256 个梳状导频、128 个带内保护空载波和两侧各 64 个边缘空载波。
@@ -30,9 +67,8 @@ NMSE 为每帧每数据符号完整信道矩阵的线性 NMSE 先平均、再取
 当前 CP=256、Q=24 时，12 Hz DPSS 累计尾能量比约为 `5.60e-5`，高于配置中的 `1e-5` 自动选阶阈值；
 固定 Q=24 优先，阈值只作为诊断，不改变指定阶数。
 
-当前保留的小实验结果位于 `outputs/smoke/four_data_cp256_q24_20261123/`；
-完整物理波形保留在服务器的同名目录。本轮旧 CP/Q 实验的波形、结果和对比图已清理。
-历史对比脚本仍可作为研究工具，其输入必须通过物理参数及来源校验。
+该 L=176 小实验及其物理波形、旧固定 5 dB 补偿结果已清理，当前保留项见文首。
+历史对比脚本仍可作为研究工具，重现时须重新生成对应输入并通过物理参数及来源校验。
 
 ## NOF1 与 NCS1 的离散 192 点小实验
 
@@ -128,9 +164,8 @@ python -m scripts.evaluate.four_data_delay192_compensation --device cuda --threa
 
 图、CSV 和逐帧指标已带回本地，原始完整物理数据保留在服务器。
 
-前一版非整数端点的计算代码为 `b09d43c`，已验收结果保留在
-`outputs/smoke/four_data_delay192_target_nmse_noninteger_20261124/`，用于复核先前结果。
-本节目标表与默认命令均对应当前指定端点。
+前一版自动选择的非整数端点已由当前指定端点取代，旧结果及其运行配置快照已清理。
+历史参数可由计算代码 `b09d43c` 复核；本节目标表与默认入口均对应当前指定端点。
 
 ## NCS1 的固定 192 点时延支撑
 
@@ -152,9 +187,9 @@ CPU 冒烟模式仅用两个先验窗口、一帧测试及 0、15、30 dB，选�
 输出仅包含 192 点原始 CSI 及理想参考检测结果，包括平均完整矩阵 NMSE-SNR、两种 LMMSE 的 BER-SNR、
 PDP、抽头索引与能量覆盖、代码和数据身份。NMSE 包含全部遗漏时延分量，按帧/符号的线性误差比先平均再取 dB。
 
-当前保留结果为 `outputs/smoke/ncs1_delay192_20261124/`，完整物理数据留在服务器。
-本轮其他抽头数的配置、对比结果和 CPU 缓存已清理；选点来源通过配置中的原始归档哈希、
-源代码提交、独立先验窗口及 PDP 哈希复核，保留结果中的 `selection_provenance.json` 记录迁移验证来源。
+该单信道结果已并入当前双信道 192 点原始实验，重复目录与物理数据已清理。
+独立先验和 PDP 与保留的原始数据核对一致；原始归档、源代码、选点和评分来源记录见
+`outputs/smoke/four_data_delay192_20261124/ncs1/support_selection_provenance.json`。
 
 固定 192 点独立运行的计算代码为 `5c15dd4`。本地相关测试通过，服务器 19 项接收机及检测器测试通过；
 25 个先验窗口、5 个测试帧和 7 个 SNR 的 NMSE、BER 及理想参考误码计数均复现选定方案，PDP 哈希也一致。
@@ -168,16 +203,14 @@ PDP、抽头索引与能量覆盖、代码和数据身份。NMSE 包含全部遗
 | 30 dB Single-tap BER | 0.16821 |
 | 30 dB Full-matrix BER | 0.13633 |
 
-本轮清理了本地 6 个旧支撑实验/CPU 缓存目录及服务器 3 个旧支撑实验目录；
-删除明细分别记录在保留结果目录的 `cleanup_local.json` 与 `cleanup_remote.json`。
+当前单信道原始指标和完整物理数据保留在双信道原始目录的 `ncs1/` 下，
+本次统一清理明细见文首所列的两份配置清理记录。
 
-## 参考 CSI 辅助的 5 dB 误差补偿实验
+## 历史参考 CSI 辅助的 5 dB 误差补偿实验
 
-为研究 CSI 误差降低时的均衡表现，可单独运行：
-
-```bash
-python -m scripts.evaluate.four_data_csi_compensation --device cuda --threads 4
-```
+固定 5 dB 入口 `scripts/evaluate/four_data_csi_compensation.py` 保留作历史研究工具。
+旧输入和结果已清理，重现时须先生成 L=176 原始实验并显式传入新的 `--source` 和 `--output`；
+当前指定端点实验使用前述 `four_data_delay192_compensation` 入口。
 
 该实验读取上述 CP=256、Q=24 物理数据，重新计算原始 CSI 并核对原始及参考 CSI 的误码。
 对每帧、每个 SNR 和每个数据符号，将原始 CSI 补零到参考矩阵的完整延迟支撑后构造
