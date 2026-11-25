@@ -1,5 +1,9 @@
 # CP=80 ms 的双信道 LMMSE 小实验
 
+当前主对比使用**参考辅助补偿后的 CSI**，入口为
+`scripts/evaluate/four_data_cp80_compensation.py`，输出到
+`outputs/smoke/four_data_cp80_assisted_20261125/`。下文原始 CSI 实验保留为补偿来源和审计对照。
+
 入口为 `scripts/evaluate/four_data_cp80.py`，配置为
 `configs/evaluation/four_data_cp80.json`。CP 按基带 6 kHz 换算为 **480 点**，
 从发射波形、接收 FFT 窗口到全帧 DPSS 先验均按新 CP 重新构造。
@@ -67,3 +71,28 @@ NCS1 对应泄漏比例为 0，最大预测误差比为 `4.2543e-9`。
 并从物理观测额外复算 30 dB 完美 CSI 的逐符号误码。
 `transfer_manifest.json` 保存全部带回文件的 SHA-256，以及留在服务器的两份物理 HDF5 的路径、
 大小、运行身份和 SHA-256；`runtime.json` 保存数值库、CUDA、硬件及运行命令。
+
+## 参考辅助补偿后的主对比
+
+补偿复用同一次 CP=480 的物理波形、发射数据和噪声，不重新生成物理链路。
+首先核对来源物理 HDF5 的验收 SHA-256、运行身份、6016×24 的实际时间基、
+25 个独立先验窗口、5 个测试窗口和两条信道的冻结 192 点支撑，
+然后重建原始 CSI，并逐帧核对原始 BER/NMSE 与完美 CSI 的误码数。
+
+目标继续采用 `configs/evaluation/four_data_delay192_compensation.json` 中的既定曲线：
+NOF1 -9.69 → -16.05 dB，NCS1 -5.24 → -9.13 dB，尺度为 10 dB 的归一化指数下降。
+每个信道、每个 SNR 按全部 5 帧/20 个数据符号的平均线性完整矩阵 NMSE 计算一个公共系数：
+
+`alpha(s) = sqrt(10**(target(s)/10) / mean_raw_linear_NMSE(s))`
+
+在完整 1024 点支撑上构造 `H_assisted = H_ref + alpha(s) * (H_raw - H_ref)`。
+该构造使用完整参考矩阵，属于理想参考辅助补偿，不代表接收机无参考 CSI 估计性能。
+同一 SNR 的全部帧和符号共享系数，保留相对误差差异；不逐帧或逐符号强行归一到目标。
+
+`comparison.png/pdf` 为补偿后单抽头、补偿后完整矩阵、完美 CSI 单抽头、完美 CSI 完整矩阵
+的四条 BER 曲线，以及补偿后平均 NMSE 与目标的对比。
+`summary.csv` 和另外的 BER/NMSE 图保留原始结果作为来源审计对照。
+
+```bash
+OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 /home/fay/anaconda3/envs/jimyang/bin/python -m scripts.evaluate.four_data_cp80_compensation --device cuda --threads 4
+```
