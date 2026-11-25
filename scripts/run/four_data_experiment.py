@@ -103,7 +103,7 @@ def main():
         plot_reports(reports,output)
         write_json(output/"experiment.json",dict(complete=True,formal=args.frame_limit is None,
             input_view=base["input_view"],channels=[r["channel"] for r in reports],
-            reports={r["channel"]:str((output/r["channel"].lower()/"metrics.json").relative_to(ROOT)) for r in reports}))
+            reports={r["channel"]:r["channel"].lower()+"/metrics.json" for r in reports}))
 
 
 if __name__ == "__main__":

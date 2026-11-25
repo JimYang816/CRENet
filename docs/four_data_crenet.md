@@ -58,5 +58,5 @@ OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 /home/fay/anaconda3/e
 并在每个 SNR 的四个符号上与已有时域坐标 LMMSE 实现核对输出和误码数。
 
 本地使用 CPU，运行新增流程、完整矩阵 NMSE 梯度、有色协方差解析解、
-四符号数据排列与既有数据协议检查，共 26 项通过。Windows Anaconda 数值库检查
+四符号数据排列、相对输出路径与既有数据协议检查，共 27 项通过。Windows Anaconda 数值库检查
 使用 `MKL_THREADING_LAYER=SEQUENTIAL` 避免重复 OpenMP 运行库；服务器使用标准库线程设置。

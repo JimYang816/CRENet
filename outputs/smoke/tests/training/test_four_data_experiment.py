@@ -1,5 +1,8 @@
 """Physical-delay, colored-noise, full-support NMSE and split-boundary checks."""
 from types import SimpleNamespace
+import json
+from pathlib import Path
+import sys
 
 import numpy as np
 import pytest
@@ -145,3 +148,23 @@ def test_three_stage_training_never_opens_test_and_final_test_counts_all_bits(mo
     assert metrics["complete"].all() and metrics["nmse_linear"].shape == (7,2,4,2)
     for name,curve in scored["curves"].items():
         np.testing.assert_array_equal(curve["errors"],metrics[name].sum(axis=(1,2)))
+
+
+def test_cli_writes_portable_manifest_for_relative_output(monkeypatch,tmp_path):
+    import scripts.run.four_data_experiment as cli
+    base = json.loads((cli.ROOT/"configs/training/four_data_crenet.json").read_text())
+    config_path = tmp_path/"config.json"
+    config_path.write_text(json.dumps(base))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys,"argv",["experiment","--config",str(config_path),"--device","cpu",
+        "--output","outputs/smoke/relative-run","--frame-limit","2"])
+    monkeypatch.setattr(cli,"preflight",lambda *a:{"accepted":True})
+    monkeypatch.setattr(cli,"train",lambda *a,**kw:None)
+    monkeypatch.setattr(cli,"evaluate",lambda config,directory,*a,**kw:
+                        {"channel":"NOF1" if "nof1" in str(directory) else "NCS1"})
+    monkeypatch.setattr(cli,"plot_reports",lambda *a:None)
+    monkeypatch.setattr(cli.subprocess,"check_output",lambda *a,**kw:"test-commit\n")
+    monkeypatch.setattr(cli.torch,"set_num_interop_threads",lambda n:None)
+    cli.main()
+    report = json.loads(Path("outputs/smoke/relative-run/experiment.json").read_text())
+    assert report["reports"] == {"NOF1":"nof1/metrics.json","NCS1":"ncs1/metrics.json"}
