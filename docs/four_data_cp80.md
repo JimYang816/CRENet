@@ -8,6 +8,7 @@
 正式生成的默认先验来源改为本次已验收的 CP80 原始物理实验。
 生成运行 ID 为 `dddd_cp80_delay192_assisted_20261126`，训练输出为
 `outputs/experiment/four_data_crenet_cp80_20261126/`，避免续用旧 CP256 缓存或权重。
+本轮双信道独立训练、全量测试及验收已完成，见 [CRENet 正式训练与完整测试](four_data_crenet.md#2026-11-26-cp80-正式训练与全量测试)。
 两信道原始 CP256 配置快照保存在 `configs/backups/dddd_cp256_20261125/`，
 仅用于核对冻结时延选择及历史实验来源，不作为新的运行默认。
 

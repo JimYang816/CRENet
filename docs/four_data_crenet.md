@@ -1,15 +1,76 @@
 # 四符号双信道 CRENet 训练与完整测试
 
-2026-11-26 起默认 CP 为 **80 ms / 480 点**。本页记录的是 CP=256 的历史训练与结果；
+2026-11-26 起默认 CP 为 **80 ms / 480 点**。本页先记录本轮 CP80 正式训练与完整测试，
+下半部分保留 CP=256 的历史训练与结果；
 对应训练、验证、测试数据及共享模型已按用户要求删除，历史权重和结果仅供来源复核。
 正式 CP80 补偿数据已生成并全量验收，新的训练输出为 `outputs/experiment/four_data_crenet_cp80_20261126/`，
 训练入口会拒绝旧 CP=256 数据。当前设置见 [CP80 实验](four_data_cp80.md)。
+
+## 2026-11-26 CP80 正式训练与全量测试
+
+本轮计算代码为 `cd38880`，使用生成代码 `5ee9af5` 已全量验收的 CP80 补偿正式数据，
+输出为 `outputs/experiment/four_data_crenet_cp80_20261126/`。
+NOF1、NCS1 分别随机初始化 CRENet，种子为 20261125，未读取旧 CP256 或其他历史权重。
+输入为 `reference_assisted`：补偿依赖完整参考矩阵，属于理想参考辅助实验。
+
+使用 D-D-D-D、FFT=1024、CP=480、512 数据与 256 梳状导频、12 Hz/Q=24，
+保留各信道 192 个冻结物理时延位置。每个信道每轮使用 14,700 个训练符号块，
+验证使用 2,100 个符号块；四个数据符号共享模型参数。
+八层 CRENet 依次进行 A 均衡器训练、B CSI 修正训练、C 联合微调，
+每阶段最多 10 轮，连续 4 轮验证未改善时早停。模型选择仅使用验证集。
+
+本地 15 项 CPU 检查、服务器相同 15 项检查及双信道真实数据小样本训练、测试、
+独立 LMMSE 核验均通过。正式计算使用 RTX 4080、PyTorch 2.5.1+cu121、batch=32。
+NOF1 的 A/B/C 阶段实际运行 4/10/4 轮，最终保留 B 第 10 轮权重（保存为 C 的 epoch 0）；
+NCS1 实际运行 4/10/10 轮，最终选中 C 第 10 轮。
+
+两信道均测试全部 4,200 帧样本，覆盖 0、5、…、30 dB。
+每个信道每个 SNR 为 600 帧、2,400 个符号块、2,457,600 bit；
+双信道共 33,600 个测试符号块、34,406,400 bit。
+四条 BER 曲线共用相同数据、接收观测和噪声；完美 CSI 对照为完整矩阵 LMMSE。
+完整矩阵基线使用全部接收行、全部数据列、已知导频消除、有色热噪声协方差及 complex128 求解。
+完美 CSI 是当前符号的完整物理矩阵，保留实际接收波形中的跨符号残差。
+
+30 dB 的正式测试结果如下：
+
+| 信道 | Single-tap BER | Full-matrix BER | CRENet BER | 完美 CSI Full-matrix BER | 输入 NMSE | CRENet 修正 NMSE |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| NOF1 | 0.01447754 | 0.00569051 | 0.00246989 | 0.00013672（336 bit） | -16.0500 dB | -18.7097 dB |
+| NCS1 | 0.13965251 | 0.02493896 | 0.00720825 | 0（0/2,457,600 bit） | -9.1300 dB | -12.4669 dB |
+
+CRENet 在两个信道全部 7 个 SNR 上的 BER 均低于两种 LMMSE 基线。
+30 dB 时，相对完整矩阵 LMMSE 的 BER 降幅为 NOF1 56.60%、NCS1 71.10%。
+各 SNR 的完整矩阵平均 NMSE 均改善：NOF1 为 1.1682–2.6970 dB，
+NCS1 为 1.2502–3.3369 dB。NMSE 先平均逐符号完整矩阵线性误差比，再取 dB。
+输入 NMSE 与正式数据验收目标的最大偏差分别为 `3.88e-10`、`2.05e-10 dB`。
+
+全部测试符号、误码计数和线性 NMSE 汇总已通过独立核验；
+每个 SNR 的四个数据符号还与独立时延域 LMMSE 实现核对，
+最大相对符号差异分别约为 `1.92e-13`、`1.74e-13`。
+NOF1、NCS1 的训练分别耗时约 24.0、33.7 分钟，完整评分各约 5.7 分钟；
+包含预检、缓存准备、图表和核验的总运行时间约 71.5 分钟，进程正常结束，GPU 已释放。
+
+实验目录根层提供双信道 `ber_snr.png/pdf`、`nmse_snr.png/pdf` 和 `summary.csv`；
+各信道目录提供 `model.pt`、各阶段最佳权重及恢复状态、逐轮训练日志、
+`metrics.json`、`per_frame.csv`、`frame_metrics.npz`、`provenance.json` 和 `verification.json`。
+根层另有 `launch.json`、`runtime.json`、`run.log` 及 `transfer_manifest.json`。
+模型、图表和逐帧结果已回传本地同名目录，45 个产物文件、共约 12.54 MiB 的
+SHA-256 全部一致；`transfer_verification.json` 另记录本地逐帧 CSV、NPZ、JSON 汇总复核。
+零误码在 CSV 中保留为零，BER 图以半误码计数位置的空心点显示。
+完整数据保留服务器，模型及实验结果不提交 Git。
+
+```bash
+OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 /home/fay/anaconda3/envs/jimyang/bin/python -m scripts.run.four_data_experiment --device cuda --threads 4
+OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 /home/fay/anaconda3/envs/jimyang/bin/python -m scripts.evaluate.four_data_crenet_verify --device cuda
+```
+
+## CP=256 历史训练与结果
 
 本页历史运行使用已验收的 `data/processed/{nof1,ncs1}_dddd/`，NOF1、NCS1 分别从头训练，
 不读取旧 P-D-D-P 权重。入口为 `scripts/run/four_data_experiment.py`，
 配置为 `configs/training/four_data_crenet.json`。README 不作修改。
 
-## 数据、训练和选择
+### 数据、训练和选择
 
 沿用 D-D-D-D、FFT=1024、CP=256、512 数据与 256 梳状导频、12 Hz/Q=24，
 保留各信道的 192 个真实物理时延位置。四个符号共享网络参数，各自处理；
@@ -33,7 +94,7 @@ A 按验证 BER 选择，B 按验证完整矩阵 NMSE 选择；C 优先选择所
 只接收观测、初始 CSI、公开导频、载波位置与掩码、噪声参数。
 每阶段选中权重、逐轮日志及可恢复的优化器与随机状态均保留。
 
-## 测试与指标
+### 测试与指标
 
 两种 LMMSE 是解析算法，无须训练。测试全部 4,200 帧，每 SNR 为 600 帧、
 2,400 个符号块、2,457,600 bit。四条 BER 曲线分别为 Single-tap LMMSE、
@@ -68,7 +129,7 @@ OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 /home/fay/anaconda3/e
 四符号数据排列、相对输出路径与既有数据协议检查，共 27 项通过。Windows Anaconda 数值库检查
 使用 `MKL_THREADING_LAYER=SEQUENTIAL` 避免重复 OpenMP 运行库；服务器使用标准库线程设置。
 
-## 2026-11-25 正式运行记录
+### 2026-11-25 正式运行记录
 
 计算代码为 `7b008cc`，服务器 RTX 4080、PyTorch 2.5.1+cu121，训练 batch=32。
 本地 27 项独立检查及服务器 27 项检查通过；双信道真实数据小样本中，新的频域完整
@@ -101,7 +162,7 @@ NCS1 实际完成 A/B/C 阶段 4/10/10 轮，A 阶段同样保留物理初始化
 NOF1 训练与评分分别耗时约 24.0、5.7 分钟；NCS1 分别约 33.7、5.7 分钟，
 上述训练计时不含参考矩阵 RAM 缓存准备。主实验进程已正常结束，GPU 已释放。
 
-## 完美 CSI 参考的跨符号干扰复核
+### 完美 CSI 参考的跨符号干扰复核
 
 对 30 dB 全部 600 帧、每信道 2,457,600 bit 的控制实验确认：NOF1 高 SNR 误码主要
 来自当前单符号接收模型未包含的跨符号干扰。`BlockedReceiver.reference` 仅将当前符号的
