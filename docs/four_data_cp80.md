@@ -2,7 +2,7 @@
 
 2026-11-26 起 **CP=80 ms / 480 点为项目默认值**。NOF1、NCS1 的 `dddd.json`、
 配置校验、正式数据入口、训练预检及后续指标图均使用该值。
-旧训练/验证/测试数据和配套共享模型已删除，服务器释放约 18.07 GiB；正式 CP80 数据尚未生成。
+旧 CP256 训练/验证/测试数据和配套共享模型已删除，服务器释放约 18.07 GiB；正式 CP80 补偿数据已生成并全量验收。
 默认参考辅助视图及其目标曲线保留，Q=24、192 个冻结物理位置和划分计划保持既定设置。
 
 正式生成的默认先验来源改为本次已验收的 CP80 原始物理实验。
@@ -15,6 +15,40 @@
 6016×24，三个划分的补偿曲线均达标，验证用临时 HDF5 随后清理。
 数据删除记录、旧数据验收来源和本地验证记录保存在
 `outputs/smoke/default_cp80_reset_20261126/`。
+
+## 正式 CP80 补偿数据
+
+生成代码为 `5ee9af5`，运行记录为 `outputs/experiment/dddd_cp80_delay192_assisted_20261126/`。
+本轮复用同配置完整文件并再次执行全量验收。完整数据保留在服务器：
+
+| 信道 | 数据目录 | 训练帧样本 | 验证帧样本 | 测试帧样本 | HDF5 大小 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| NOF1 | `data/processed/nof1_dddd/` | 3,675 | 525 | 4,200 | 14.06 GiB |
+| NCS1 | `data/processed/ncs1_dddd/` | 3,675 | 525 | 4,200 | 5.66 GiB |
+
+样本数计入 0、5、…、30 dB 的 7 个 SNR；每样本含 4 个数据符号、4,096 bit。
+每个 SNR 的训练/验证/测试分别为 525/75/600 帧，测试在 150 个物理窗口各重复 4 次。
+每个数据目录含 `model.h5`、`train.h5`、`validation.h5`、`test.h5` 和 `manifest.json`，
+共 8 个 HDF5、约 19.72 GiB。
+
+默认输入视图为 `reference_assisted`，保留显式 `raw`；完整参考抽头与原始估计系数以
+complex64 存储，读取时按完整参考和公共 SNR 误差系数重建补偿 CSI。
+训练、验证、测试各自按全量线性 NMSE 均值校准，同一划分、同一 SNR 的全部帧和符号共享系数。
+NOF1 的 7 点平均 NMSE 为 -9.69 → -16.05 dB，NCS1 为 -5.24 → -9.13 dB，
+均达到尺度 10 dB 的既定曲线，最大偏差小于 `1.8e-15 dB`。
+该视图使用完整参考矩阵，是理想参考辅助数据。
+
+两信道实际 6016×24 DPSS 基的 SHA-256 相同；全部物理参考、独立划分、重复数据/噪声种子、
+逐帧完整矩阵 NMSE、补偿均值和四符号导频消除均经过验收。
+各划分 BER-SNR 图均匀抽取 16 帧做诊断，平均 NMSE-SNR 汇总完整划分，
+图表与逐项核验保存在运行目录的信道子目录。
+
+```python
+from src.data import FourDataDataset
+
+with FourDataDataset("data/processed/nof1_dddd/train.h5") as dataset:
+    inputs, labels = dataset[0]  # 默认补偿后的 reference_assisted CSI
+```
 
 当前主对比使用**参考辅助补偿后的 CSI**，入口为
 `scripts/evaluate/four_data_cp80_compensation.py`，输出到

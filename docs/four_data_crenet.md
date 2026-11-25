@@ -2,7 +2,7 @@
 
 2026-11-26 起默认 CP 为 **80 ms / 480 点**。本页记录的是 CP=256 的历史训练与结果；
 对应训练、验证、测试数据及共享模型已按用户要求删除，历史权重和结果仅供来源复核。
-正式 CP80 数据尚未生成，新的训练输出为 `outputs/experiment/four_data_crenet_cp80_20261126/`，
+正式 CP80 补偿数据已生成并全量验收，新的训练输出为 `outputs/experiment/four_data_crenet_cp80_20261126/`，
 训练入口会拒绝旧 CP=256 数据。当前设置见 [CP80 实验](four_data_cp80.md)。
 
 本页历史运行使用已验收的 `data/processed/{nof1,ncs1}_dddd/`，NOF1、NCS1 分别从头训练，
