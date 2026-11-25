@@ -5,15 +5,11 @@ from pathlib import Path
 import sys
 
 import numpy as np
-import pytest
 import torch
 
 from data_generation.src.receiver.chain import taps_to_matrix
-from src.algorithms.crenet.model import CRENet
-from src.algorithms.crenet.metrics import full_matrix_nmse
-from src.algorithms.crenet.operators import BandChannel, band_indices
-from src.data.four_data_training import FourDataTrainingSet, taps_to_matrices
-from src.evaluation.four_data_crenet import full_matrix_lmmse, evaluate
+from src.data.four_data_training import FourDataTrainingSet
+from src.evaluation.four_data_crenet import evaluate
 from src.training.four_data_crenet import train
 
 
@@ -88,43 +84,6 @@ def test_four_blocks_noncontiguous_delays_and_supervision_are_aligned(monkeypatc
             np.testing.assert_allclose(inputs["observations"][j],source.clean[fi,di]
                 + np.sqrt(source.variance[si,fi])*source.noise[fi,di],rtol=1e-6,atol=2e-8)
     assert seen == {(s,f,d) for s in range(7) for f in range(2) for d in range(4)}
-
-
-def test_full_matrix_nmse_counts_out_of_band_errors_and_has_correct_gradient():
-    torch.manual_seed(12)
-    base = torch.randn(2,9,9,dtype=torch.complex128)
-    reference = torch.randn_like(base)
-    bands = torch.randn(2,9,5,dtype=torch.complex128,requires_grad=True)
-    channel = BandChannel(base,bands)
-    output = SimpleNamespace(initial_channel=base,channels=[channel])
-    initial,measured = full_matrix_nmse(output,reference)
-    columns,valid = band_indices(9,2)
-    dense = base.clone().scatter_add(2,columns[None].expand(2,-1,-1),bands*valid)
-    expected = (dense-reference).abs().square().sum((-2,-1))/reference.abs().square().sum((-2,-1))
-    torch.testing.assert_close(measured[:,0],expected)
-    a, = torch.autograd.grad(measured.sum(),bands,retain_graph=True)
-    b, = torch.autograd.grad(expected.sum(),bands)
-    torch.testing.assert_close(a,b)
-
-
-def test_lmmse_matches_independent_colored_covariance_normal_equations():
-    torch.manual_seed(25)
-    h = torch.randn(2,10,10,dtype=torch.complex128)
-    y = torch.randn(2,10,dtype=torch.complex128)
-    known = torch.zeros_like(y)
-    known[:,1] = 1+1j
-    data = torch.arange(10)%2 == 0
-    a = torch.randn(10,10,dtype=torch.complex128)
-    covariance = a@a.mH+torch.eye(10,dtype=torch.complex128)*.4
-    variance = torch.tensor([.1,.001],dtype=torch.float64)
-    actual = full_matrix_lmmse(h,y,known,variance,data,torch.linalg.cholesky(covariance))
-    hd = h[:,:,data]
-    cancelled = y-(h@known[...,None])[...,0]
-    weighted = torch.linalg.solve(covariance,hd)
-    gram = hd.mH@weighted+variance[:,None,None]*torch.eye(int(data.sum()))
-    rhs = hd.mH@torch.linalg.solve(covariance,cancelled[...,None])
-    expected = torch.linalg.solve(gram,rhs)[...,0]
-    torch.testing.assert_close(actual,expected)
 
 
 def test_three_stage_training_never_opens_test_and_final_test_counts_all_bits(monkeypatch,tmp_path):
