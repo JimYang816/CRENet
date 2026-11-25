@@ -47,7 +47,8 @@ def fake_reader(monkeypatch):
             self.split = path.stem
             opened.append(self.split)
             self.channel, self.input_view = "NOF1",kwargs["input_view"]
-            self.config, self.snr_db = dict(nfft=n,data_count=int(mask.sum())),np.arange(0,35,5)
+            self.config, self.snr_db = dict(nfft=n,data_count=int(mask.sum()),
+                                          cp=480,fs_baseband=6000),np.arange(0,35,5)
             self.frame_count, self.sampled_basis, self.delays = frames,basis,delays
             self.known, self.masks = known,dict(data=mask,pilot=pilot)
             self._model = {"unit_rf_noise_covariance":np.eye(n,dtype=complex)}
@@ -101,6 +102,7 @@ def test_three_stage_training_never_opens_test_and_final_test_counts_all_bits(mo
     repeated = train(config,tmp_path,run,"test-identity",frame_limit=2)
     assert repeated == report and (run/"model.pt").read_bytes() == before
     scored = evaluate(config,tmp_path,run,"test-identity",frame_limit=2)
+    assert scored["cp"] == 480 and scored["fs_baseband"] == 6000
     assert scored["bits_per_snr"] == 2*4*4*2
     assert len(scored["curves"]) == 4 and scored["frames_per_snr"] == 2
     metrics = np.load(run/"frame_metrics.npz")

@@ -74,7 +74,7 @@ def verify_channel(directory, run, *, device="cpu"):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output",type=Path,default=ROOT/"outputs/experiment/four_data_crenet_20261125")
+    parser.add_argument("--output",type=Path,default=ROOT/"outputs/experiment/four_data_crenet_cp80_20261126")
     parser.add_argument("--channel",choices=("NOF1","NCS1","all"),default="all")
     parser.add_argument("--device",choices=("cpu","cuda"),default=default_device())
     args = parser.parse_args()
