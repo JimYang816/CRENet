@@ -96,3 +96,19 @@ NOF1 -9.69 → -16.05 dB，NCS1 -5.24 → -9.13 dB，尺度为 10 dB 的归一�
 ```bash
 OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 /home/fay/anaconda3/envs/jimyang/bin/python -m scripts.evaluate.four_data_cp80_compensation --device cuda --threads 4
 ```
+
+补偿评测提交为 `02e5d33`，RTX 4080 计算及出图约 17.3 s。
+本地 6 项 CPU 补偿/协议检查、服务器 19 项相关检查通过。
+两条信道的全部 7 个 SNR 都达到既定平均 NMSE，最大偏差小于 `7.2e-15 dB`；
+原始 CSI 的逐帧误码和 NMSE、完美 CSI 的全部 SNR 误码数均复现补偿来源。
+30 dB 的**补偿后主结果**如下，每点仍为 20,480 bit：
+
+| 信道 | 补偿后单抽头 BER | 补偿后完整矩阵 BER | 完美 CSI 单抽头 BER | 完美 CSI 完整矩阵 BER | 补偿后平均 NMSE |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| NOF1 | 0.0112305（230 bit） | 0.00434570（89 bit） | 0.00566406（116 bit） | 0.0000488281（1 bit） | -16.05 dB |
+| NCS1 | 0.138281（2,832 bit） | 0.0230957（473 bit） | 0.125830（2,577 bit） | 0（0 bit） | -9.13 dB |
+
+结果目录的 `metrics.json`、`summary.csv`、`verification.json` 保存补偿尺度、逐帧误码、
+完整矩阵 NMSE 和校验；`comparison.png/pdf` 为补偿后的主图。
+原始数据和完美 CSI 对照保留实际物理波形中的残余跨符号项。
+该补偿明确依赖完整完美 CSI，是理想参考辅助实验；每信道仅 5 帧，零误码仅指本次样本。
