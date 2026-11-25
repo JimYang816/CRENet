@@ -45,6 +45,9 @@ def load_prior(c, source, archive, receiver, smoke=False):
     else:
         meta = json.loads((source/"manifest.json").read_text(encoding="utf-8"))
         with h5py.File(source/"physical.h5", "r") as h:
+            if (meta["config"] != c or not h.attrs.get("complete") or h.attrs.get("identity") != digest(meta)
+                    or h["basis"].shape != (4*(c["nfft"]+c["cp"]), c["dpss_expected_count"])):
+                raise ValueError("Independent prior must match the current CP80 physical frame and time basis")
             basis, coefficients = h["basis"][:], h["prior"][:][..., delays]
         records = sorted({r for r, _ in meta["prior_windows"]})
         info = dict(mode="frozen independent full-frame prior from accepted raw study",

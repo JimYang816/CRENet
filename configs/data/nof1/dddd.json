@@ -87,7 +87,7 @@
   "estimation_mode": "full_frame_joint_no_feedback_v1",
   "seed": 20261025,
   "nfft": 1024,
-  "cp": 256,
+  "cp": 480,
   "fs_baseband": 6000,
   "fs_passband": 96000,
   "carrier_hz": 14000,

@@ -3,7 +3,7 @@
     "NOF1": "data/processed/nof1_dddd",
     "NCS1": "data/processed/ncs1_dddd"
   },
-  "output": "outputs/experiment/four_data_crenet_20261125",
+  "output": "outputs/experiment/four_data_crenet_cp80_20261126",
   "input_view": "reference_assisted",
   "model": {
     "layers": 8,

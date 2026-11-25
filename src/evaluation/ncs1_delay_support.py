@@ -11,7 +11,7 @@ import h5py
 import numpy as np
 
 from data_generation.src.channel.watermark.replay import WatermarkArchive
-from data_generation.src.config import ROOT, digest, load_config
+from data_generation.src.config import ROOT, digest, frozen_support_matches_config, load_config
 from data_generation.src.receiver.delay_support import (
     SelectedDelayDPSSModel, profile_full_frame,
 )
@@ -69,7 +69,7 @@ def metadata(archive_path, backend, smoke, study, *, code_files=CODE):
     support = study["frozen_support"]
     if support:
         source_records = {record for record, _ in support["prior_windows"]}
-        if (support["channel"] != channel or support["frame_config_sha256"] != digest(c)
+        if (support["channel"] != channel or not frozen_support_matches_config(support, c)
                 or support["source_archive_sha256"] != archive_sha256
                 or not source_records.issubset(c["prior_records"]) or source_records & set(tests)
                 or any(start not in c["starts_seconds"] for _, start in support["prior_windows"])):

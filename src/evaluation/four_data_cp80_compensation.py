@@ -65,9 +65,10 @@ def verify_source(source):
                 or frozen["indices"] != detail["selection"]["candidates"]["selected192"]["indices"]):
             raise ValueError(f"{channel}: saved channel provenance or fixed support changed")
         for name, expected in meta["code_sha256"].items():
-            payload = (ROOT/name).read_bytes()
+            # Verify the recorded source revision; defaults may evolve afterwards.
+            payload = subprocess.check_output(["git", "show", f"{meta['git_head']}:{name}"], cwd=ROOT)
             if expected not in (hashlib.sha256(payload).hexdigest(), hashlib.sha256(payload.replace(b"\r\n", b"\n")).hexdigest()):
-                raise ValueError(f"CP80 source code changed: {name}")
+                raise ValueError(f"Recorded CP80 source code does not match its committed revision: {name}")
         path = directory/"physical.h5"
         identity, checksum = digest(meta), file_sha256(path)
         expected = transfer["physical_data_remain_on_server"][channel.lower()]

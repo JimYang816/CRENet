@@ -22,7 +22,7 @@ def test_cp80_changes_physical_frame_and_preserves_accepted_delays(channel):
     assert c["cp"] == 480 and c["cp"]/c["fs_baseband"] == .08
     assert c["delay_length"] == 192
     assert c["dpss_expected_count"] == 24
-    assert load_config(ROOT/f"configs/data/{channel.lower()}/dddd.json")["cp"] == 256
+    assert load_config(ROOT/f"configs/data/{channel.lower()}/dddd.json")["cp"] == 480
     assert len(priors) == 25 and len(tests) == 5
     assert not {r for r, _ in priors} & {r for r, _ in tests}
     original = json.loads((ROOT/options["support_files"][channel]).read_text(encoding="utf-8"))

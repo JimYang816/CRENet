@@ -18,7 +18,8 @@ from data_generation.src.config import ROOT, digest
 from data_generation.src.dataset.four_data_protocol import SPLITS, channel_config, counts, estimated_max_bytes, load_options, windows
 from src.common.experiment import file_sha256, write_json
 from src.common.numerics import DenseBackend, default_device
-from src.evaluation.four_data_delay192_compensation import CODE as SOURCE_CODE, load_target_config, verify_source
+from src.evaluation.four_data_cp80_compensation import CODE as SOURCE_CODE, verify_source
+from src.evaluation.four_data_delay192_compensation import load_target_config
 
 CODE = tuple(dict.fromkeys((*SOURCE_CODE, "data_generation/scripts/four_data.py",
     "data_generation/src/dataset/four_data_protocol.py", "data_generation/src/dataset/four_data_math.py",
@@ -38,7 +39,7 @@ def main(argv=None):
     parser.add_argument("--config", type=Path, default=ROOT/"configs/data/four_data_dataset.json")
     parser.add_argument("--archive", type=Path, default=ROOT/"data/raw/watermark/WatermarkV1.zip")
     parser.add_argument("--output-root", type=Path, default=ROOT/"data/processed")
-    parser.add_argument("--run-id", default="dddd_delay192_assisted_20261124")
+    parser.add_argument("--run-id", default="dddd_cp80_delay192_assisted_20261126")
     parser.add_argument("--channels", nargs="+", choices=("NOF1", "NCS1"), default=["NOF1", "NCS1"])
     parser.add_argument("--device", choices=("cpu", "cuda"), default=default_device())
     parser.add_argument("--threads", type=int, default=4)

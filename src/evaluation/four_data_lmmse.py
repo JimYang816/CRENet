@@ -12,7 +12,7 @@ import numpy as np
 from scipy.signal.windows import dpss
 
 from data_generation.src.channel.watermark.replay import WatermarkArchive
-from data_generation.src.config import ROOT, digest, load_config
+from data_generation.src.config import ROOT, FROZEN_SUPPORT_CONFIGS, digest, load_config
 from data_generation.src.receiver.chain import relative_energy, taps_to_matrix
 from data_generation.src.receiver.dpss import DPSSModel
 from data_generation.src.receiver.estimation import FrozenPrior, input_windows
@@ -34,6 +34,7 @@ CODE_FILES = (
     "data_generation/src/channel/watermark/replay.py", "src/algorithms/single_tap_mmse/equalizer.py",
     "src/algorithms/full_matrix_lmmse/equalizer.py", "src/algorithms/likelihood.py", "src/algorithms/interface.py",
     "src/common/numerics.py", "src/common/experiment.py", "data_generation/src/config.py", "data_generation/src/pdd.py",
+    *FROZEN_SUPPORT_CONFIGS,
 )
 
 

@@ -9,7 +9,7 @@ import time
 import h5py
 import numpy as np
 
-from data_generation.src.config import ROOT, digest, load_config
+from data_generation.src.config import ROOT, digest, frozen_support_matches_config, load_config
 from data_generation.src.transmitter.ofdm import carrier_masks, decisions
 from src.common.experiment import file_sha256, write_json
 from src.evaluation import ncs1_delay_support as receiver
@@ -60,7 +60,7 @@ def channel_settings(channel, options, archive_sha256, smoke=False):
             or support.get("channel") != channel or support.get("tap_count") != 192
             or indices.shape != (192,) or not np.issubdtype(indices.dtype, np.integer)
             or np.any(np.diff(indices) <= 0) or indices[0] < 0 or indices[-1] >= base["nfft"]
-            or support.get("frame_config_sha256") != digest(base)
+            or not frozen_support_matches_config(support, base)
             or support.get("source_archive_sha256") != archive_sha256
             or source_windows != [[r, s] for r in base["prior_records"] for s in base["starts_seconds"]]):
         raise ValueError("Frozen support differs from the accepted independent-prior source")

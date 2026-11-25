@@ -33,9 +33,9 @@ def load_options(path=None):
 def channel_config(channel, smoke=False):
     c = load_config(ROOT/f"configs/data/{channel.lower()}/dddd.json")
     if (c["channel"] != channel or c["frame_structure"] != "DDDD"
-            or (c["nfft"], c["cp"], c["data_count"], c["pilot_count"], c["dpss_expected_count"]) != (1024, 256, 512, 256, 24)
+            or (c["nfft"], c["cp"], c["data_count"], c["pilot_count"], c["dpss_expected_count"]) != (1024, 480, 512, 256, 24)
             or c["dpss_half_bandwidth_hz"] != 12 or c["feedback_iterations"] != 0):
-        raise ValueError("Formal four-data generation requires the current DDDD / CP256 / Q24 frame")
+        raise ValueError("Formal four-data generation requires DDDD / CP480 (80 ms) / Q24")
     c["delay_length"] = 192
     if smoke:
         c["smoke"] = True

@@ -93,6 +93,7 @@ def evaluate(config, directory, output, identity, *, device="cpu", frame_limit=N
                       ber=(value.sum(axis=(1,2))/bits_per_snr).tolist()) for key,value in errors.items()}
     report = dict(identity=identity, complete=True, formal=frame_limit is None,
         channel=dataset.channel, input_view=dataset.input_view, protocol="DDDD",
+        cp=dataset.config["cp"], fs_baseband=dataset.config["fs_baseband"],
         reference_assisted_input_uses_full_reference=config["input_view"] == "reference_assisted",
         checkpoint_sha256=checkpoint_hash, selected_epoch=checkpoint["epoch"],
         snr_db=dataset.snr_db.tolist(), frames_per_snr=n_frame,
@@ -152,7 +153,12 @@ def plot_reports(reports, output):
             axis.set(title=report["channel"],xlabel="SNR (dB)",xticks=snr)
             axis.grid(True,which="both",alpha=.25)
             axis.legend(fontsize=8)
-        fig.suptitle("DDDD | CP=256 | Q=24 | 192 raw delays | reference-assisted input")
+        # Reports without an explicit CP are the retained historical CP256 runs.
+        prefixes = {(r.get("cp", 256), r.get("fs_baseband", 6000)) for r in reports}
+        if len(prefixes) != 1:
+            raise ValueError("Reports use different cyclic-prefix configurations")
+        cp, fs = prefixes.pop()
+        fig.suptitle(f"DDDD | CP={cp} ({1000*cp/fs:g} ms) | Q=24 | 192 raw delays | reference-assisted input")
         fig.tight_layout()
         for suffix in ("png","pdf"):
             fig.savefig(output/f"{kind}_snr.{suffix}",dpi=220,bbox_inches="tight")

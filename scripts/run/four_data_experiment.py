@@ -28,8 +28,9 @@ SOURCE_FILES = (
 def preflight(directory, channel):
     from src.data.four_data import FourDataDataset
     manifest = json.loads((directory/"manifest.json").read_text(encoding="utf-8"))
-    if not manifest["complete"] or manifest["smoke"] or manifest["channel"] != channel:
-        raise ValueError("Expected an accepted formal four-data dataset")
+    if (not manifest["complete"] or manifest["smoke"] or manifest["channel"] != channel
+            or manifest.get("cp") != 480 or manifest.get("cp_ms") != 80):
+        raise ValueError("Expected an accepted formal CP80 four-data dataset; regenerate superseded CP256 data")
     for name, expected in manifest["files"].items():
         path = directory/name
         if path.stat().st_size != expected["bytes"] or file_sha256(path) != expected["sha256"]:
@@ -38,6 +39,8 @@ def preflight(directory, channel):
     splits = {}
     for split,expected in (("train",525),("validation",75),("test",600)):
         with FourDataDataset(directory/f"{split}.h5") as ds:
+            if ds.config["cp"] != 480 or ds.config["fs_baseband"] != 6000:
+                raise ValueError("Training requires CP=80 ms (480 samples at 6 kHz)")
             if ds.frame_count != expected or len(ds.snr_db) != 7:
                 raise ValueError("Formal DDDD split counts changed")
             splits[split] = set(ds._h["windows/record"][:].tolist())

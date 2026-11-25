@@ -64,6 +64,7 @@ def accept(directory, run, c, options, backend, *, hash_files=True):
     directory, run = Path(directory), Path(run)
     plan = validate_plan(c)
     report = dict(schema=SCHEMA, channel=c["channel"], complete=False, smoke=bool(c.get("smoke")),
+        cp=c["cp"], cp_ms=1000*c["cp"]/c["fs_baseband"],
         default_input_view=options["default_input_view"], reference_assisted_csi_adjustment=(options["compensation_calibration"] != "none"),
         compensation_calibration=options["compensation_calibration"], config_hash=digest(c), counts=plan,
         snr_db=c["snr_db"], splits={})
@@ -189,7 +190,7 @@ def plot_report(run, c, report):
         ax.set(title=f"{split}: {value['frames_per_snr']} frames/SNR", xlabel="SNR (dB)", ylabel="Mean full-matrix NMSE (dB)", xticks=c["snr_db"])
         ax.grid(alpha=.25)
         ax.legend(fontsize=8)
-    fig.suptitle(f"{c['channel']} | DDDD, CP=256, Q=24, 192 raw taps | full-support reference assistance")
+    fig.suptitle(f"{c['channel']} | DDDD, CP={c['cp']} ({1000*c['cp']/c['fs_baseband']:g} ms), Q=24, 192 raw taps | full-support reference assistance")
     for ext in ("png", "pdf"):
         fig.savefig(run/f"nmse_snr.{ext}", dpi=170)
     plt.close(fig)
