@@ -26,7 +26,7 @@ def main():
     parser.add_argument("--input-view", choices=("raw",))
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--force", nargs="+", choices=(*IDENTIFIERS, "crenet", "all"), default=[],
-                       help="Recompute selected detectors; all also refreshes OAMP-Net2 and CRENet")
+                       help="Recompute selected LMMSE baselines and CRENet; all refreshes every configured detector")
     modes.add_argument("--plot-only", action="store_true", help="Redraw saved complete reports without data or GPU")
     parser.add_argument("--from-run", type=Path, help="With --plot-only, read saved reports from this root and write to the configured output")
     args = parser.parse_args()

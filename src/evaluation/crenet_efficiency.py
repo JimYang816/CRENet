@@ -29,7 +29,7 @@ from src.evaluation.crenet import process_peak_bytes
 from src.evaluation.inputs import prepare_batch
 from src.evaluation.registry import AVAILABLE_ALGORITHMS, resolve_parameters
 
-AVAILABLE_IDENTIFIERS = tuple(a.identifier for a in AVAILABLE_ALGORITHMS) + ("udnet", "oamp_net2", "crenet")
+AVAILABLE_IDENTIFIERS = tuple(a.identifier for a in AVAILABLE_ALGORITHMS) + ("crenet",)
 
 
 def _guard_truth_reads():
@@ -58,27 +58,15 @@ def _worker(options):
         if dataset.split not in ("validation", "test"):
             raise ValueError("Efficiency requires a validation/test input split")
         covariance = dataset._shared["unit_rf_noise_covariance"][:]
-        model = preprocessor = thermal = None
+        model = thermal = None
         parameters = {}
-        if identifier in ("udnet", "oamp_net2", "crenet"):
-            if identifier == "udnet":
-                from src.algorithms.udnet.checkpoint import load_model, validate_dataset
-                from src.algorithms.udnet.inference import equalize_batch
-                from src.data.udnet import LocalPreprocessor, WindowPlan
-            elif identifier == "oamp_net2":
-                from src.algorithms.oamp_net2.checkpoint import load_model, validate_dataset
-                from src.algorithms.oamp_net2.inference import equalize_batch
-            else:
-                from src.algorithms.crenet.checkpoint import load_model, validate_dataset
-            model, payload = load_model(options[identifier + "_checkpoint"], device)
+        if identifier == "crenet":
+            from src.algorithms.crenet.checkpoint import load_model, validate_dataset
+            from src.algorithms.crenet.inference import prepare_frozen_inference
+            model, payload = load_model(options["crenet_checkpoint"], device)
             validate_dataset(payload, dataset)
-            if identifier == "crenet":
-                from src.algorithms.crenet.inference import prepare_frozen_inference
-                prepare_frozen_inference(model)
-            if identifier == "udnet":
-                preprocessor = LocalPreprocessor(WindowPlan.build(dataset._config["nfft"], dataset._indices),
-                                                 covariance, device)
-        if identifier in ("full_matrix_lmmse", "mmse_dfe", "dd_ce_lmmse", "oamp_net2"):
+            prepare_frozen_inference(model)
+        if identifier == "full_matrix_lmmse":
             from src.algorithms.likelihood import make_whitener
             thermal = make_whitener(covariance, backend)
         algorithm = next((a for a in AVAILABLE_ALGORITHMS if a.identifier == identifier), None)
@@ -86,9 +74,6 @@ def _worker(options):
             importlib.import_module(algorithm.module)
             supplied = options["comparison"].get("baselines", options["comparison"]).get("parameters", {})
             parameters = resolve_parameters({identifier: supplied.get(identifier, {})})[identifier]
-            if identifier == "dd_ce_lmmse":
-                from src.evaluation.dd_ce import receiver_context
-                dd_context = receiver_context(dataset, backend, parameters)
         backend.synchronize()
         setup_seconds = time.perf_counter() - started
         prediction_seconds, blocks = 0., 0
@@ -119,14 +104,8 @@ def _worker(options):
                         backend.synchronize()
                         tick = time.perf_counter()
                         batch = prepare_batch(dataset, si, frames, d, backend)
-                        if identifier == "udnet":
-                            result = equalize_batch(batch, backend, model=model, preprocessor=preprocessor)
-                        elif identifier == "oamp_net2":
-                            result = equalize_batch(batch, backend, model=model, whitener=thermal)
-                        else:
-                            extra = {} if identifier == "single_tap_mmse" else dict(whitener=thermal)
-                            controls = dd_context[d] if identifier == "dd_ce_lmmse" else parameters
-                            result = algorithm.equalize(batch, backend, **extra, **controls)
+                        extra = {} if identifier == "single_tap_mmse" else dict(whitener=thermal)
+                        result = algorithm.equalize(batch, backend, **extra, **parameters)
                         if not np.isfinite(result.symbols).all():
                             raise FloatingPointError("Nonfinite detector output")
                         backend.synchronize()
@@ -137,8 +116,6 @@ def _worker(options):
         if identifier == "crenet":
             environment["precision"] = (model.config["precision"] + "/" +
                 ("float32" if model.config["precision"] == "complex64" else "float64"))
-        elif identifier == "udnet":
-            environment["precision"] = "complex128/float64_to_float32"
         return dict(algorithm=identifier, process_id=os.getpid(), input_view=dataset.input_view, blocks=blocks,
             detector_controls=parameters,
             snr_db=dataset.snr_db.tolist(), batch_size=options["batch_size"], frame_limit=options["frame_limit"],
@@ -151,32 +128,28 @@ def _worker(options):
             peak_cuda_reserved_bytes=int(torch.cuda.max_memory_reserved()) if device == "cuda" else None)
 
 
-def benchmark(dataset_path, comparison_report, checkpoint, udnet_checkpoint, *, output=None,
-              device="cpu", batch_size=2, frame_limit=None, threads=4, algorithms=None, oamp_net2_checkpoint=None):
+def benchmark(dataset_path, comparison_report, checkpoint, *, output=None,
+              device="cpu", batch_size=2, frame_limit=None, threads=4, algorithms=None):
     if algorithms is None:
         algorithms = AVAILABLE_IDENTIFIERS
     if (device not in ("cpu", "cuda") or any(isinstance(x, bool) or not isinstance(x, int) or x < 1
         for x in (batch_size, threads)) or (frame_limit is not None and
         (isinstance(frame_limit, bool) or not isinstance(frame_limit, int) or frame_limit < 1))
-        or not algorithms or len(set(algorithms)) != len(algorithms) or set(algorithms)-set(AVAILABLE_IDENTIFIERS)
-        or ("oamp_net2" in algorithms and oamp_net2_checkpoint is None)):
+        or not algorithms or len(set(algorithms)) != len(algorithms) or set(algorithms)-set(AVAILABLE_IDENTIFIERS)):
         raise ValueError("Invalid efficiency benchmark controls")
     validation_started = time.perf_counter()
     dataset_path = Path(dataset_path).resolve()
     sources = {"dataset": dataset_path,
         "model.h5": dataset_path.parent/"model.h5",
-        "crenet_checkpoint": checkpoint, "udnet_checkpoint": udnet_checkpoint,
+        "crenet_checkpoint": checkpoint,
         "comparison_report": comparison_report}
-    if oamp_net2_checkpoint is not None:
-        sources["oamp_net2_checkpoint"] = oamp_net2_checkpoint
     guard = DataIdentity(sources)
     report = json.loads(Path(comparison_report).read_text(encoding="utf-8"))
     if not report.get("complete") or report.get("input_view") != DEFAULT_INPUT_VIEW:
         raise ValueError("Efficiency requires a complete raw CSI comparison report")
     initial_validation_seconds = time.perf_counter() - validation_started
     options = dict(dataset=str(Path(dataset_path).resolve()), comparison=report,
-        crenet_checkpoint=str(Path(checkpoint).resolve()), udnet_checkpoint=str(Path(udnet_checkpoint).resolve()),
-        oamp_net2_checkpoint=str(Path(oamp_net2_checkpoint).resolve()) if oamp_net2_checkpoint is not None else None,
+        crenet_checkpoint=str(Path(checkpoint).resolve()),
         device=device, batch_size=batch_size, frame_limit=frame_limit, threads=threads)
     rows = []
     for algorithm in algorithms:
@@ -186,9 +159,7 @@ def benchmark(dataset_path, comparison_report, checkpoint, udnet_checkpoint, *, 
             raise RuntimeError(f"Efficiency worker {algorithm} failed:\n{completed.stderr}")
         rows.append(json.loads(completed.stdout))
     guard.assert_unchanged()
-    checkpoints = dict(crenet=options["crenet_checkpoint"], udnet=options["udnet_checkpoint"])
-    if oamp_net2_checkpoint is not None:
-        checkpoints["oamp_net2"] = options["oamp_net2_checkpoint"]
+    checkpoints = dict(crenet=options["crenet_checkpoint"])
     result = dict(schema="crenet-isolated-efficiency-v1", input_view=DEFAULT_INPUT_VIEW, device=device, algorithms=rows,
         dataset=options["dataset"], comparison_report=str(Path(comparison_report).resolve()),
         checkpoints=checkpoints,

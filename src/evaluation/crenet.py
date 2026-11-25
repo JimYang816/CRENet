@@ -204,7 +204,7 @@ def _record_disjoint(dataset):
 
 
 def evaluate(dataset_path, checkpoint, run, backend, *, batch_size=2, frame_limit=None,
-             require_test=True, include_baselines=False, udnet_checkpoint=None, bootstrap_samples=2000,
+             require_test=True, include_baselines=False, bootstrap_samples=2000,
              baseline_parameters=None, cache_dir=None, operator_backend="dense"):
     """Evaluate one checkpoint, recomputing preprocessing and every feedback step.
 
@@ -324,14 +324,6 @@ def evaluate(dataset_path, checkpoint, run, backend, *, batch_size=2, frame_limi
             report["baselines"] = baseline
             report["comparison_precision"] = dict(crenet=precision+"/"+real_precision,
                 traditional_baselines=baseline["numerical_environment"]["precision"])
-            if udnet_checkpoint is not None:
-                from src.evaluation.udnet import evaluate as udnet_evaluate
-                udnet = udnet_evaluate(dataset_path, udnet_checkpoint, run/"udnet", backend,
-                    input_view="raw", batch_size=batch_size, cache_dir=cache_dir,
-                    algorithm_parameters=baseline_parameters)
-                report["curves"]["UDNet"] = udnet["curves"]["UDNet"]
-                report["udnet_checkpoint"] = str(Path(udnet_checkpoint).resolve())
-                report["comparison_precision"]["udnet"] = "complex128/float64 preprocessing; float32 detector"
         plot_report(report, run)
         write_json(run/"metrics.json", report)
         return report

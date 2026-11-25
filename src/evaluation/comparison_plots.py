@@ -13,14 +13,14 @@ import numpy as np
 
 from src.common.experiment import write_json, file_sha256
 from src.evaluation.fingerprints import source_fingerprint
-from src.evaluation.registry import AVAILABLE_ALGORITHMS, CURVES, SUPPORTED_CURVES, normalize_report_labels
+from src.evaluation.registry import AVAILABLE_ALGORITHMS, CURVES, IDENTIFIERS, SUPPORTED_CURVES, normalize_report_labels
 from src.evaluation.result_cache import FileLock
 
 
 def plot_ber(report, path):
     report = normalize_report_labels(report)
-    colors = ("#667085", "#2477b3", "#0097a7", "#8052aa", "#df8028", "#15845b", "#b42a55")
-    markers = ("o", "s", "X", "P", "^", "D", "*")
+    colors = ("#667085", "#2477b3", "#b42a55")
+    markers = ("o", "s", "*")
     styles = dict(zip(SUPPORTED_CURVES, zip(colors, markers)))
     with plt.rc_context({"font.size": 11, "axes.spines.top": False, "axes.spines.right": False}):
         fig, ax = plt.subplots(figsize=(7.5, 5.2))
@@ -28,10 +28,7 @@ def plot_ber(report, path):
         for name, values in report["curves"].items():
             color, marker = styles[name]
             ber, bits = np.array(values["ber"]), np.array(values["total_bits"])
-            # Keep the data-aided curve visible at overlapping points.
             line = dict(markersize=6)
-            if name == "DD-DPSS":
-                line.update(linestyle="--", markersize=8, markerfacecolor="none", zorder=3)
             ax.semilogy(report["snr_db"], np.where(ber > 0, ber, np.nan), color=color,
                         marker=marker, linewidth=1.8, **line,
                         label=name)
@@ -59,8 +56,6 @@ def plot_ber(report, path):
 def plot_nmse(report, path):
     fig, ax = plt.subplots(figsize=(6.4, 4.2), layout="constrained")
     ax.plot(report["snr_db"], report["nmse"]["mean_nmse_db"], "o-", color="#2477b3", label="Test CSI")
-    if "dd_mean_nmse_db" in report["nmse"]:
-        ax.plot(report["snr_db"], report["nmse"]["dd_mean_nmse_db"], "P--", color="#8052aa", label="DD-DPSS corrected CSI")
     if "corrected_mean_nmse_db" in report["nmse"]:
         ax.plot(report["snr_db"], report["nmse"]["corrected_mean_nmse_db"], "s-",
                 color="#b42a55", label="CRENet corrected CSI")
@@ -96,10 +91,7 @@ def validate_report(report):
     values = np.asarray(report["nmse"]["mean_nmse_db"])
     if report["nmse"].get("split") != "test" or values.shape != snr.shape or not np.all(np.isfinite(values)):
         raise ValueError("Invalid test NMSE values in report")
-    has_dd = any(curve.get("identifier") == "dd_ce_lmmse" for curve in report["curves"].values())
-    if has_dd != ("dd_mean_nmse_db" in report["nmse"]):
-        raise ValueError("DD-DPSS requires matching BER and corrected CSI NMSE")
-    for field in ("corrected_mean_nmse_db", "dd_mean_nmse_db"):
+    for field in ("corrected_mean_nmse_db",):
         if field not in report["nmse"]:
             continue
         corrected = np.asarray(report["nmse"][field])
@@ -127,7 +119,6 @@ def publish_report(run, report, *, redraw_nmse=False):
         if (not redraw_nmse and previous is not None and (run/"nmse_snr.png").is_file()
                 and previous.get("nmse", {}).get("mean_nmse_db") == report["nmse"]["mean_nmse_db"]
                 and previous.get("nmse", {}).get("corrected_mean_nmse_db") == report["nmse"].get("corrected_mean_nmse_db")
-                and previous.get("nmse", {}).get("dd_mean_nmse_db") == report["nmse"].get("dd_mean_nmse_db")
                 and previous.get("nmse", {}).get("provenance", {}).get("cache_key") == report["nmse"]["provenance"]["cache_key"]
                 and previous.get("snr_db") == report["snr_db"]
                 and previous.get("channel") == report["channel"]
@@ -166,15 +157,23 @@ def replot(run, *, output=None, expected_channel=None, expected_view=None, requi
         raise ValueError(f"Saved report does not match channel {expected_channel}")
     if expected_view is not None and report.get("input_view") != expected_view:
         raise ValueError(f"Saved report does not match CSI view {expected_view}")
-    retired = {"EP": "ep", "Robust EP": "robust_ep", "MMSE-PIC": "mmse_pic"}
-    if {"EP", "Robust EP"}.intersection(report.get("curves", {})):
-        for field in ("robust_covariance", "ep", "paper_doi", "rejected_sites"):
-            report.pop(field, None)
-    for label, identifier in retired.items():
-        report.get("curves", {}).pop(label, None)
-        report.get("parameters", {}).pop(identifier, None)
+    report = normalize_report_labels(report)
+    retired = {curve.get("identifier") for label, curve in report["curves"].items()
+               if label not in SUPPORTED_CURVES}
+    report["curves"] = {label: report["curves"][label] for label in SUPPORTED_CURVES if label in report["curves"]}
+    if "parameters" in report:
+        report["parameters"] = {key: value for key, value in report["parameters"].items() if key in IDENTIFIERS}
+    for identifier in retired:
+        if identifier:
+            report.pop(identifier, None)
+    for field in ("checkpoint_paths", "checkpoints"):
+        if field in report:
+            report[field] = {key: value for key, value in report[field].items() if key == "crenet"}
+    if "nmse" in report:
+        report["nmse"] = {key: value for key, value in report["nmse"].items()
+                          if not key.endswith("mean_nmse_db") or key in ("mean_nmse_db", "corrected_mean_nmse_db")}
     if "comparison_algorithms" in report:
-        report["comparison_algorithms"] = [name for name in report["comparison_algorithms"] if name not in retired]
+        report["comparison_algorithms"] = list(report["curves"])
     required = {a.label for a in AVAILABLE_ALGORITHMS if a.identifier in required_algorithms}
     missing = required-normalize_report_labels(report)["curves"].keys()
     if missing:

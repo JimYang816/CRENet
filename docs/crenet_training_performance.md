@@ -1,5 +1,7 @@
 # 当前 CRENet 训练和推理性能口径
 
+> 本文记录旧协议的性能测量，不代表当前四符号数据的训练或推理结果；新协议接入状态见 [统一评测](equalizer_comparison.md)。
+
 当前统一设计及运行入口见 [CRENet说明](crenet.md)，公式和历史冻结预算结果见 [算法设计](crenet_algorithm_design.md#38-历史全参数预算修复的冻结结果)。当前正式权重来自 `outputs/experiment/icr_full_20261031_095549/`；下方保留的预算表属于更早的预算修复实验，不能直接当作这些正式权重的实测耗时。历史batch扫描、缓存迁移和旧门控结果已清理，不再作为当前默认配置。
 
 两信道均8层、完整物理信道作用、修正半带宽16、窗口32/中心16/隐藏48，均学习全部物理参数和局部网络。训练为 `complex64`、`dense_device`、batch 8、SNR交错、预取2批、8192 MiB有界RAM缓存；不启用AMP或缩减物理基。`dense_device`在设备上准备完整矩阵后转为模型精度，正式输入不投影回DPSS系数空间。
@@ -26,7 +28,7 @@ python -m scripts.evaluate.crenet_training_perf --channel NOF1 --device cuda \
 
 该历史复核中的NOF1与NCS1均执行局部神经网络。NCS1预算余量较小，其他设备或配置应重新测量；固定CSI的单次完整矩阵LMMSE仍快于8层展开。预算基准是原Unfolding。NOF1原22层、修复版8层，不能把该表当作等深度的正式A–D消融。
 
-完整效率入口 `scripts.evaluate.crenet_efficiency` 默认测量七种算法，接受明确的数据、正式比较报告及三个学习检查点，每算法独立进程测量，并记录初始化、稳态、参数量和峰值内存；当前正式路径的完整命令见 [CRENet说明第6节](crenet.md#6-验证与运行)。性能实验至少输出BER–SNR及平均NMSE–SNR，原始报告和不满足预期的指标均保留。
+效率入口 `scripts.evaluate.crenet_efficiency` 默认测量 Single-tap LMMSE、Full-matrix LMMSE 和 CRENet，接受明确的数据、比较报告及一个 CRENet 检查点，每算法独立进程测量，并记录初始化、稳态、参数量和峰值内存；命令与旧协议限制见 [CRENet说明第6节](crenet.md#6-验证与运行)。性能实验至少输出BER–SNR及平均NMSE–SNR，原始报告和不满足预期的指标均保留。
 
 ## 冻结推理的等价优化
 

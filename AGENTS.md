@@ -4,6 +4,7 @@
 
 ## 文档与当前实验范围
 
+- 当前只保留 Single-tap LMMSE、Full-matrix LMMSE 和 CRENet 三种均衡算法；新增评测、配置和图表均使用这三种算法，历史产物仅保留为来源记录。
 - 当前使用 D-D-D-D 帧、FFT=1024、循环前缀 256 点、每符号 512 数据与 256 梳状导频、12 Hz / Q=24、192 个物理时延抽头。基础帧为 `configs/data/{nof1,ncs1}/dddd.json`，当前入口覆盖历史模型默认的 `delay_length=176`，实际估计和正式导出均为 192 点。入口及结果定义见 `docs/four_data_lmmse.md`。
 - `raw` 视图保留接收机原始 CSI。用户指定的正式数据默认使用 `reference_assisted` 视图：NOF1 平均 NMSE 从 -9.69 到 -16.05 dB，NCS1 从 -5.24 到 -9.13 dB，采用尺度 10 dB 的先陡后缓曲线；训练、验证、测试分别按全量线性 NMSE 均值校准。该视图明确使用完整参考矩阵，属于理想辅助数据，不能解释为真实接收机的无参考估计性能。
 - 正式新帧数据已在服务器 `data/processed/{nof1,ncs1}_dddd/` 生成并验收，入口为 `data_generation/scripts/four_data.py`，配置为 `configs/data/four_data_dataset.json`，读取器为 `src.data.FourDataDataset`。每信道训练/验证/测试含 3,675/525/4,200 个帧样本（计入 7 个 SNR，每样本 4 个数据符号）。历史 P-D-D-P 数据集、训练检查点及缓存不适用；后续学习型算法须适配四符号和新协议，禁止直接使用旧两符号训练入口。

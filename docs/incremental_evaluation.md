@@ -1,31 +1,24 @@
 # 独立训练与增量评测
 
-> 本文记录旧 P-D-D-P / 参考辅助补偿条件下的设计或结果，仅供历史参考。当前实验使用 D-D-D-D 帧和未经补偿的 CSI；范围及运行方式见 [四数据符号 LMMSE 小实验](four_data_lmmse.md)。
+当前只比较 Single-tap LMMSE、Full-matrix LMMSE 和 CRENet。
+两种 LMMSE 无需训练；唯一学习模型为 CRENet。
+四符号正式数据已生成，CRENet 的旧训练和评测入口仍须适配，状态见
+[统一评测](equalizer_comparison.md) 和 [四符号协议](four_data_lmmse.md)。
 
-当前七算法报告位于 `outputs/experiment/equalizer_comparison_dd_ce_20261102/{nof1,ncs1}/`，包含 BER 和平均 NMSE 图。此前六算法汇总已清理。DD-CE 的 BER 和修正 CSI 的逐块线性 NMSE 同步缓存，可用 `--force dd_ce_lmmse` 单独刷新。运行方法见[统一评测](equalizer_comparison.md)。
-服务器保留 CRENet 的 warmup/fixed/joint 检查点、UDNet 的 best/latest 检查点、原 OAMP-Net2 检查点及逐算法结果缓存。
-本地保存图、指标、训练记录与报告；完整数据、特征缓存及权重仍留服务器。
+`scripts.evaluate.compare` 只评测或绘图，不会自动调用训练。
+`configs/evaluation/ber_comparison.json` 中的 `checkpoints` 仅支持 `crenet`；
+更换模型时应绑定新实验的权重，并验证相同的数据、输入视图、模型与代码身份。
+完整训练入口 `scripts.run.crenet_experiment` 仅训练 CRENet 的共同预训练、固定 CSI 与联合分支。
 
-后续只评测或更新对比图时使用下列入口，它不调用任何训练函数：
+两种 LMMSE 使用逐块校验缓存；CRENet 完整报告缓存位于
+`outputs/experiment/_cache/crenet_reports/`，校验数据、权重、推理与评分源码、bootstrap 设置和全量比特覆盖。
+单独修改 CRENet 不要求重算两种 LMMSE；修改公共输入或评分代码时，受影响的方法须重新计算。
+更换数据协议或 CSI 视图必须重新匹配身份，不能复用旧权重和结果。
 
-```bash
-python -m scripts.evaluate.compare --device cuda --threads 4
-python -m scripts.evaluate.compare --device cuda --threads 4 --channel NCS1
-python -m scripts.evaluate.compare --plot-only
-```
+`--force` 可同时指定 `single_tap_mmse`、`full_matrix_lmmse` 和 `crenet`，
+`--force all` 刷新所有已配置方法。`--baselines-only` 只运行两种 LMMSE。
+离线重画使用 `--plot-only`；需要保留旧报告时，使用 `--from-run` 读取历史目录并输出到不同目录。
+绘图仅保留三种算法的曲线，原始历史结果不删除。
 
-默认配置为 `configs/evaluation/ber_comparison.json`，CRENet引用 `outputs/experiment/icr_full_20261031_095549/joint/<channel>/icr_mmse.pt`，UDNet引用同一实验的 `udnet/<channel>/best.pt`，OAMP-Net2引用 `outputs/experiment/oamp_net2_compensated/<channel>/best.pt`；其中 `<channel>` 为 `nof1` 或 `ncs1`。
-改变某个学习算法时，单独训练该算法到新的实验目录，将对应信道、算法的 checkpoint 路径切到新权重，再执行统一评测。
-缺少或不匹配的检查点会报错，不自动训练其他模型。`scripts.run.crenet_experiment` 是显式的完整训练入口，不用于日常增量评测。
-
-复用按实际计算身份判断：数据内容、compensated 视图、算法参数、对应权重、算法依赖源码和数值环境。
-独立修改 UDNet 不使 MMSE/DFE/OAMP/CRENet 的结果失效；独立修改 CRENet 也不重算其他检测器。
-修改公共数据构造或评分逻辑则会使实际受影响的算法重算。文档、输出目录和独立绘图脚本的修改不改变数值结果身份。
-
-传统方法、UDNet、OAMP-Net2 使用已有逐块校验缓存。CRENet 完整报告缓存位于 `outputs/experiment/_cache/crenet_reports/`，
-同时核验数据、权重摘要、原推理/评分代码、bootstrap 设置和每 SNR 全量比特覆盖。
-首次可直接导入当前检查点所属实验中身份一致的历史报告，无需重放推理；缓存本身保存 SHA256 校验。
-复用记录写入 `crenet.evaluation_cache`；其中耗时保留原测量来源，不能作为新的效率实测。
-
-只有显式需要重算时使用 `--force mmse_dfe`、`--force crenet`，也可用对应标识指定两种LMMSE；`--force` 支持同时传入多项，`--force all` 会刷新已配置的传统方法、OAMP-Net2 和 CRENet。UDNet仍按自身计算身份复用缓存，统一CLI不提供单独强制重算UDNet的选项。
-历史训练、报告和不同身份的缓存保留，不用重新训练全部算法来更新单条曲线。
+缓存内的计时保留原始测量来源，不构成新的效率实测。
+完整数据和权重留在服务器，图、指标、训练记录和报告通过 SSH 回传本地。

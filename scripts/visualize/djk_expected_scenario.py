@@ -19,9 +19,8 @@ from src.evaluation.registry import normalize_report_labels
 
 
 ROOT = Path(__file__).resolve().parents[2]
-METHODS = ["Single-tap LMMSE", "Full-matrix LMMSE", "MMSE-DFE",
-           "UDNet", "OAMP-Net2", "CRENet"]
-LEARNED = {"UDNet", "OAMP-Net2", "CRENet"}
+METHODS = ["Single-tap LMMSE", "Full-matrix LMMSE", "CRENet"]
+LEARNED = {"CRENet"}
 
 
 def load_source(path):

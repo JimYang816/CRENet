@@ -22,17 +22,10 @@ ALGORITHMS = (
     Algorithm("single_tap_mmse", "Single-tap LMMSE", "src.algorithms.single_tap_mmse.equalizer"),
     Algorithm("full_matrix_lmmse", "Full-matrix LMMSE", "src.algorithms.full_matrix_lmmse.equalizer", MATRIX),
 )
-# Keep the original defaults for callers producing the historical two-MMSE
-# report. The unified experiment explicitly enables the other baselines.
-OPTIONAL_ALGORITHMS = (
-    Algorithm("mmse_dfe", "MMSE-DFE", "src.algorithms.mmse_dfe.detector", MATRIX),
-    Algorithm("dd_ce_lmmse", "DD-DPSS", "src.algorithms.dd_ce_lmmse.detector",
-              MATRIX+("src.algorithms.full_matrix_lmmse.equalizer", "src.evaluation.dd_ce")),
-)
-AVAILABLE_ALGORITHMS = ALGORITHMS+OPTIONAL_ALGORITHMS
+AVAILABLE_ALGORITHMS = ALGORITHMS
 CURVES = tuple(a.label for a in ALGORITHMS)
 IDENTIFIERS = tuple(a.identifier for a in AVAILABLE_ALGORITHMS)
-SUPPORTED_CURVES = tuple(a.label for a in AVAILABLE_ALGORITHMS)+("UDNet", "OAMP-Net2", "CRENet")
+SUPPORTED_CURVES = CURVES+("CRENet",)
 
 
 def normalize_report_labels(report):
@@ -61,20 +54,10 @@ def resolve_parameters(algorithm_parameters=None):
         raise ValueError(f"Unknown algorithms: {sorted(set(supplied)-set(IDENTIFIERS))}")
     result = {}
     for algorithm in AVAILABLE_ALGORITHMS:
-        if algorithm in OPTIONAL_ALGORITHMS and algorithm.identifier not in supplied:
-            continue
         override = supplied.get(algorithm.identifier, {})
-        if not isinstance(override, dict):
+        if not isinstance(override, dict) or override:
             raise ValueError(f"Invalid parameters for {algorithm.identifier}")
-        if algorithm.identifier == "dd_ce_lmmse":
-            from src.algorithms.dd_ce_lmmse.detector import controls
-            if set(override)-{"rank", "prior_scale"}:
-                raise ValueError("Invalid parameters for dd_ce_lmmse")
-            result[algorithm.identifier] = controls(**override)
-        elif override:
-            raise ValueError(f"Invalid parameters for {algorithm.identifier}")
-        else:
-            result[algorithm.identifier] = {}
+        result[algorithm.identifier] = {}
     return result
 
 

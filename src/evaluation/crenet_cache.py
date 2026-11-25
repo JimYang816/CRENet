@@ -122,7 +122,7 @@ def evaluate(dataset_path, checkpoint, run, backend, *, batch_size=8, cache_dir=
         unchanged()
         # Cache only CRENet; changes to optional comparators must not affect it.
         report["curves"] = {"CRENet": report["curves"]["CRENet"]}
-        for key in ("baselines", "comparison_precision", "udnet_checkpoint", "evaluation_cache"):
+        for key in ("baselines", "comparison_precision", "evaluation_cache"):
             report.pop(key, None)
         report.setdefault("measurement_source_report", str(source) if source is not None else str((run/"metrics.json").resolve()))
         report["checkpoint"] = str(checkpoint)

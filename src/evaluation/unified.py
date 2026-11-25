@@ -13,7 +13,7 @@ from src.evaluation.fingerprints import DataIdentity
 from src.evaluation.registry import SUPPORTED_CURVES
 from src.evaluation.result_cache import FileLock
 
-LEARNED = ("udnet", "oamp_net2", "crenet")
+LEARNED = ("crenet",)
 ORDER = SUPPORTED_CURVES
 
 
@@ -28,13 +28,8 @@ def _preflight(dataset_path, checkpoints, backend):
             raise ValueError("Unified comparison requires the test split")
         if not ds._config.get("smoke") and (ds.frame_count != 600 or len(ds._indices) != 512):
             raise ValueError("Unified comparison requires all 600 test frames and 512 data carriers")
-        for name, path in checkpoints.items():
-            if name == "udnet":
-                from src.algorithms.udnet.checkpoint import load_model, validate_dataset
-            elif name == "oamp_net2":
-                from src.algorithms.oamp_net2.checkpoint import load_model, validate_dataset
-            else:
-                from src.algorithms.crenet.checkpoint import load_model, validate_dataset
+        for path in checkpoints.values():
+            from src.algorithms.crenet.checkpoint import load_model, validate_dataset
             model, payload = load_model(path, backend.device)
             validate_dataset(payload, ds)
             del model, payload
@@ -56,19 +51,6 @@ def evaluate(dataset_path, run, backend, *, checkpoints=None, batch_size=8, cach
             cache_dir=cache_dir, algorithm_parameters=algorithm_parameters, force=forced-{"crenet"}, input_view=input_view)
         report = dict(baseline, schema="watermark-unified-comparison-v1", smoke=smoke, curves=dict(baseline["curves"]))
         components = {}
-        if "udnet" in checkpoints:
-            from src.evaluation.udnet import evaluate as evaluate_udnet
-            components["udnet"] = evaluate_udnet(dataset_path, checkpoints["udnet"], run/"udnet", backend,
-                batch_size=batch_size, cache_dir=cache_dir, algorithm_parameters=algorithm_parameters)
-            report["curves"]["UDNet"] = components["udnet"]["curves"]["UDNet"]
-            report["udnet"] = components["udnet"]["udnet"]
-        if "oamp_net2" in checkpoints:
-            from src.evaluation.oamp_net2 import evaluate as evaluate_oamp
-            components["oamp_net2"] = evaluate_oamp(dataset_path, checkpoints["oamp_net2"], run/"oamp_net2", backend,
-                batch_size=batch_size, cache_dir=cache_dir, algorithm_parameters=algorithm_parameters,
-                force="all" in forced)
-            report["curves"]["OAMP-Net2"] = components["oamp_net2"]["curves"]["OAMP-Net2"]
-            report["oamp_net2"] = components["oamp_net2"]["oamp_net2"]
         if "crenet" in checkpoints:
             from src.evaluation.crenet_cache import evaluate as evaluate_crenet
             components["crenet"] = evaluate_crenet(dataset_path, checkpoints["crenet"], run/"crenet", backend,
@@ -100,8 +82,8 @@ def evaluate(dataset_path, run, backend, *, checkpoints=None, batch_size=8, cach
         report["curves"] = {name: report["curves"][name] for name in ORDER if name in report["curves"]}
         report["comparison_algorithms"] = list(report["curves"])
         report["checkpoint_paths"] = {name: str(Path(path).resolve()) for name, path in checkpoints.items()}
-        report["nmse"]["semantics"] = ("Shared input CSI. dd_mean_nmse_db and corrected_mean_nmse_db, "
-            "when present, score the full corrected CSI of DD-DPSS and CRENet respectively.")
+        report["nmse"]["semantics"] = ("Shared input CSI. corrected_mean_nmse_db, when present, "
+            "scores the full corrected CSI of CRENet.")
         guard.assert_unchanged()
         publish_report(run, report)
         _write_html(run, report)
@@ -112,8 +94,7 @@ def _write_html(run, report):
     headings = "".join(f"<th>{s:g} dB</th>" for s in report["snr_db"])
     rows = "".join("<tr><th>"+html.escape(name)+"</th>"+"".join(f"<td>{v:.6g}</td>" for v in curve["ber"])+"</tr>"
                    for name, curve in report["curves"].items())
-    nmse_fields = (("输入 CSI", "mean_nmse_db"), ("DD-DPSS", "dd_mean_nmse_db"),
-                   ("CRENet", "corrected_mean_nmse_db"))
+    nmse_fields = (("输入 CSI", "mean_nmse_db"), ("CRENet", "corrected_mean_nmse_db"))
     nmse_rows = "".join(f"<tr><th>{label}</th>"+"".join(f"<td>{v:.3f}</td>" for v in report["nmse"][field])+"</tr>"
                         for label, field in nmse_fields if field in report["nmse"])
     body = f'''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>{report['channel']} 均衡算法对比</title>

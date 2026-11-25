@@ -20,7 +20,6 @@ def main():
     parser.add_argument("--channel", choices=("NOF1", "NCS1"), required=True)
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--run", type=Path, required=True)
-    parser.add_argument("--udnet-checkpoint", type=Path)
     parser.add_argument("--device", choices=("cpu", "cuda"), default=default_device())
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--operator-backend", choices=("dense", "dpss"), default="dense")
@@ -32,7 +31,7 @@ def main():
     torch.set_num_threads(args.threads)
     with threadpool_limits(args.threads):
         evaluate(Path(config["datasets"][args.channel])/"test.h5", args.checkpoint, args.run,
-                 DenseBackend(args.device), udnet_checkpoint=args.udnet_checkpoint,
+                 DenseBackend(args.device),
                  operator_backend=args.operator_backend, **config.get("evaluation", {}))
 
 

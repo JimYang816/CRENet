@@ -27,7 +27,7 @@ LABELS = SUPPORTED_CURVES
 
 
 def comparison_config(training, comparison, output):
-    """Bind evaluation to this run's new models, retaining valid baseline paths."""
+    """Bind the three-algorithm evaluation to this run's joint CRENet model."""
     if training.get("input_view") != "raw" or comparison.get("input_view") != "raw":
         raise ValueError("The full experiment requires raw CSI")
     if set(training["datasets"]) != {"NOF1", "NCS1"}:
@@ -37,9 +37,9 @@ def comparison_config(training, comparison, output):
     result["datasets"] = {ch: str(Path(path)/"test.h5") for ch, path in training["datasets"].items()}
     for ch in training["datasets"]:
         checkpoints = result.setdefault("checkpoints", {}).setdefault(ch, {})
+        if set(checkpoints)-{"crenet"}:
+            raise ValueError("Only CRENet checkpoints are supported")
         checkpoints["crenet"] = str(output/"joint"/ch.lower()/"crenet.pt")
-        if not checkpoints.get("udnet") or not Path(checkpoints["udnet"]).is_file():
-            checkpoints["udnet"] = str(output/"udnet"/ch.lower()/"best.pt")
     return result
 
 
@@ -55,13 +55,8 @@ def preflight(training, comparison):
                 if (ds.channel != ch or ds.split != split or ds.frame_count != count
                         or ds.snr_db.tolist() != SNR or len(ds._indices) != 512 or ds._config.get("smoke")):
                     raise ValueError(f"{ch}/{split}: requires the accepted complete dataset")
-        paths = {k: v for k, v in comparison["checkpoints"][ch].items()
-                 if k != "crenet" and (k != "udnet" or Path(v).is_file())}
-        _preflight(Path(directory)/"test.h5", paths, DenseBackend("cpu"))
-    return dict(torch=str(torch.__version__), cuda_available=torch.cuda.is_available(),
-                reused_checkpoints={ch: {k: dict(path=v, sha256=file_sha256(v))
-                    for k, v in paths.items() if k != "crenet" and Path(v).is_file()}
-                    for ch, paths in comparison["checkpoints"].items()})
+        _preflight(Path(directory)/"test.h5", {}, DenseBackend("cpu"))
+    return dict(torch=str(torch.__version__), cuda_available=torch.cuda.is_available())
 
 
 def validate_report(report, channel):
@@ -104,13 +99,10 @@ def run(args):
         training = json.loads(args.config.read_text(encoding="utf-8"))
         original_comparison = json.loads(args.comparison_config.read_text(encoding="utf-8"))
         comparison = comparison_config(training, original_comparison, output)
-        udnet = json.loads(Path("configs/training/udnet.json").read_text(encoding="utf-8"))
-        if udnet["datasets"] != training["datasets"] or udnet["training"].get("input_view") != "raw":
-            raise ValueError("UDNet training must use the same raw datasets")
         for ch in training["datasets"]:
             for stage in STAGES:
                 resolve_config(args.config, channel=ch, stage=stage, output=output)
-        identity = dict(commit=commit, training=training, comparison=comparison, udnet=udnet,
+        identity = dict(commit=commit, training=training, comparison=comparison,
                         device=args.device, threads=args.threads)
         if (output/"manifest.json").exists():
             previous = json.loads((output/"manifest.json").read_text(encoding="utf-8"))
@@ -126,7 +118,6 @@ def run(args):
             write_json(output/"manifest.json", dict(identity=identity, environment=environment))
             write_json(output/"training_config.json", training)
             write_json(output/"comparison_config.json", comparison)
-            write_json(output/"udnet_config.json", udnet)
             (output/"logs").mkdir(exist_ok=True)
             common = ["--device", args.device, "--threads", str(args.threads)]
             for ch in training["datasets"]:
@@ -143,13 +134,6 @@ def run(args):
                            for ch in training["datasets"] for branch in ("fixed", "joint")}
             write_json(output/"detector_learning_audit.json", audit_study(checkpoints))
             for ch in training["datasets"]:
-                target = output/"udnet"/ch.lower()/"best.pt"
-                if Path(comparison["checkpoints"][ch]["udnet"]) == target:
-                    command = ["scripts.train.udnet", "--config", str(output/"udnet_config.json"),
-                               "--channel", ch, "--output", str(output/"udnet"), *common]
-                    if args.resume and (target.parent/"latest.pt").exists():
-                        command.append("--resume")
-                    execute(output, state, f"{ch.lower()}_udnet", command)
                 execute(output, state, f"{ch.lower()}_comparison", ["scripts.evaluate.compare", "--config",
                         str(output/"comparison_config.json"), "--channel", ch, *common])
                 execute(output, state, f"{ch.lower()}_fixed_evaluation", ["scripts.evaluate.crenet", "--config",

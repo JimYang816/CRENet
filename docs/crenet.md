@@ -1,6 +1,6 @@
 # CRENet：当前统一算法与运行方式
 
-> 本文记录旧 P-D-D-P / 参考辅助补偿条件下的设计或结果，仅供历史参考。当前实验使用 D-D-D-D 帧和未经补偿的 CSI；范围及运行方式见 [四数据符号 LMMSE 小实验](four_data_lmmse.md)。
+> 本文中的训练命令和数值对应旧 P-D-D-P 协议，作为历史设计与结果保留。当前 D-D-D-D 正式数据默认使用参考辅助补偿 CSI；CRENet 流程须适配四符号后再运行，旧权重不可复用。项目现仅保留两种 LMMSE 与 CRENet，当前状态见 [四符号协议](four_data_lmmse.md) 和 [统一评测](equalizer_comparison.md)。
 
 当前设计为 **8层残差 MMSE Unfolding + 共享带状 CSI 修正器**。NOF1、NCS1 都学习逐层物理参数和局部神经校准网络，分别训练权重。公式、参数和冻结测试见 [算法设计](crenet_algorithm_design.md)。
 
@@ -42,7 +42,7 @@ python -m scripts.train.crenet --channel NCS1 --stage joint --device cuda
 
 ## 3. 当前正式检查点与历史预算复核
 
-当前正式训练已在 `outputs/experiment/icr_full_20261031_095549/` 完成，两信道均包含共同预训练、固定CSI分支和联合分支，`progress.json` 标记 `completed`。当前主比较配置引用下表的联合模型，UDNet也使用该实验的独立训练权重：
+历史正式训练保存在 `outputs/experiment/icr_full_20261031_095549/`，两信道均包含共同预训练、固定CSI分支和联合分支，`progress.json` 标记 `completed`。下表记录当时模型，当前新帧配置未绑定这些旧权重：
 
 | 信道 | 固定CSI | 完整模型 |
 |---|---|---|
@@ -59,15 +59,15 @@ python -m scripts.train.crenet --channel NCS1 --stage joint --device cuda
 
 该历史复核中，NOF1固定CSI相对未训练初始化没有显著学习收益，部分0 dB点仍差于LMMSE，联合CSI NMSE也未全面改善。单种子、物理记录配对区间不能证明训练随机性稳定或神经校准的独立贡献。完整负面结果和区间保存在历史冻结报告中。
 
-## 4. 七算法主比较
+## 4. 三算法主比较
 
-比较 Single-tap LMMSE、Full-matrix LMMSE、MMSE-DFE、DD-CE + Full-matrix LMMSE、UDNet、OAMP-Net2 和当前 CRENet，配置为 `configs/evaluation/ber_comparison.json`。双信道报告默认输出到 `outputs/experiment/equalizer_comparison_dd_ce_20261102/{nof1,ncs1}/`，运行方法见 [统一评测](equalizer_comparison.md)。
+当前仅比较 Single-tap LMMSE、Full-matrix LMMSE 和 CRENet，配置为 `configs/evaluation/ber_comparison.json`。当前两种 LMMSE 已接入四符号实验；统一入口及 CRENet 流程仍需按新协议适配，运行边界见 [统一评测](equalizer_comparison.md)。
 
 ```bash
 python -m scripts.evaluate.compare --device cuda --threads 4
 ```
 
-六算法报告沿用 2026-10-31 全量测试的误码计数及输入/修正 CSI NMSE，原始报告保存在 `outputs/experiment/equalizer_comparison_mmse_dfe_20261031/`。后续更新检查点时，必须重新校验计算身份并完成所需评测，才能引用新结果。
+历史完整报告保留原始误码计数及输入/修正 CSI NMSE。离线绘图只提取当前三种方法，不改变原始来源；后续更新检查点时，必须重新校验计算身份并完成所需评测，才能引用新结果。
 
 ## 5. 比较、消融与输出
 
@@ -109,7 +109,7 @@ python -m scripts.run.crenet_ablation --trained-root outputs/experiment/crenet_c
 
 各信道的 `test/<channel>/comparison.json`、`comparison.csv` 保存完整逐SNR数值及四项配对区间，同目录包含BER/NMSE图；验证结果在对应 `validation/` 目录。D的测试平均BER最低，但30 dB的CSI NMSE仍弱于C，不能表述为所有指标均改善。该结果仍为单训练种子，配对区间反映物理记录间差异，不代表多种子稳定性。
 
-A–D内部统一使用冻结配置的 `complex64` 和对角噪声权重；七算法主比较中的传统Full-matrix LMMSE使用完整热噪声协方差及双精度。两类报告须分别引用，不能跨表替换A或D的误码计数。
+A–D内部统一使用冻结配置的 `complex64` 和对角噪声权重；主比较中的传统Full-matrix LMMSE使用完整热噪声协方差及双精度。两类报告须分别引用，不能跨表替换A或D的误码计数。
 
 每次完整评测至少生成BER–SNR、平均完整矩阵NMSE–SNR，保留实际误码数、逐层结果、数据/代码/权重摘要、计时及物理记录配对统计。预算复核保留的 `legacy_20261030.py` 与 `legacy_lmmse_20261030.py` 是原推理快照，不能删除或当成活动训练模型。
 
@@ -117,15 +117,13 @@ A–D内部统一使用冻结配置的 `complex64` 和对角噪声权重；七�
 
 本地CPU验证覆盖新配置解析、两分支共享预训练、分组学习率、逐层参数学习审计及推理等价性。服务器按 `main` 同步代码后读取原数据和检查点。Git只保存代码、配置、测试与文档；数据、训练权重、旧结果和论文产物留在各自输出目录。
 
-正式效率入口默认对七种算法分别启动独立进程。以NOF1为例，必须使用与比较报告匹配的数据和三个正式检查点：
+保留的效率入口默认对三种算法分别启动独立进程，只需一个 CRENet 检查点。以下为旧协议的运行示例，必须使用与比较报告匹配的数据和权重：
 
 ```bash
 python -m scripts.evaluate.crenet_efficiency \
   --dataset data/processed/nof1_compact_20261026_final/test.h5 \
-  --comparison-report outputs/experiment/equalizer_comparison_dd_ce_20261102/nof1/metrics.json \
+  --comparison-report outputs/experiment/crenet_comparison/nof1/metrics.json \
   --checkpoint outputs/experiment/icr_full_20261031_095549/joint/nof1/icr_mmse.pt \
-  --udnet-checkpoint outputs/experiment/icr_full_20261031_095549/udnet/nof1/best.pt \
-  --oamp-net2-checkpoint outputs/experiment/oamp_net2_compensated/nof1/best.pt \
   --output outputs/experiment/crenet_efficiency_<run_id>/nof1.json \
   --device cuda --batch-size 2 --threads 4
 ```

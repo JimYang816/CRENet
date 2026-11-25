@@ -1,10 +1,10 @@
 # 不完美 CSI 下联合信道修正与 MMSE 深度展开的水声 OFDM 均衡算法
 
-> 本文记录旧 P-D-D-P / 参考辅助补偿条件下的设计或结果，仅供历史参考。当前实验使用 D-D-D-D 帧和未经补偿的 CSI；范围及运行方式见 [四数据符号 LMMSE 小实验](four_data_lmmse.md)。
+> 本文记录旧 P-D-D-P 协议的设计与结果，仅供历史参考。当前 D-D-D-D 正式数据默认使用参考辅助补偿 CSI，旧权重和训练入口须按新协议适配；范围及验收结果见 [四符号数据说明](four_data_lmmse.md)。
 
 本文按当前实现同步：修正网络采用 `14(2B+1)+5` 通道反馈，均衡层采用带 CSI 加载和精确方向线搜索的残差展开，并进行局部 QPSK logits 校准。主配置为 `input_view="compensated"`、`complex64`、对角噪声权重；RTX 4080 的训练数据准备与 batch/cache 设置见 [运行说明](crenet.md#6-验证与运行) 和 [训练性能历史基准](crenet_training_performance.md)。
 
-默认联合展开8层，采用A/B/C三阶段训练。正式比较包括 Single-tap LMMSE、Full-matrix LMMSE、MMSE-DFE、DD-CE + Full-matrix LMMSE、UDNet、OAMP-Net2、CRENet，统一配置见 `configs/evaluation/ber_comparison.json`。2026-10-31已完成当前正式训练、双信道全量评测及等深度A–D消融，检查点与结果目录见 [CRENet运行说明](crenet.md#3-当前正式检查点与历史预算复核)。论文主稿与图片位于 `outputs/paper/`。
+默认联合展开8层，采用A/B/C三阶段训练。当前仅保留 Single-tap LMMSE、Full-matrix LMMSE 和 CRENet，统一配置见 `configs/evaluation/ber_comparison.json`。2026-10-31的训练、评测及等深度A–D消融属于历史协议，检查点与结果目录见 [CRENet运行说明](crenet.md#3-当前正式检查点与历史预算复核)，不能直接复用于新的四符号数据。论文主稿与图片位于 `outputs/paper/`。
 
 ## 1. 研究背景
 
@@ -132,7 +132,7 @@ H_0^{(d)}=\widehat H^{(d)},\qquad d\in\{D1,D2\}.
 \tag{2}
 $$
 
-Single-tap LMMSE、Full-matrix LMMSE、MMSE-DFE、DD-CE + Full-matrix LMMSE、UDNet、OAMP-Net2 和 CRENet 均使用同一已验收的 compensated CSI 及固定划分。SNR 0→30 dB 时，NOF1 平均 NMSE 为 −12.70→−18.30 dB，NCS1 为 −6.20→−10.67 dB。raw 视图仅供显式诊断，不能复用其检查点、特征或评测缓存；主比较汇总见 [均衡算法对比](equalizer_comparison.md)。
+Single-tap LMMSE、Full-matrix LMMSE 和 CRENet 在同一比较中必须使用相同初始 CSI 及固定划分。本文历史实验的 compensated CSI 在 SNR 0→30 dB 时，NOF1 平均 NMSE 为 −12.70→−18.30 dB，NCS1 为 −6.20→−10.67 dB；这些端点不适用于当前四符号数据。输入视图与协议变化后不得复用旧检查点、特征或评测缓存；当前状态见 [均衡算法对比](equalizer_comparison.md)。
 
 模型保留 $H_0$ 的全部耦合，不另行输入系数或参考投影，也不把完整估计矩阵重新投影到 DPSS 子空间。后续修正只改变既定带内元素；其恢复能力必须由实验检验，不能由“存在参考监督”直接推出。
 
@@ -491,7 +491,7 @@ CSI 监督与真实符号不进入推理 forward，测试集不参与选型。�
 
 ### 3.8 历史全参数预算修复的冻结结果
 
-本节保留 `icr_budgeted_unified_20261031` / `icr_budgeted_20261031` 的历史预算修复记录，数值和限制均对应当时冻结的权重；相关历史结果和检查点已清理。当前七算法主比较使用 `icr_full_20261031_095549` 的正式联合权重；已完成的等深度A–D实验为 `icr_ad_current_20261031_133445`，见 [正式消融定义与结果](crenet.md#5-比较消融与输出)。本节表格不替代这两批正式报告，也不代表其权重的最新效率实测。
+本节保留 `icr_budgeted_unified_20261031` / `icr_budgeted_20261031` 的历史预算修复记录，数值和限制均对应当时冻结的权重；相关历史结果和检查点已清理。后续历史主比较使用 `icr_full_20261031_095549` 的正式联合权重；已完成的等深度A–D实验为 `icr_ad_current_20261031_133445`，见 [正式消融定义与结果](crenet.md#5-比较消融与输出)。本节表格不替代这两批历史报告，也不代表当前新帧结果或最新效率实测。
 
 两信道使用相同的8层残差展开、窗口32、中心16、隐藏维度48、QPSK 软更新及比特损失。
 两者在检测器训练阶段 A/C 都学习全部逐层物理参数、局部隐藏映射和分类头；阶段 B 仍只训练 CSI 修正器。

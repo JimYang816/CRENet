@@ -21,9 +21,8 @@ from src.evaluation.registry import normalize_report_labels
 ROOT = Path(__file__).resolve().parents[2]
 FS = 96000
 BB_FS = 12000
-METHODS = ["Single-tap LMMSE", "Full-matrix LMMSE", "MMSE-DFE", "UDNet",
-           "OAMP-Net2", "CRENet"]
-COLORS = ["#7a8694", "#245a87", "#b27832", "#8c65a8", "#239687", "#d64d45"]
+METHODS = ["Single-tap LMMSE", "Full-matrix LMMSE", "CRENet"]
+COLORS = ["#7a8694", "#245a87", "#d64d45"]
 
 
 def dump(path, value):

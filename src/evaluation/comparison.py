@@ -13,7 +13,6 @@ from src.algorithms.likelihood import make_whitener
 from src.common.experiment import write_json
 from src.data.compact import CompactDataset
 from src.evaluation import fingerprints as fp
-from src.evaluation.dd_ce import corrected_nmse, receiver_context
 from src.evaluation.inputs import prepare_batch
 from src.evaluation.nmse import evaluate_nmse
 from src.evaluation.comparison_plots import plot_ber, publish_report, replot
@@ -77,7 +76,6 @@ def evaluate(dataset_path, run, backend, *, batch_size=8,
         environment = fp.numerical_environment(backend)
         origin = fp.generation_origin(run, backend, batch_size)
         report_curves = {}
-        channel_updates = {}
         with ExitStack() as stack:
             entries = {}
             shape = (nsnr, count, 2)
@@ -89,9 +87,6 @@ def evaluate(dataset_path, run, backend, *, batch_size=8,
                     environment=environment)
                 arrays = dict(bit_errors=(shape, "int64"), rejected_sites=(shape, "int64"))
                 limits = {"bit_errors": (0, 2*ndata), "rejected_sites": (0, None)}
-                if algorithm.identifier == "dd_ce_lmmse":
-                    arrays["corrected_nmse"] = (shape, "float64")
-                    limits["corrected_nmse"] = (0, None)
                 entries[algorithm.identifier] = stack.enter_context(CacheEntry(
                     cache, "algorithms/"+algorithm.identifier, scientific_identity,
                     arrays, shape, origin, force=algorithm.identifier in forced, limits=limits,
@@ -102,8 +97,6 @@ def evaluate(dataset_path, run, backend, *, batch_size=8,
             thermal = None
             if any(not np.all(entries[a.identifier].complete) for a in algorithms[1:]):
                 thermal = make_whitener(ds._shared["unit_rf_noise_covariance"][:], backend)
-            if "dd_ce_lmmse" in entries and not np.all(entries["dd_ce_lmmse"].complete):
-                dd_context = receiver_context(ds, backend, parameters["dd_ce_lmmse"])
             for si, snr in enumerate(ds.snr_db):
                 for d in range(2):
                     for start in range(0, count, batch_size):
@@ -123,12 +116,9 @@ def evaluate(dataset_path, run, backend, *, batch_size=8,
                             extra = {}
                             if algorithm.identifier != "single_tap_mmse":
                                 extra["whitener"] = thermal
-                            controls = dd_context[d] if algorithm.identifier == "dd_ce_lmmse" else parameters[algorithm.identifier]
-                            result = algorithm.equalize(batch, backend, **extra, **controls)
+                            result = algorithm.equalize(batch, backend, **extra, **parameters[algorithm.identifier])
                             errors, rejected_sites = score_batch(ds, frames, d, result)
                             scores = dict(bit_errors=errors, rejected_sites=rejected_sites)
-                            if algorithm.identifier == "dd_ce_lmmse":
-                                scores["corrected_nmse"] = corrected_nmse(ds, frames, d, result.corrected_channel, backend)
                             for j, fi in enumerate(frames):
                                 entries[algorithm.identifier].commit((si, fi, d),
                                     **{name: values[j] for name, values in scores.items()})
@@ -144,12 +134,8 @@ def evaluate(dataset_path, run, backend, *, batch_size=8,
                 report_curves[algorithm.label] = dict(identifier=algorithm.identifier, errors=totals.tolist(),
                     total_bits=[bits]*nsnr, ber=(totals/bits).tolist(), parameters=parameters[algorithm.identifier],
                     provenance=entry.provenance())
-                if algorithm.identifier == "dd_ce_lmmse":
-                    linear = entry.read("corrected_nmse").mean(axis=(1, 2))
-                    channel_updates["dd_mean_nmse_db"] = (10*np.log10(np.maximum(linear, np.finfo(float).tiny))).tolist()
                 entry.publish()
         nmse = _nmse(ds, cache, identity, environment, origin)
-        nmse.update(channel_updates)
         identity.assert_unchanged()
         report = dict(schema=SCHEMA, complete=True, channel=ds.channel, snr_db=ds.snr_db.tolist(),
             frame_count=count, bits_per_snr=bits, data_blocks_per_snr=count*2, curves=report_curves,
