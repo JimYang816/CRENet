@@ -1,11 +1,11 @@
-"""Frozen full-frame, delay-local channel statistics for P-D-D-P estimation."""
+"""Frozen delay-local channel statistics for pilot-aided estimation."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 import numpy as np
 
 from data_generation.src.transmitter.ofdm import ifft
-from data_generation.src.receiver.dpss import FULL_FRAME_DOMAIN
+from data_generation.src.receiver.dpss import FULL_FRAME_DOMAIN, SINGLE_SYMBOL_DOMAIN
 from src.common.numerics import hermitian
 
 
@@ -41,10 +41,10 @@ class FrozenPrior:
                 or not len(coeff) or not np.all(np.isfinite(coeff))
                 or np.sum(abs(coeff)**2) <= 0):
             raise ValueError("Invalid prior coefficients")
-        if fit_domain != FULL_FRAME_DOMAIN:
-            raise ValueError("PDDP requires full-frame prior coefficients")
-        if (not isinstance(delay_block_size, (int, np.integer))
-                or delay_block_size < 0 or delay_block_size > model.length):
+        if fit_domain not in (FULL_FRAME_DOMAIN, SINGLE_SYMBOL_DOMAIN):
+            raise ValueError("Unknown prior coefficient domain")
+        max_block_size = model.c["nfft"] if fit_domain == SINGLE_SYMBOL_DOMAIN else model.length
+        if not isinstance(delay_block_size, (int, np.integer)) or not 0 <= delay_block_size <= max_block_size:
             raise ValueError("Invalid delay covariance block size")
         if not np.isfinite(interference_scale) or interference_scale < 0:
             raise ValueError("Invalid data interference scale")
