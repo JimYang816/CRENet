@@ -113,3 +113,24 @@ NOF1 原最终模型即 B 阶段权重，验证 BER 为 0.04837519。延长的�
 各次结果的 `summary.json` 保存实际源代码哈希、数据身份、设备、采样种子及超参数。
 配对测试入口为 `python -m scripts.evaluate.four_data_detector_holdout`，
 结果包含 `frozen_selection.json`、`comparison.json`、逐帧数据及 BER/NMSE 图。
+
+例如，在服务器复跑 NOF1 的修正后分组诊断，可使用新的输出目录：
+
+```bash
+cd /home/fay/JimYang/CRENet
+OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+  /home/fay/anaconda3/envs/jimyang/bin/python -m scripts.evaluate.four_data_stage_a \
+  --channel NOF1 --start B --steps 100 --intervals 5 \
+  --variants scalars_1e-3 scaled_neural_1e-2 --device cuda --threads 4 \
+  --output outputs/experiment/four_data_detector_nof1_repeat
+```
+
+重放已经冻结的候选配对测试如下；这只用于复核，不提供新的独立留出集：
+
+```bash
+OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+  /home/fay/anaconda3/envs/jimyang/bin/python -m scripts.evaluate.four_data_detector_holdout \
+  --channel NOF1 --variant scaled_neural_1e-2 --device cuda --threads 4 \
+  --diagnosis outputs/experiment/four_data_detector_nof1_longer_20261126 \
+  --output outputs/experiment/four_data_detector_nof1_holdout_repeat
+```
