@@ -97,7 +97,7 @@ def recalibrate_datasets(dataset_root, run, options, targets, backend):
             directories={ch: str(p) for ch, p in directories.items()},
             channels={},
         )
-        # Preflight all six splits before the first metadata mutation.
+        # Preflight every selected split before the first metadata mutation.
         for channel, directory in directories.items():
             manifest = json.loads(
                 (directory / "manifest.json").read_text(encoding="utf-8")

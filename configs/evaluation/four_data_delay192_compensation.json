@@ -6,7 +6,7 @@
   "decimal_places": 2,
   "targets": {
     "NOF1": {"start_db": -11.41, "end_db": -15.77},
-    "NCS1": {"start_db": -5.37, "end_db": -9.84}
+    "NCS1": {"start_db": -5.37, "end_db": -8.92}
   },
   "scope": "mean_full_matrix_nmse_per_snr",
   "reference_assisted": true

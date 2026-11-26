@@ -10,10 +10,11 @@ from src.evaluation.comparison import evaluate
 from src.evaluation.registry import CURVES
 
 
-def test_datasets(dataset_root, run, targets, backend, batch_size=8):
+def test_datasets(dataset_root, run, targets, backend, batch_size=8, *, channels=None):
     dataset_root, run = Path(dataset_root), Path(run)
     reports = {}
-    for channel in targets["channels"]:
+    channels = targets["channels"] if channels is None else channels
+    for channel in channels:
         write_json(run / "progress.json", dict(stage="full_test", channel=channel))
         reports[channel] = evaluate(
             dataset_root / (channel.lower() + "_dddd") / "test.h5",
@@ -82,7 +83,10 @@ def finish(run, reports, targets):
                         target[i],
                     ]
                 )
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8), layout="constrained")
+    columns = len(reports)
+    fig, axes = plt.subplots(
+        2, columns, figsize=(6 * columns, 8), layout="constrained", squeeze=False
+    )
     for col, (channel, r) in enumerate(reports.items()):
         x = np.asarray(r["snr_db"])
         measured = np.asarray(r["curves"][CURVES[0]]["ber"])
@@ -133,8 +137,11 @@ def finish(run, reports, targets):
         fig.savefig(run / f"comparison.{extension}", dpi=180)
     plt.close(fig)
     for kind in ("ber", "nmse"):
-        fig, axes = plt.subplots(1, 2, figsize=(11, 4.3), layout="constrained")
-        for ax, (channel, r) in zip(axes, reports.items(), strict=True):
+        fig, axes = plt.subplots(
+            1, columns, figsize=(5.5 * columns, 4.3),
+            layout="constrained", squeeze=False,
+        )
+        for ax, (channel, r) in zip(axes[0], reports.items(), strict=True):
             if kind == "ber":
                 values = np.asarray(r["curves"][CURVES[0]]["ber"])
                 ax.semilogy(

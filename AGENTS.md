@@ -6,10 +6,10 @@
 
 - 当前均衡算法为半带宽 16 的 Banded LMMSE；按真实 FFT 索引保留数据通道的 ±16 耦合，先消除已知导频，再使用完整热噪声协方差求解。Single-tap LMMSE 和 Full-matrix LMMSE 源码及旧实验入口已归档至提交 `a08592b`，历史产物仅保留为来源记录。
 - 当前默认使用 D-D-D-D 帧、FFT=1024、循环前缀 80 ms（基带 6 kHz 下为 480 点）、12 Hz / Q=24、192 个物理时延抽头。每符号使用 512 个数据子载波、224 个梳状导频、224 个带内保护空载波和两端各 32 个边缘空载波。基础帧为 `configs/data/{nof1,ncs1}/dddd.json`，当前入口将 `delay_length` 设为 192。入口及结果定义见 `docs/four_data_cp80.md`。
-- `raw` 视图保留接收机原始 CSI。正式数据默认使用 `reference_assisted` 视图，当前指定 NOF1 平均 NMSE 从 -11.41 到 -15.77 dB，NCS1 从 -5.37 到 -9.84 dB，采用尺度 10 dB 的先陡后缓曲线并保留两位小数；训练、验证、测试分别按全量线性 NMSE 均值校准。该视图明确使用完整参考矩阵，属于理想辅助数据，不能解释为真实接收机的无参考估计性能。
+- `raw` 视图保留接收机原始 CSI。正式数据默认使用 `reference_assisted` 视图，当前指定 NOF1 平均 NMSE 从 -11.41 到 -15.77 dB，NCS1 从 -5.37 到 -8.92 dB，采用尺度 10 dB 的先陡后缓曲线并保留两位小数；训练、验证、测试分别按全量线性 NMSE 均值校准。该视图明确使用完整参考矩阵，属于理想辅助数据，不能解释为真实接收机的无参考估计性能。
 - 正式数据生成入口为 `data_generation/scripts/four_data.py`，配置为 `configs/data/four_data_dataset.json`，默认输出到 `data/processed/dddd_pilot224/{nof1,ncs1}_dddd/`，读取器为 `src.data.FourDataDataset`。每信道的训练、验证和测试分别含 3,675、525 和 4,200 个帧样本（计入 7 个 SNR，每样本 4 个数据符号）。全帧 DPSS 基和物理通道先验系数来自独立记录，来源为已验收的 `outputs/smoke/four_data_cp80_20261125/`。
 - 当前 224 导频正式数据已于 2026-11-27 生成并全量验收，双信道约 19.78 GiB，记录为 `outputs/experiment/dddd_cp80_delay192_pilot224_assisted_20261127/`。256 导频的旧 CP80 正式数据约 19.72 GiB 已删除，旧验收记录保留在 `outputs/experiment/dddd_cp80_delay192_assisted_20261126/`；历史权重及结果禁止用于新的默认实验。
-- 现有正式数据的 CSI 重校准与完整 B16 测试入口为 `data_generation/scripts/recalibrate_four_data.py`，记录保存到 `outputs/experiment/dddd_assisted_b16_20261127/`。重校准只修改补偿元数据，原始生成身份保留，并单独记录校准身份和旧补偿参数；完整测试使用参考辅助视图，每信道每 SNR 共 600 帧。
+- 现有正式数据的 CSI 重校准与完整 B16 测试入口为 `data_generation/scripts/recalibrate_four_data.py`；本次 NCS1 使用 `--channels NCS1`，记录保存到 `outputs/experiment/dddd_assisted_b16_ncs1_892_20261127/`，NOF1 沿用 `outputs/experiment/dddd_assisted_b16_20261127/`。重校准只修改补偿元数据，原始生成身份保留，并单独记录校准身份和旧补偿参数；完整测试使用参考辅助视图，每信道每 SNR 共 600 帧。
 - 旧版 CRENet（8 层残差 MMSE 展开）的源码、训练与评测配置及消融记录见提交 `38c1b00`。本地备份为 `outputs/experiment/archive/crenet_before_redesign_20261127_38c1b00.zip`，旧权重和结果仅用于复核历史实验。
 - `README.md` 仅保留项目简要说明及文件目录结构；未经用户明确允许，不得修改。
 - NCS1 与 NOF1 使用两份 D-D-D-D 配置并共用同一实际 DPSS 时间基；各自冻结 192 个物理时延位置，保留真实索引。`pddp.json` 仅为历史帧配置。

@@ -21,7 +21,7 @@
 | 信道 | 各 SNR 的平均 NMSE 目标 / dB |
 | --- | --- |
 | NOF1 | -11.41, -13.22, -14.31, -14.97, -15.38, -15.62, -15.77 |
-| NCS1 | -5.37, -7.22, -8.34, -9.02, -9.44, -9.69, -9.84 |
+| NCS1 | -5.37, -6.84, -7.73, -8.27, -8.60, -8.80, -8.92 |
 
 训练、验证和测试分别使用该划分的全量线性 NMSE 均值计算公共 SNR 系数，
 构造 `H_assisted = H_ref + alpha_s (H_raw - H_ref)`。
@@ -36,7 +36,15 @@ python -m data_generation.scripts.recalibrate_four_data all --device cuda --thre
 
 入口先核对旧验收文件哈希并保存旧补偿参数，重校准后逐帧验收全部划分，
 然后对每信道全部 600 帧/SNR、每帧四符号进行 B16 测试。
-输出为 `outputs/experiment/dddd_assisted_b16_20261127/`；每信道每 SNR 为 2,457,600 bit。
+默认输出为 `outputs/experiment/dddd_assisted_b16_20261127_v2/`；每信道每 SNR 为 2,457,600 bit。
+
+本次仅更新 NCS1 至 -5.37 → -8.92 dB，保持 NOF1 正式数据与结果，运行：
+
+```bash
+python -m data_generation.scripts.recalibrate_four_data all --channels NCS1 --output outputs/experiment/dddd_assisted_b16_ncs1_892_20261127 --device cuda --threads 4 --batch-size 8
+```
+
+单信道模式仅重校准和验收选中信道的训练、验证、测试集，并对该信道进行完整 B16 测试。
 
 已有正式测试数据的增量评测使用：
 
@@ -55,9 +63,9 @@ python -m scripts.evaluate.compare --plot-only
 Single-tap LMMSE、Full-matrix LMMSE 及其旧实验入口的来源版本为 `a08592b`。
 历史报告保留原始误码和名称，不转换成新的带状 LMMSE 结果。
 
-## 当前全量测试结果
+## 前次全量测试结果（NCS1 终点 -9.84 dB）
 
-2026-11-27 按上述小数目标完成六份数据的重校准与全量验收，计算提交为 `f49d73b`。
+2026-11-27 按 NOF1 -11.41 → -15.77 dB、NCS1 -5.37 → -9.84 dB 完成六份数据的重校准与全量验收，计算提交为 `f49d73b`。
 平均 NMSE 相对目标的最大偏差约 `1.78e-15 dB`，原始生成模型哈希保持不变。
 逐帧参考、观测、标签和独立随机种子核查通过；参考辅助输入的批量矩阵与读取器矩阵抽查完全一致。
 

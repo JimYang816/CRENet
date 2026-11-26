@@ -106,3 +106,16 @@ def test_formal_reader_comparison_scores_all_four_symbols(tmp_path, input_view):
         ),
         atol=1e-10,
     )
+    if input_view == "reference_assisted":
+        from src.evaluation.assisted_banded import finish
+
+        measured = report["nmse"]["mean_nmse_db"]
+        targets = dict(
+            snr_db=report["snr_db"], decay_db=10,
+            targets={"NOF1": dict(start_db=measured[0], end_db=measured[-1])},
+        )
+        finish(tmp_path / "run", {"NOF1": report}, targets)
+        result = json.loads((tmp_path / "run/test_metrics.json").read_text())
+        assert list(result["channels"]) == ["NOF1"]
+        for name in ("comparison.png", "ber_snr.png", "nmse_snr.png", "summary.csv"):
+            assert (tmp_path / "run" / name).stat().st_size > 0

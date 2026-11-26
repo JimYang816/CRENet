@@ -15,7 +15,7 @@ from data_generation.src.dataset.four_data_protocol import (
     load_options,
 )
 from data_generation.src.dataset.four_data_recalibration import recalibrate_datasets
-from data_generation.src.dataset.four_data_targets import load_target_config
+from data_generation.src.dataset.four_data_targets import CHANNELS, load_target_config
 from src.common.experiment import file_sha256, write_json
 from src.common.numerics import DenseBackend, default_device
 from src.evaluation.assisted_banded import test_datasets
@@ -55,7 +55,7 @@ def main():
     parser.add_argument(
         "--output",
         type=Path,
-        default=ROOT / "outputs/experiment/dddd_assisted_b16_20261127",
+        default=ROOT / "outputs/experiment/dddd_assisted_b16_20261127_v2",
     )
     parser.add_argument(
         "--targets",
@@ -65,6 +65,7 @@ def main():
     parser.add_argument("--device", choices=("cpu", "cuda"), default=default_device())
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--channels", nargs="+", choices=CHANNELS, default=CHANNELS)
     args = parser.parse_args()
     if min(args.threads, args.batch_size) < 1:
         parser.error("Use positive thread and batch counts")
@@ -89,12 +90,15 @@ def main():
     )
     targets = load_target_config(args.targets)
     options = load_options()
+    channels = [channel for channel in CHANNELS if channel in args.channels]
+    options = dict(options, channels=channels)
     identity = dict(
         commit=subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
         ).strip(),
         dataset_root=str(args.dataset_root.resolve()),
         targets=targets,
+        channels=channels,
         code_sha256={name: file_sha256(ROOT / name) for name in CODE},
         reference_assisted=True,
         half_bandwidth=16,
@@ -105,6 +109,7 @@ def main():
         if (
             previous["targets"] != targets
             or previous["dataset_root"] != identity["dataset_root"]
+            or previous.get("channels", list(CHANNELS)) != channels
         ):
             raise ValueError("Output belongs to different targets or source data")
     else:
@@ -118,6 +123,7 @@ def main():
     attempt = dict(
         started_utc=datetime.now(timezone.utc).isoformat(),
         stage=args.stage,
+        channels=channels,
         device=args.device,
         batch_size=args.batch_size,
         threads=args.threads,
@@ -139,7 +145,10 @@ def main():
                     raise ValueError(
                         "Complete calibration and acceptance before full testing"
                     )
-                test_datasets(args.dataset_root, run, targets, backend, args.batch_size)
+                test_datasets(
+                    args.dataset_root, run, targets, backend, args.batch_size,
+                    channels=channels,
+                )
         attempt["complete"] = True
     except BaseException as exc:
         attempt["error"] = repr(exc)

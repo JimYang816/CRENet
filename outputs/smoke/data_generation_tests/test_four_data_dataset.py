@@ -89,7 +89,7 @@ def test_repeated_target_calibration_keeps_completed_hdf5_files_identical(tmp_pa
 
 @pytest.mark.parametrize("channel, expected", [
     ("NOF1", [-11.41,-13.22,-14.31,-14.97,-15.38,-15.62,-15.77]),
-    ("NCS1", [-5.37,-7.22,-8.34,-9.02,-9.44,-9.69,-9.84]),
+    ("NCS1", [-5.37,-6.84,-7.73,-8.27,-8.60,-8.80,-8.92]),
 ])
 def test_requested_decimal_targets_decrease_steeply_then_gently(channel, expected):
     actual = channel_targets(load_target_config(), channel)
@@ -99,7 +99,8 @@ def test_requested_decimal_targets_decrease_steeply_then_gently(channel, expecte
     assert np.all(improvement > 0) and np.all(np.diff(improvement) < 0)
 
 
-def test_recalibration_changes_only_csi_metadata_and_is_idempotent(tmp_path):
+@pytest.mark.parametrize("channel", ["NOF1", "NCS1"])
+def test_recalibration_changes_only_csi_metadata_and_is_idempotent(tmp_path, channel):
     from data_generation.src.dataset.four_data_recalibration import recalibrate_metadata
     sources, payloads = {}, {}
     rng = np.random.default_rng(271)
@@ -111,7 +112,7 @@ def test_recalibration_changes_only_csi_metadata_and_is_idempotent(tmp_path):
             h["samples/raw_nmse_linear"] = np.full((7,2+i,4),.4+i*.1)
             h["samples/raw_coefficients"] = payloads[split]
         sources[path.name] = dict(sha256=file_sha256(path))
-    c, options, targets = channel_config("NOF1"), load_options(), load_target_config()
+    c, options, targets = channel_config(channel), load_options(), load_target_config()
     identities = recalibrate_metadata(tmp_path,c,options,targets,"new-calibration",sources)
     after = {p.name:file_sha256(p) for p in tmp_path.glob("*.h5")}
     assert recalibrate_metadata(tmp_path,c,options,targets,"new-calibration",sources) == identities
@@ -123,4 +124,4 @@ def test_recalibration_changes_only_csi_metadata_and_is_idempotent(tmp_path):
             assert h.attrs["calibration_identity"] == identities[split]
             assert h["compensation"].attrs["source_file_sha256"] == sources[f"{split}.h5"]["sha256"]
             np.testing.assert_allclose(10*np.log10(h["compensation/assisted_mean_nmse_linear"][:]),
-                                       channel_targets(targets,"NOF1"),atol=1e-12)
+                                       channel_targets(targets,channel),atol=1e-12)
