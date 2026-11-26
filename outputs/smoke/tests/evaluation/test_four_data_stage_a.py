@@ -128,6 +128,19 @@ def test_soft_ber_training_updates_detector_parameters():
     assert changes["scalars"]["changed_tensors"] and changes["neural"]["changed_tensors"]
 
 
+def test_switching_parameter_groups_clears_stale_gradients():
+    torch.set_num_threads(1)
+    model = CRENet(layers=2, bandwidth=2, window_size=4, center_size=2, hidden_size=4,
+                   detector_mode="budgeted", noise_mode="diagonal", initial_soft_damping=.8)
+    dataset = SmallPhysicalDataset()
+    all_parameters = detector_optimizer(model, dict(scalars=1e-3, neural=1e-3))
+    train_interval(model, dataset, all_parameters, batch_size=8, steps=1, seed=1)
+    neural_only = detector_optimizer(model, dict(scalars=0., neural=1e-3))
+    result = train_interval(model, dataset, neural_only, batch_size=8, steps=1, seed=1)
+    assert result["first_gradient_l2"]["scalars"] == 0
+    assert result["first_gradient_l2"]["neural"] > 0
+
+
 def test_diagnosis_can_fine_tune_detector_after_csi_repair(monkeypatch, tmp_path):
     torch.set_num_threads(1)
     options = dict(layers=2, bandwidth=2, window_size=4, center_size=2, hidden_size=4,

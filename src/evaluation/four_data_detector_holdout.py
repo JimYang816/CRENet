@@ -94,6 +94,8 @@ def run(directory, previous, diagnosis, output, *, variant, device):
         original_identity=provenance["identity"], original_model_sha256=file_sha256(previous/"model.pt"),
         manifest_sha256=diagnostic["manifest_sha256"], candidate_validation=record["best_validation"],
         original_validation=original["validation"], selection_uses_test=False,
+        device=str(device), torch=torch.__version__, cuda=torch.version.cuda,
+        gpu=torch.cuda.get_device_name(torch.device(device)) if torch.device(device).type == "cuda" else None,
         git_commit=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         source_sha256=sources)
     identity = digest(frozen)

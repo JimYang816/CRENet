@@ -5,6 +5,8 @@
 对应训练、验证、测试数据及共享模型已按用户要求删除，历史权重和结果仅供来源复核。
 正式 CP80 补偿数据已生成并全量验收，新的训练输出为 `outputs/experiment/four_data_crenet_cp80_20261126/`，
 训练入口会拒绝旧 CP=256 数据。当前设置见 [CP80 实验](four_data_cp80.md)。
+两信道 A 阶段选择第 0 轮的原因、均衡器参数分组和微调对照见
+[均衡器训练诊断](four_data_crenet_training_diagnosis.md)。
 
 ## 2026-11-26 CP80 正式训练与全量测试
 

@@ -50,6 +50,8 @@ def detector_group(name):
 
 def detector_optimizer(model, rates):
     """Freeze CSI repair and select physical scalars and/or local neural weights."""
+    # A preceding candidate may have left gradients on parameters being frozen.
+    model.zero_grad(set_to_none=True)
     configure_stage(model, "A")
     grouped = {"scalars": [], "neural": []}
     for name, parameter in model.named_parameters():
@@ -124,13 +126,13 @@ def train_interval(model, dataset, optimizer, *, batch_size, steps, seed, object
             loss = loss+lambda_h*(nmse*weights).sum(1).mean()
         if not torch.isfinite(loss):
             raise FloatingPointError("Nonfinite detector diagnosis loss")
-        optimizer.zero_grad(set_to_none=True)
+        model.zero_grad(set_to_none=True)
         loss.backward()
         if not gradient:
             for name in ("scalars", "neural"):
                 squared = sum(float(p.grad.detach().double().square().sum())
                               for n, p in model.named_parameters()
-                              if detector_group(n) == name and p.grad is not None)
+                              if detector_group(n) == name and p.requires_grad and p.grad is not None)
                 gradient[name] = squared**.5
         torch.nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad],
                                        10., error_if_nonfinite=True)
@@ -193,7 +195,9 @@ def run(config, directory, previous, output, *, device, variants, intervals, ste
         recorded_validation=recorded, baseline=baseline,
         validation_error_count_difference=sum(x["errors"] for x in baseline["per_snr"])
                                           -sum(x["errors"] for x in recorded["per_snr"]),
-        device=str(device), torch=torch.__version__, batch_size=batch_size, steps_per_interval=steps,
+        device=str(device), torch=torch.__version__, cuda=torch.version.cuda,
+        gpu=torch.cuda.get_device_name(torch.device(device)) if torch.device(device).type == "cuda" else None,
+        batch_size=batch_size, steps_per_interval=steps,
         intervals=intervals, variants={}, config=copy.deepcopy(config),
         git_commit=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         source_sha256={name:file_sha256(ROOT/name) for name in SOURCE_FILES})
