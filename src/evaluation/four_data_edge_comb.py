@@ -64,6 +64,17 @@ def compare_source(baseline, options, archive_sha):
     return dict(path=str(baseline), manifest_sha256=file_sha256(path), previous_commit=manifest["git_head"])
 
 
+def replay_observations(packet, old, frame):
+    clean, standard, variance, bits = (packet[key] for key in ("clean", "standard", "variance", "bits"))
+    changed = 0
+    if old is not None:
+        np.testing.assert_array_equal(bits, old["samples/bits"][frame])
+        np.testing.assert_allclose(standard, old["samples/standard_noise"][frame], rtol=0, atol=1e-12)
+        changed = int(np.count_nonzero(np.any(abs(clean-old["samples/clean_observations"][frame]) > 1e-12, axis=(1, 2))))
+    y = clean[None] + np.sqrt(variance)[..., None, None]*standard[None]
+    return y, variance, bits, changed
+
+
 def split_result(split, c, old, replay, archive, receiver, options, estimators, known, backend, smoke):
     plan = windows(c, split)
     repeats = c["learning_dataset"]["repeats"][split]
@@ -83,7 +94,6 @@ def split_result(split, c, old, replay, archive, receiver, options, estimators, 
     for wi, packet in replay:
         record, start = plan[wi]
         frame = slice(wi*repeats, (wi+1)*repeats)
-        clean, standard, variance, bits = (packet[key] for key in ("clean", "standard", "variance", "bits"))
         if old is None:
             sounding = archive.load(record)
             truth = np.stack([receiver.reference(sounding, start, s)[0] for s in range(symbol_count)]).astype(np.complex64)
@@ -94,12 +104,9 @@ def split_result(split, c, old, replay, archive, receiver, options, estimators, 
                 sounding = archive.load(record)
                 direct_truth = np.stack([receiver.reference(sounding, start, s)[0] for s in range(symbol_count)])
                 np.testing.assert_allclose(truth, direct_truth.astype(truth.dtype), rtol=1e-6, atol=1e-8)
-            np.testing.assert_array_equal(bits, old["samples/bits"][frame])
-            np.testing.assert_allclose(standard, old["samples/standard_noise"][frame], rtol=0, atol=1e-12)
-            changed_frames += int(np.count_nonzero(np.any(abs(clean-old["samples/clean_observations"][frame]) > 1e-12,
-                                                          axis=(1, 2))))
         projection, energy = reference_statistics(sampled_basis, truth, delays)
-        y = clean[None] + np.sqrt(variance)[..., None, None]*standard[None]
+        y, variance, bits, changed = replay_observations(packet, old, frame)
+        changed_frames += changed
         coeff = estimate_frames(estimators, y, variance, floor)
         score = projection_nmse(coeff, projection, energy)
         nmse[:, frame] = score

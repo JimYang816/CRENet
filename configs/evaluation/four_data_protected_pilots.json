@@ -1,0 +1,21 @@
+{
+  "channels": ["NOF1", "NCS1"],
+  "bandwidth_hz": 12,
+  "q": 5,
+  "delay_count": 256,
+  "model_error_ratio": 0.01,
+  "ber_frames_per_channel": 16,
+  "baseline": "outputs/experiment/four_data_single_symbol_12hz_q5_k256_20261126",
+  "edge_comb": "outputs/experiment/four_data_edge_comb_20261126",
+  "candidates": [
+    {"clusters": 128, "pilots_per_cluster": 1, "guard_nulls_per_side": 1, "null_per_edge": 64},
+    {"clusters": 64, "pilots_per_cluster": 4, "guard_nulls_per_side": 1, "null_per_edge": 64},
+    {"clusters": 64, "pilots_per_cluster": 2, "guard_nulls_per_side": 2, "null_per_edge": 64},
+    {"clusters": 32, "pilots_per_cluster": 8, "guard_nulls_per_side": 2, "null_per_edge": 64},
+    {"clusters": 32, "pilots_per_cluster": 6, "guard_nulls_per_side": 3, "null_per_edge": 64},
+    {"clusters": 32, "pilots_per_cluster": 4, "guard_nulls_per_side": 4, "null_per_edge": 64},
+    {"clusters": 64, "pilots_per_cluster": 2, "guard_nulls_per_side": 1, "null_per_edge": 128},
+    {"clusters": 32, "pilots_per_cluster": 6, "guard_nulls_per_side": 1, "null_per_edge": 128},
+    {"clusters": 32, "pilots_per_cluster": 4, "guard_nulls_per_side": 2, "null_per_edge": 128}
+  ]
+}

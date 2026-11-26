@@ -25,12 +25,29 @@ def decisions(symbols):
     return np.stack((np.asarray(symbols).real < 0, np.asarray(symbols).imag < 0), axis=-1).astype(np.uint8)
 
 
+def protected_pilot_group(c, middle):
+    spec = c["pilot_cluster"]
+    pilots = spec["pilots_per_cluster"]
+    guard = spec["guard_nulls_per_side"]
+    if c["frame_structure"] != "DDDD" or any(type(k) is not int or k < 1 for k in (pilots, guard)):
+        raise ValueError("Protected pilot clusters require DDDD and positive pilot and guard counts")
+    groups, extra_pilots = divmod(c["pilot_count"], pilots)
+    if not groups or extra_pilots:
+        raise ValueError("The pilot count must contain whole clusters")
+    data, extra_data = divmod(c["data_count"], groups)
+    if data < 1 or extra_data or groups*(data + pilots + 2*guard) != middle:
+        raise ValueError("Protected pilot clusters and data must fill the interior FFT bins")
+    return [1]*(data//2) + [0]*guard + [2]*pilots + [0]*guard + [1]*(data-data//2)
+
+
 def carrier_masks(c):
     if c.get("frame_structure") not in (FRAME_STRUCTURE, "DDDD"):
         raise ValueError("Unknown four-symbol frame layout")
     n = c["nfft"]
     middle = n-2*c["null_per_edge"]
-    if c["frame_structure"] == "DDDD":
+    if c.get("pilot_cluster") is not None:
+        group = protected_pilot_group(c, middle)
+    elif c["frame_structure"] == "DDDD":
         group = [2, 1, 1] if middle == c["data_count"]+c["pilot_count"] else [2, 1, 1, 2, 1, 1, 0]
     else:
         group = [1, 1, 0, 2, 0, 1, 1]
