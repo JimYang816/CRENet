@@ -140,12 +140,17 @@ def replay_split(study, split, spec, pool, workers):
                           compute=partial(replay_cluster_window, spec=spec))
 
 
-def prepare_estimators(study, c, backend):
+def prepare_design(study, c, backend):
     prior = replace(study.prior, model=replace(study.prior.model, c=c))
     model = prior.model
     known = make_frame(c, 1, 2).known
     noise = study.receiver.chain.noise_covariance
     design = SymbolPilotDesign(model.basis, model.delays, known, carrier_masks(c), noise, backend)
+    return prior, known, design
+
+
+def prepare_estimators(study, c, backend):
+    prior, known, design = prepare_design(study, c, backend)
     observations = len(design.rows)
     matrices = backend.numpy(design.responses).reshape(len(known), observations, -1)
     ranks = np.linalg.matrix_rank(matrices).tolist()
