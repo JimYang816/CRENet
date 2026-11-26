@@ -4,6 +4,7 @@
     "NCS1": "data/processed/dddd_pilot224/ncs1_dddd/test.h5"
   },
   "output": "outputs/experiment/dddd_assisted_b16_20261127/test",
+  "cache_dir": "outputs/experiment/dddd_assisted_b16_20261127/cache",
   "input_view": "reference_assisted",
   "batch_size": 8,
   "algorithms": {
