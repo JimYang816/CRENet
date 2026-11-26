@@ -46,6 +46,18 @@ def cluster_config(base, spec):
                 pilot_cluster={key: fields[key] for key in LAYOUT_FIELDS[1:3]})
 
 
+def default_layout(channel):
+    c = channel_config(channel)
+    spec = c.get("pilot_cluster")
+    if spec is None:
+        raise ValueError(f"{channel} default frame must declare a protected pilot cluster")
+    carrier_masks(c)
+    layout = dict(clusters=c["pilot_count"]//spec["pilots_per_cluster"], **spec, null_per_edge=c["null_per_edge"])
+    if cluster_config(channel_config(channel, legacy_comb=True), layout) != c:
+        raise ValueError(f"{channel} default physical frame differs from the accepted CP80 replay source")
+    return layout
+
+
 def load_options(path=None, *, smoke=False):
     options = json.loads(Path(path or ROOT/CONFIG).read_text(encoding="utf-8"))
     specs = options["candidates"]
@@ -57,7 +69,12 @@ def load_options(path=None, *, smoke=False):
     base = channel_config("NOF1")
     for spec in specs:
         carrier_masks(cluster_config(base, spec))
-    if smoke:
+    if path is None:
+        layouts = [default_layout(channel) for channel in options["channels"]]
+        if layouts[0] != layouts[1]:
+            raise ValueError("NOF1 and NCS1 must use the same default protected pilot layout")
+        options["candidates"] = layouts[:1]
+    elif smoke:
         options["candidates"] = specs[:3]
     return options
 
@@ -74,7 +91,8 @@ class ChannelStudy:
 
 
 def prepare(channel, data, archive_path, archive_sha, options, smoke):
-    c = channel_config(channel, smoke)
+    # The source contains comb-era taps and pairing streams. All observations are replayed.
+    c = channel_config(channel, smoke, legacy_comb=True)
     source = data/(channel.lower()+"_dddd")
     accepted, source_sha = (None, None) if smoke else dataset_manifest(source, c, archive_sha)
     archive, receiver = WatermarkArchive(archive_path, channel), BlockedReceiver(c)

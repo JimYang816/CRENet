@@ -14,7 +14,7 @@ from scipy import linalg, sparse
 from scipy.signal.windows import dpss
 
 from data_generation.src.channel.watermark.replay import WatermarkArchive
-from data_generation.src.config import ROOT, digest, load_config
+from data_generation.src.config import ROOT, digest, load_dddd_config
 from data_generation.src.receiver import pdd
 from data_generation.src.receiver.chain import ReceiverChain, relative_energy, resample
 from data_generation.src.receiver.dpss import DPSSModel
@@ -38,7 +38,7 @@ CODE = ("src/evaluation/four_data_q_sweep.py", "scripts/evaluate/four_data_q_swe
 
 
 def config(channel):
-    c = load_config(ROOT / f"configs/data/{channel.lower()}/dddd.json")
+    c = load_dddd_config(channel, legacy_comb=True)
     if (c["frame_structure"] != "DDDD" or c["delay_length"] != LENGTH
             or c["dpss_half_bandwidth_hz"] != BANDWIDTH_HZ
             or (c["data_count"], c["pilot_count"]) != (512, 256)):

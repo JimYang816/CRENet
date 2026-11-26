@@ -1,4 +1,4 @@
-"""Validate protected pilot clusters and test one shared DDDD allocation."""
+"""Evaluate the default protected pilot layout or an explicit candidate sweep."""
 from __future__ import annotations
 
 import argparse
@@ -13,14 +13,14 @@ from src.evaluation.four_data_protected_pilots import CONFIG, load_options, run
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=ROOT/CONFIG)
+    parser.add_argument("--config", type=Path, help=f"Run a candidate sweep such as {CONFIG}")
     parser.add_argument("--archive", type=Path, default=ROOT/"data/raw/watermark/WatermarkV1.zip")
     parser.add_argument("--data", type=Path, default=ROOT/"data/processed")
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--device", choices=("cpu", "cuda"), default=default_device())
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--workers", type=int, default=8)
-    parser.add_argument("--smoke", action="store_true", help="Use three layouts and small physical splits on CPU")
+    parser.add_argument("--smoke", action="store_true", help="Use small physical splits on CPU")
     args = parser.parse_args(argv)
     if min(args.threads, args.workers) < 1 or (args.smoke and args.device != "cpu"):
         parser.error("Use positive thread and worker counts and CPU for smoke runs")

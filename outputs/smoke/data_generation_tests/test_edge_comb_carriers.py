@@ -9,7 +9,7 @@ from data_generation.src.transmitter.ofdm import carrier_masks, make_frame
 
 @pytest.mark.parametrize("channel", ["NOF1", "NCS1"])
 def test_edge_comb_layout_and_paired_payload(channel):
-    base = channel_config(channel)
+    base = channel_config(channel, legacy_comb=True)
     previous = carrier_masks(base)
     cfg = dict(base, null_per_edge=128)
     masks = carrier_masks(cfg)

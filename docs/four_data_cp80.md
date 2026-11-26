@@ -1,5 +1,15 @@
 # CP=80 ms 的双信道 LMMSE 小实验
 
+## 默认单符号载波布局
+
+NOF1 和 NCS1 共用 64 簇保护导频。带内每 14 个频点依次为 4 个数据、1 个空载波、4 个导频、1 个空载波、4 个数据，频带两端各留 64 点。每个符号共 512 个数据、256 个导频、128 个带内空载波和 128 个边缘空载波。两条信道的基础配置在 `configs/data/{nof1,ncs1}/dddd.json`，验证和配对测试记录在 `outputs/experiment/four_data_protected_pilots_20261126/`。
+
+`python -m scripts.evaluate.four_data_single_symbol --output <结果目录>` 使用该默认布局重放接收波形，以 12 Hz、Q=5 和 256 个物理时延抽头估计原始 CSI。每个符号使用自身的导频和带内空载波。`scripts.evaluate.four_data_protected_pilots` 使用同一默认布局，显式传入 `--config configs/evaluation/four_data_protected_pilots.json` 可复现九种布局的验证搜索。
+
+服务器原梳状布局的 HDF5 提供完整物理参考、配对数据比特和标准噪声。下文记录原梳状布局的整帧 CSI 实验及参考辅助数据复现流程。
+
+## 原梳状导频的 CP80 配置
+
 2026-11-26 起 **CP=80 ms / 480 点为项目默认值**。NOF1、NCS1 的 `dddd.json`、
 配置校验、正式数据入口、训练预检及后续指标图均使用该值。
 旧 CP256 训练/验证/测试数据和配套共享模型已删除，服务器释放约 18.07 GiB；正式 CP80 补偿数据已生成并全量验收。

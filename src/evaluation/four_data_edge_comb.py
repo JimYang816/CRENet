@@ -170,7 +170,7 @@ def previous_test(baseline, c, accepted, prior, test):
 
 
 def run_channel(output, data, archive_path, archive_sha, baseline, channel, options, backend, workers, smoke):
-    base_c = channel_config(channel, smoke)
+    base_c = channel_config(channel, smoke, legacy_comb=True)
     c = dict(base_c, null_per_edge=options["null_per_edge"])
     layout = allocation(c)
     if layout["counts"] != dict(pilot=256, data=512, protection=0, edge=256, tracking=256):

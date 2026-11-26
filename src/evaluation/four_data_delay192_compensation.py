@@ -9,7 +9,7 @@ import subprocess
 import h5py
 import numpy as np
 
-from data_generation.src.config import ROOT, digest, load_config
+from data_generation.src.config import ROOT, digest, load_dddd_config
 from data_generation.src.receiver.delay_support import SelectedDelayDPSSModel
 from data_generation.src.receiver.estimation import FrozenPrior
 from data_generation.src.receiver.pdd import JointEstimator
@@ -97,7 +97,7 @@ def verify_source(source):
         detail = json.loads((directory/"metrics.json").read_text(encoding="utf-8"))
         frozen = json.loads((directory/"frozen_support192.json").read_text(encoding="utf-8"))
         report, c = saved["channels"][channel], meta["config"]
-        current = load_config(ROOT/f"configs/data/{channel.lower()}/dddd.json")
+        current = load_dddd_config(channel, legacy_comb=True)
         current["delay_length"] = 192
         delays = np.asarray(frozen["indices"])
         if (meta != original["channel_manifests"][channel] or detail.get("metadata") != meta

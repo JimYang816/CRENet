@@ -364,7 +364,7 @@ def run(output, data, archive_path, backend, options, *, smoke=False):
     for channel in options["channels"]:
         directory = output/channel.lower()
         directory.mkdir(exist_ok=True)
-        c = channel_config(channel, smoke)
+        c = channel_config(channel, smoke, legacy_comb=True)
         reports[channel] = run_channel(directory, data/(channel.lower()+"_dddd"), archive_path, archive_sha,
                                        c, options, backend, smoke)
     finish(output, reports)
