@@ -14,6 +14,18 @@ NOF1 和 NCS1 的 D-D-D-D 帧每个符号共 1024 个子载波，其中 512 个�
 小样本原始 CSI 与完美 CSI 对照入口为 `python -m scripts.evaluate.four_data_cp80`，
 默认输出到 `outputs/smoke/four_data_cp80_pilot224/`。
 
+### DPSS-BEM 与 CE-BEM 配对小实验
+
+`python -m scripts.evaluate.four_data_bem_comparison` 在同一联合估计器中比较两种时间基。
+DPSS-BEM 使用半带宽 12 Hz 和 24 项基。CE-BEM 用 `exp(2πjkn/1024)` 的归一化基，
+整数频移 `k` 从 −16 到 16（半带宽 93.75 Hz，33 项），以 1024 点为周期延拓到含 CP 的整帧。
+每种模型均为每帧每个时延位置估计一组系数。指数基定义见 [Tang 等的 OFDM 信道估计论文](https://sps.ewi.tudelft.nl/pubs/leus07tsp1.pdf)。
+
+每条信道在相同的 25 个独立窗口重新拟合各自先验，使用 5 个配对测试帧及 0、5、…、30 dB。
+两种模型共享公开导频、接收波形、噪声和冻结物理时延位置。指标包括原始 CSI 的平均完整矩阵 NMSE，
+以及 Single-tap LMMSE 和 Full-matrix LMMSE 的 BER。另以测试参考 CSI 在接收 FFT 窗上做最小二乘投影，
+测量模型近似的 NMSE 下限。正式输出含 BER-SNR、平均 NMSE-SNR 和逐帧来源，使用 `--smoke --device cpu` 验证流程。
+
 ## 256 导频的 CP80 实验记录
 
 2026-11-26 起 **CP=80 ms / 480 点为项目默认值**。当时 NOF1、NCS1 的 `dddd.json`、
