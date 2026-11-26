@@ -1,0 +1,10 @@
+{
+  "checkpoint": "outputs/experiment/four_data_crenet_nof1_pilot224_20261127/training/nof1/model.pt",
+  "output": "outputs/experiment/crenet_generalization_diagnosis_20261127",
+  "frames": 40,
+  "batch_size": 16,
+  "datasets": [
+    {"channel": "NOF1", "split": "validation", "path": "data/processed/dddd_pilot224/nof1_dddd/validation.h5"},
+    {"channel": "NCS1", "split": "test", "path": "data/processed/dddd_pilot224/ncs1_dddd/test.h5"}
+  ]
+}

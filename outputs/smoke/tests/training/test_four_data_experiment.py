@@ -170,3 +170,16 @@ def test_cli_writes_portable_manifest_for_relative_output(monkeypatch,tmp_path):
     assert len(trained) == 1 and "nof1" in trained[0]
     assert len(tested) == 2 and tested[0][1:] == tested[1][1:]
     assert report["train_channel"] == report["validation_channel"] == "NOF1"
+
+
+def test_sparse_frame_schedule_preserves_original_indices(monkeypatch,tmp_path):
+    source = fake_reader(monkeypatch)
+    dataset = FourDataTrainingSet(tmp_path/"validation.h5")
+    batches = list(dataset.batches(3,snr_indices=[6],frame_indices=[1]))
+    keys = np.concatenate([scoring["keys"] for _,_,scoring in batches])
+    np.testing.assert_array_equal(keys,np.array([[6,1,d] for d in range(4)]))
+    for _,targets,scoring in batches:
+        for bits,(_,fi,di) in zip(targets["bits"],scoring["keys"]):
+            np.testing.assert_array_equal(bits,source.bits[fi,di])
+    with pytest.raises(ValueError,match="Frame indices"):
+        list(dataset.batches(4,frame_indices=[1,1]))

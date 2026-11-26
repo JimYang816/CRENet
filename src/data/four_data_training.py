@@ -74,11 +74,16 @@ class FourDataTrainingSet:
                     print(f"{self.channel} {self.split}: reference cache {j+1}/{len(windows)} "
                           f"({time.monotonic()-begin:.1f}s)", flush=True)
 
-    def batches(self, batch_size, *, seed=None, snr_indices=None):
+    def batches(self, batch_size, *, seed=None, snr_indices=None, frame_indices=None):
         selected = list(range(len(self.snr_db))) if snr_indices is None else list(snr_indices)
+        frames = list(range(self.frame_count)) if frame_indices is None else list(frame_indices)
         if batch_size < 1 or not selected or any(not 0 <= i < len(self.snr_db) for i in selected):
             raise ValueError("Invalid four-data batch schedule")
-        grid = np.stack(np.meshgrid(selected, np.arange(self.frame_count), np.arange(4),
+        if (not frames or len(set(frames)) != len(frames)
+                or any(isinstance(i, bool) or not isinstance(i, (int, np.integer))
+                       or not 0 <= i < self.frame_count for i in frames)):
+            raise ValueError("Frame indices must be distinct valid physical frame indices")
+        grid = np.stack(np.meshgrid(selected, frames, np.arange(4),
                                     indexing="ij"), -1).reshape(-1, 3)
         if seed is not None:
             np.random.default_rng(seed).shuffle(grid)
