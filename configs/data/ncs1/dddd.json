@@ -93,9 +93,10 @@
   "carrier_hz": 14000,
   "fft_advance": 32,
   "guard_samples": 300,
-  "null_per_edge": 64,
+  "null_per_edge": 32,
   "data_count": 512,
-  "pilot_count": 256,
+  "pilot_count": 224,
+  "protection_count": 224,
   "snr_db": [
     0,
     5,

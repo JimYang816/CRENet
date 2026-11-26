@@ -6,10 +6,12 @@ from pathlib import Path
 
 import numpy as np
 
-from data_generation.src.config import ROOT, load_config
+from data_generation.src.config import DDDD_CARRIER_COUNTS, ROOT, load_config
 
 SCHEMA = "watermark-dddd-delay192-compact-v1"
 MODEL_SCHEMA = SCHEMA+"-model"
+DEFAULT_OUTPUT_ROOT = ROOT/"data/processed/dddd_pilot224"
+DEFAULT_RUN_ID = "dddd_cp80_delay192_pilot224_assisted"
 SPLITS = ("train", "validation", "test")
 SPLIT_CODES = dict(train=2, validation=3, test=4)
 TEST_RECORDS = list(range(11, 48, 4))
@@ -33,9 +35,10 @@ def load_options(path=None):
 def channel_config(channel, smoke=False):
     c = load_config(ROOT/f"configs/data/{channel.lower()}/dddd.json")
     if (c["channel"] != channel or c["frame_structure"] != "DDDD"
-            or (c["nfft"], c["cp"], c["data_count"], c["pilot_count"], c["dpss_expected_count"]) != (1024, 480, 512, 256, 24)
+            or (c["nfft"], c["cp"], c["dpss_expected_count"]) != (1024, 480, 24)
+            or any(c.get(key) != count for key, count in DDDD_CARRIER_COUNTS.items())
             or c["dpss_half_bandwidth_hz"] != 12 or c["feedback_iterations"] != 0):
-        raise ValueError("Formal four-data generation requires DDDD / CP480 (80 ms) / Q24")
+        raise ValueError("Formal generation requires DDDD / CP480 / Q24 and the 224-pilot carrier allocation")
     c["delay_length"] = 192
     if smoke:
         c["smoke"] = True

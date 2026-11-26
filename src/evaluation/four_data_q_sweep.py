@@ -14,7 +14,7 @@ from scipy import linalg, sparse
 from scipy.signal.windows import dpss
 
 from data_generation.src.channel.watermark.replay import WatermarkArchive
-from data_generation.src.config import ROOT, digest, load_config
+from data_generation.src.config import FROZEN_SUPPORT_CONFIGS, ROOT, digest, load_legacy_dddd_config
 from data_generation.src.receiver import pdd
 from data_generation.src.receiver.chain import ReceiverChain, relative_energy, resample
 from data_generation.src.receiver.dpss import DPSSModel
@@ -34,11 +34,12 @@ CODE = ("src/evaluation/four_data_q_sweep.py", "scripts/evaluate/four_data_q_swe
         "data_generation/src/receiver/chain.py", "data_generation/src/receiver/dpss.py",
         "data_generation/src/receiver/estimation.py", "data_generation/src/receiver/pdd.py",
         "data_generation/src/transmitter/ofdm.py", "data_generation/src/channel/watermark/replay.py",
-        "src/algorithms/full_matrix_lmmse/equalizer.py", "src/algorithms/likelihood.py")
+        "src/algorithms/full_matrix_lmmse/equalizer.py", "src/algorithms/likelihood.py",
+        "data_generation/src/config.py", *FROZEN_SUPPORT_CONFIGS)
 
 
 def config(channel):
-    c = load_config(ROOT / f"configs/data/{channel.lower()}/dddd.json")
+    c = load_legacy_dddd_config(channel)
     if (c["frame_structure"] != "DDDD" or c["delay_length"] != LENGTH
             or c["dpss_half_bandwidth_hz"] != BANDWIDTH_HZ
             or (c["data_count"], c["pilot_count"]) != (512, 256)):

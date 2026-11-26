@@ -9,7 +9,9 @@ import time
 import h5py
 import numpy as np
 
-from data_generation.src.config import ROOT, digest, frozen_support_matches_config, load_config
+from data_generation.src.config import (
+    DDDD_CARRIER_COUNTS, ROOT, digest, frozen_support_matches_config, load_config, load_legacy_dddd_config,
+)
 from data_generation.src.transmitter.ofdm import carrier_masks, decisions
 from src.common.experiment import file_sha256, write_json
 from src.evaluation import ncs1_delay_support as receiver
@@ -17,6 +19,7 @@ from src.evaluation.four_data_lmmse import basis_diagnostics, detect, finish, mo
 
 
 CONFIG = "configs/evaluation/four_data_cp80.json"
+DEFAULT_OUTPUT = ROOT/"outputs/smoke/four_data_cp80_pilot224"
 CODE = tuple(dict.fromkeys((*receiver.CODE, "src/evaluation/four_data_cp80.py",
     "scripts/evaluate/four_data_cp80.py", CONFIG, "configs/data/nof1/delay_support192.json",
     "configs/data/nof1/dddd.json", "configs/data/ncs1/dddd.json")))
@@ -41,12 +44,13 @@ def load_options(path=None):
     return options
 
 
-def channel_settings(channel, options, archive_sha256, smoke=False):
-    # Validate the original configuration before applying this experiment's CP.
-    base = load_config(ROOT/f"configs/data/{channel.lower()}/dddd.json")
-    if (base["frame_structure"], base["dpss_expected_count"], base["dpss_half_bandwidth_hz"],
-            base["data_count"], base["pilot_count"]) != ("DDDD", 24, 12, 512, 256):
+def channel_settings(channel, options, archive_sha256, smoke=False, *, legacy_comb=False):
+    base = (load_legacy_dddd_config(channel) if legacy_comb
+            else load_config(ROOT/f"configs/data/{channel.lower()}/dddd.json"))
+    if (base["frame_structure"], base["dpss_expected_count"], base["dpss_half_bandwidth_hz"]) != ("DDDD", 24, 12):
         raise ValueError("Expected the current DDDD / Q24 / 12-Hz frame")
+    if not legacy_comb and any(base.get(key) != count for key, count in DDDD_CARRIER_COUNTS.items()):
+        raise ValueError("Expected the 224-pilot carrier allocation")
     if (not set(options["prior_records"]).issubset(base["prior_records"])
             or not set(options["prior_starts_seconds"]).issubset(base["starts_seconds"])
             or not set(options["test_records"]).issubset(base["learning_dataset"]["records"]["test"])
@@ -217,6 +221,8 @@ def run(output, archive_path, backend, smoke=False, *, options=None):
         receiver.finish(directory, meta, selection, results, perfect, path)
         reports[channel] = channel_report(results, perfect)
         verification[channel] = verify_channel(path, meta, reports[channel], backend)
+        verification[channel]["physical_file"] = dict(
+            sha256=file_sha256(path), bytes=path.stat().st_size, identity=digest(meta))
         print(f"{channel}: verified all raw counts/NMSE and perfect-CSI 30-dB counts", flush=True)
     if len({value["basis_sha256"] for value in verification.values()}) != 1:
         raise ValueError("Channels do not share the same actual DPSS basis")

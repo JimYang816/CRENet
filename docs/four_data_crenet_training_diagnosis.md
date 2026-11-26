@@ -120,6 +120,7 @@ NOF1 原最终模型即 B 阶段权重，验证 BER 为 0.04837519。延长的�
 cd /home/fay/JimYang/CRENet
 OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
   /home/fay/anaconda3/envs/jimyang/bin/python -m scripts.evaluate.four_data_stage_a \
+  --previous outputs/experiment/four_data_crenet_cp80_20261126 \
   --channel NOF1 --start B --steps 100 --intervals 5 \
   --variants scalars_1e-3 scaled_neural_1e-2 --device cuda --threads 4 \
   --output outputs/experiment/four_data_detector_nof1_repeat
@@ -130,6 +131,7 @@ OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
 ```bash
 OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
   /home/fay/anaconda3/envs/jimyang/bin/python -m scripts.evaluate.four_data_detector_holdout \
+  --previous outputs/experiment/four_data_crenet_cp80_20261126 \
   --channel NOF1 --variant scaled_neural_1e-2 --device cuda --threads 4 \
   --diagnosis outputs/experiment/four_data_detector_nof1_longer_20261126 \
   --output outputs/experiment/four_data_detector_nof1_holdout_repeat

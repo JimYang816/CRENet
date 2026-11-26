@@ -8,14 +8,14 @@ from threadpoolctl import threadpool_limits
 
 from data_generation.src.config import ROOT
 from src.common.numerics import DenseBackend, default_device
-from src.evaluation.four_data_cp80 import load_options, run
+from src.evaluation.four_data_cp80 import DEFAULT_OUTPUT, load_options, run
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=ROOT/"configs/evaluation/four_data_cp80.json")
     parser.add_argument("--archive", type=Path, default=ROOT/"data/raw/watermark/WatermarkV1.zip")
-    parser.add_argument("--output", type=Path, default=ROOT/"outputs/smoke/four_data_cp80_20261125")
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--device", choices=("cpu", "cuda"), default=default_device())
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--smoke", action="store_true", help="Two prior windows, one test frame/channel, 0/15/30 dB")
