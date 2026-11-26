@@ -1,4 +1,4 @@
-"""Reproduce and accept the CP80 comb datasets with fixed CSI targets."""
+"""Generate and accept formal NOF1/NCS1 DDDD datasets with fixed CSI targets."""
 from __future__ import annotations
 
 import argparse
@@ -60,8 +60,7 @@ def main(argv=None):
     target_path = ROOT/options["target_config"]
     targets = load_target_config(target_path)
     source = (ROOT/options["source_study"]).resolve()
-    # This compact full-frame export reproduces the accepted CP80 comb protocol.
-    configurations = {channel: channel_config(channel, args.smoke, legacy_comb=True) for channel in args.channels}
+    configurations = {channel: channel_config(channel, args.smoke) for channel in args.channels}
     run_id = args.run_id+("_smoke" if args.smoke and not args.run_id.endswith("_smoke") else "")
     run = ROOT/"outputs"/("smoke" if args.smoke else "experiment")/run_id
     run.mkdir(parents=True, exist_ok=True)

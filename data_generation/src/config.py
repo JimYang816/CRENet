@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parents[2]
 FROZEN_SUPPORT_CONFIGS = tuple(f"configs/backups/dddd_cp256_20261125/{ch}.json" for ch in ("nof1", "ncs1"))
 
 
-def _validate_config(c):
+def load_config(path=None):
+    c = json.loads(Path(path or ROOT / "configs/data/ncs1/dddd.json").read_text(encoding="utf-8"))
     frame = c.get("frame_structure")
     if frame not in ("DDDD", "PDDP"):
         raise ValueError("Unknown frame configuration; expected DDDD or PDDP")
@@ -20,23 +21,6 @@ def _validate_config(c):
     if any(sets[i] & sets[j] for i in range(3) for j in range(i)):
         raise ValueError("Prior, validation and test records must be disjoint")
     return c
-
-
-def load_config(path=None):
-    c = json.loads(Path(path or ROOT / "configs/data/ncs1/dddd.json").read_text(encoding="utf-8"))
-    return _validate_config(c)
-
-
-def load_dddd_config(channel, *, legacy_comb=False):
-    name = channel.lower()
-    if not legacy_comb:
-        return load_config(ROOT/f"configs/data/{name}/dddd.json")
-    # The accepted CP80 comb data used this frozen frame with CP changed to 480.
-    path = ROOT/f"configs/backups/dddd_cp256_20261125/{name}.json"
-    historical = json.loads(path.read_text(encoding="utf-8"))
-    if historical.get("cp") != 256 or historical.get("pilot_cluster") is not None:
-        raise ValueError("Expected the historical four-symbol comb frame")
-    return _validate_config(dict(historical, cp=480))
 
 
 def digest(value):

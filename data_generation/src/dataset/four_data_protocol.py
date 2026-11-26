@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from data_generation.src.config import ROOT, load_dddd_config
+from data_generation.src.config import ROOT, load_config
 
 SCHEMA = "watermark-dddd-delay192-compact-v1"
 MODEL_SCHEMA = SCHEMA+"-model"
@@ -30,8 +30,8 @@ def load_options(path=None):
     return options
 
 
-def channel_config(channel, smoke=False, *, legacy_comb=False):
-    c = load_dddd_config(channel, legacy_comb=legacy_comb)
+def channel_config(channel, smoke=False):
+    c = load_config(ROOT/f"configs/data/{channel.lower()}/dddd.json")
     if (c["channel"] != channel or c["frame_structure"] != "DDDD"
             or (c["nfft"], c["cp"], c["data_count"], c["pilot_count"], c["dpss_expected_count"]) != (1024, 480, 512, 256, 24)
             or c["dpss_half_bandwidth_hz"] != 12 or c["feedback_iterations"] != 0):

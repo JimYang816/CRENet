@@ -12,7 +12,7 @@ import numpy as np
 from scipy.signal.windows import dpss
 
 from data_generation.src.channel.watermark.replay import WatermarkArchive
-from data_generation.src.config import ROOT, FROZEN_SUPPORT_CONFIGS, digest, load_dddd_config
+from data_generation.src.config import ROOT, FROZEN_SUPPORT_CONFIGS, digest, load_config
 from data_generation.src.receiver.chain import relative_energy, taps_to_matrix
 from data_generation.src.receiver.dpss import DPSSModel
 from data_generation.src.receiver.estimation import FrozenPrior, input_windows
@@ -50,7 +50,7 @@ def load_run_config(path):
 
 
 def channel_config(channel):
-    c = load_dddd_config(channel, legacy_comb=True)
+    c = load_config(ROOT/f"configs/data/{channel.lower()}/dddd.json")
     if (c["channel"] != channel or c["frame_structure"] != "DDDD"
             or (c["data_count"], c["pilot_count"], c["dpss_expected_count"], c["delay_length"]) != (512, 256, 24, 176)
             or c["dpss_half_bandwidth_hz"] != 12 or c["snr_db"] != list(range(0, 31, 5))):

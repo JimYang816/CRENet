@@ -9,7 +9,7 @@ import time
 import h5py
 import numpy as np
 
-from data_generation.src.config import ROOT, digest, frozen_support_matches_config, load_dddd_config
+from data_generation.src.config import ROOT, digest, frozen_support_matches_config, load_config
 from data_generation.src.transmitter.ofdm import carrier_masks, decisions
 from src.common.experiment import file_sha256, write_json
 from src.evaluation import ncs1_delay_support as receiver
@@ -43,7 +43,7 @@ def load_options(path=None):
 
 def channel_settings(channel, options, archive_sha256, smoke=False):
     # Validate the original configuration before applying this experiment's CP.
-    base = load_dddd_config(channel, legacy_comb=True)
+    base = load_config(ROOT/f"configs/data/{channel.lower()}/dddd.json")
     if (base["frame_structure"], base["dpss_expected_count"], base["dpss_half_bandwidth_hz"],
             base["data_count"], base["pilot_count"]) != ("DDDD", 24, 12, 512, 256):
         raise ValueError("Expected the current DDDD / Q24 / 12-Hz frame")

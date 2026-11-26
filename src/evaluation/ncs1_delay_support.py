@@ -11,7 +11,7 @@ import h5py
 import numpy as np
 
 from data_generation.src.channel.watermark.replay import WatermarkArchive
-from data_generation.src.config import ROOT, digest, frozen_support_matches_config, load_dddd_config
+from data_generation.src.config import ROOT, digest, frozen_support_matches_config, load_config
 from data_generation.src.receiver.delay_support import (
     SelectedDelayDPSSModel, profile_full_frame,
 )
@@ -57,7 +57,7 @@ def metadata(archive_path, backend, smoke, study, *, code_files=CODE):
     channel = study["channel"]
     if channel not in ("NOF1", "NCS1"):
         raise ValueError("Unknown WATERMARK channel")
-    c = load_dddd_config(channel, legacy_comb=True)
+    c = load_config(ROOT/f"configs/data/{channel.lower()}/dddd.json")
     if (c["frame_structure"], c["dpss_expected_count"], c["dpss_half_bandwidth_hz"]) != ("DDDD", 24, 12):
         raise ValueError("This receiver requires DDDD / Q24 / 12 Hz")
     prior_records = c["prior_records"][:2] if smoke else c["prior_records"]

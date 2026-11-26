@@ -96,10 +96,6 @@
   "null_per_edge": 64,
   "data_count": 512,
   "pilot_count": 256,
-  "pilot_cluster": {
-    "pilots_per_cluster": 4,
-    "guard_nulls_per_side": 1
-  },
   "snr_db": [
     0,
     5,

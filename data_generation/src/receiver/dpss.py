@@ -8,7 +8,6 @@ from scipy.signal.windows import dpss
 from data_generation.src.pdd import SYMBOL_COUNT
 
 FULL_FRAME_DOMAIN = "full_frame_including_cp"
-SINGLE_SYMBOL_DOMAIN = "single_symbol_fft_window"
 
 
 @dataclass

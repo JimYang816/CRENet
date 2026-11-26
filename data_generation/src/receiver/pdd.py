@@ -24,35 +24,6 @@ def selected_time_covariance(kernel, rows):
     return np.fft.fftshift(np.fft.ifft(left, axis=1, norm="ortho"), axes=1)[:, rows]
 
 
-def stationary_interference(delay, indices, correlation, difference):
-    """Time covariance from the delay block and independent unknown data."""
-    n = len(correlation)
-    rho = np.zeros(n, complex)
-    np.add.at(rho, ((indices[:, None]-indices) % n).ravel(), delay.ravel())
-    return np.fft.ifft(np.fft.fft(rho)*np.fft.fft(correlation))[difference]
-
-
-def selected_noise_whitener(noise, backend):
-    factor = linalg.cholesky(noise, lower=True)
-    return backend.array(linalg.solve_triangular(factor, np.eye(len(noise)), lower=True, check_finite=False))
-
-
-def observation_spectrum(covariance, cross, whitener, regularizer, backend):
-    """Factor backend-native covariance and cross-covariance arrays."""
-    whitened = whitener @ covariance @ whitener.conj().T
-    values, vectors = backend.eigh((whitened+whitened.conj().T)*.5)
-    raw = backend.numpy(values)
-    if raw.min() < -1e-8*max(raw.max(), 1e-30):
-        raise RuntimeError("Selected observation covariance is not positive semidefinite")
-    positive = np.maximum(raw, 0)
-    ridge = regularizer*float(positive.mean())
-    projected = whitener.conj().T @ vectors
-    gain = cross @ projected
-    diagnostics = dict(observations=len(raw), min_eigenvalue=float(raw.min()),
-                       max_eigenvalue=float(raw.max()), whitened_ridge=ridge)
-    return backend.array(positive), projected, gain, ridge, diagnostics
-
-
 def selected_components(prior, known, masks, backend):
     n, q, length = prior.model.c["nfft"], prior.model.count, prior.model.length
     data_symbols, training_symbols = symbol_layout(prior.model.c)
@@ -92,7 +63,10 @@ def selected_components(prior, known, masks, backend):
         cross[:, select] = np.einsum("qa,lb,mab->qlm", lt, ld, z.conj().reshape(size, q, width), optimize=True)
         del dz, z, factors
         # ICI from independent unknown QPSK in each D, including colored terms.
-        stationary = stationary_interference(delay, delays[select], correlation, difference)
+        rho = np.zeros(n, complex)
+        indices = delays[select]
+        np.add.at(rho, ((indices[:, None]-indices) % n).ravel(), delay.ravel())
+        stationary = np.fft.ifft(np.fft.fft(rho)*np.fft.fft(correlation))[difference]
         for s in data_symbols:
             kernel = (v[s] @ temporal @ v[s].conj().T)*stationary
             interference = hermitian(selected_time_covariance(kernel, rows[s]))
@@ -121,10 +95,22 @@ class JointEstimator:
         # Select S Rn S^H before whitening the full joint observation.
         blocks = [noise[np.ix_(r, r)] for r in self.rows]
         selected_noise = linalg.block_diag(*blocks)
-        whitener = selected_noise_whitener(selected_noise, backend)
-        self.values, self.projected, self.gain, self.ridge, diagnostics = observation_spectrum(
-            backend.array(covariance), backend.array(cross), whitener, prior.regularizer, backend)
-        self.diagnostics = [diagnostics]
+        size = int(self.offsets[-1])
+        f = linalg.cholesky(selected_noise, lower=True)
+        w = linalg.solve_triangular(f, np.eye(size), lower=True, check_finite=False)
+        dw = backend.array(w)
+        dc = dw @ backend.array(covariance) @ dw.conj().T
+        values, vectors = backend.eigh((dc+dc.conj().T)*.5)
+        raw = backend.numpy(values)
+        if raw.min() < -1e-8*max(raw.max(), 1e-30):
+            raise RuntimeError("Selected observation covariance is not positive semidefinite")
+        positive = np.maximum(raw, 0)
+        self.ridge = prior.regularizer*float(positive.mean())
+        self.values = backend.array(positive)
+        self.projected = dw.conj().T @ vectors
+        self.gain = backend.array(cross) @ self.projected
+        self.diagnostics = [dict(observations=size, min_eigenvalue=float(raw.min()),
+                                 max_eigenvalue=float(raw.max()), whitened_ridge=self.ridge)]
 
     def effective_noise_variances(self, observations, noise_variances):
         """Thermal RF variance plus the existing receive-power model-error floor."""

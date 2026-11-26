@@ -5,7 +5,7 @@ import h5py
 import numpy as np
 import pytest
 
-from data_generation.src.config import ROOT, digest, frozen_support_matches_config, load_config, load_dddd_config
+from data_generation.src.config import ROOT, digest, frozen_support_matches_config, load_config
 from data_generation.src.dataset.four_data_export import load_prior
 from data_generation.src.dataset.four_data_protocol import channel_config, counts, load_options
 from scripts.run.four_data_experiment import preflight
@@ -21,9 +21,8 @@ def test_cp80_is_the_formal_default_with_independent_existing_plan(channel):
     assert c["delay_length"] == 192 and c["dpss_expected_count"] == 24
     assert [counts(c)[s]["frames_all_snr"] for s in ("train", "validation", "test")] == [3675, 525, 4200]
     support = json.loads((ROOT/f"configs/data/{channel.lower()}/delay_support192.json").read_text(encoding="utf-8"))
-    historical = load_dddd_config(channel, legacy_comb=True)
-    assert frozen_support_matches_config(support, historical)
-    changed = dict(historical, fft_advance=historical["fft_advance"]+1)
+    assert frozen_support_matches_config(support, base)
+    changed = dict(base, fft_advance=base["fft_advance"]+1)
     assert not frozen_support_matches_config(support, changed)
     assert load_options()["source_study"] == "outputs/smoke/four_data_cp80_20261125"
     assert load_options()["default_input_view"] == "reference_assisted"
