@@ -9,7 +9,7 @@ from data_generation.src.dataset.four_data_math import (
     assisted_taps, coefficient_nmse, reconstruct_taps, reference_statistics, sampled_grams,
 )
 from data_generation.src.dataset.four_data_protocol import channel_config, counts, load_options, validate_plan
-from data_generation.src.dataset.four_data_targets import error_scales, load_target_config, target_curve
+from data_generation.src.dataset.four_data_targets import channel_targets, error_scales, load_target_config, target_curve
 from data_generation.src.dataset.four_data_export import calibrate
 from src.common.experiment import file_sha256
 
@@ -85,3 +85,42 @@ def test_repeated_target_calibration_keeps_completed_hdf5_files_identical(tmp_pa
     before = {p.name:file_sha256(p) for p in tmp_path.glob('*.h5')}
     calibrate(tmp_path,c,options,targets)
     assert before == {p.name:file_sha256(p) for p in tmp_path.glob('*.h5')}
+
+
+@pytest.mark.parametrize("channel, expected", [
+    ("NOF1", [-11.41,-13.22,-14.31,-14.97,-15.38,-15.62,-15.77]),
+    ("NCS1", [-5.37,-7.22,-8.34,-9.02,-9.44,-9.69,-9.84]),
+])
+def test_requested_decimal_targets_decrease_steeply_then_gently(channel, expected):
+    actual = channel_targets(load_target_config(), channel)
+    np.testing.assert_array_equal(actual, expected)
+    assert np.all(actual != np.round(actual))
+    improvement = -np.diff(actual)
+    assert np.all(improvement > 0) and np.all(np.diff(improvement) < 0)
+
+
+def test_recalibration_changes_only_csi_metadata_and_is_idempotent(tmp_path):
+    from data_generation.src.dataset.four_data_recalibration import recalibrate_metadata
+    sources, payloads = {}, {}
+    rng = np.random.default_rng(271)
+    for i, split in enumerate(("train","validation","test")):
+        path = tmp_path/f"{split}.h5"
+        payloads[split] = rng.normal(size=(7,2+i,3))+1j*rng.normal(size=(7,2+i,3))
+        with h5py.File(path,"w") as h:
+            h.attrs.update(raw_complete=True,model_identity="original-generation")
+            h["samples/raw_nmse_linear"] = np.full((7,2+i,4),.4+i*.1)
+            h["samples/raw_coefficients"] = payloads[split]
+        sources[path.name] = dict(sha256=file_sha256(path))
+    c, options, targets = channel_config("NOF1"), load_options(), load_target_config()
+    identities = recalibrate_metadata(tmp_path,c,options,targets,"new-calibration",sources)
+    after = {p.name:file_sha256(p) for p in tmp_path.glob("*.h5")}
+    assert recalibrate_metadata(tmp_path,c,options,targets,"new-calibration",sources) == identities
+    assert after == {p.name:file_sha256(p) for p in tmp_path.glob("*.h5")}
+    for split in payloads:
+        with h5py.File(tmp_path/f"{split}.h5","r") as h:
+            np.testing.assert_array_equal(h["samples/raw_coefficients"][:],payloads[split])
+            assert h.attrs["model_identity"] == "original-generation"
+            assert h.attrs["calibration_identity"] == identities[split]
+            assert h["compensation"].attrs["source_file_sha256"] == sources[f"{split}.h5"]["sha256"]
+            np.testing.assert_allclose(10*np.log10(h["compensation/assisted_mean_nmse_linear"][:]),
+                                       channel_targets(targets,"NOF1"),atol=1e-12)

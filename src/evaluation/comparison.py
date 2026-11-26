@@ -57,8 +57,8 @@ def evaluate(dataset_path, run, backend, *, batch_size=8,
         raise ValueError("Batch size must be a positive integer")
     parameters = resolve_parameters(algorithm_parameters)
     algorithms = selected_algorithms(parameters)
-    if input_view != "raw":
-        raise ValueError("Comparison requires unmodified receiver CSI")
+    if input_view not in ("raw", "reference_assisted"):
+        raise ValueError("Choose raw receiver CSI or the explicit reference-assisted view")
     forced = resolve_force(force)
     run, cache = Path(run), Path(cache_dir) if cache_dir is not None else DEFAULT_CACHE
     run.mkdir(parents=True, exist_ok=True)
@@ -137,7 +137,9 @@ def evaluate(dataset_path, run, backend, *, batch_size=8,
             frame_count=count, bits_per_snr=bits, data_blocks_per_snr=count*4, curves=report_curves,
             parameters=parameters, dataset=str(Path(dataset_path).resolve()), data_identity=identity.files,
             nmse=nmse, report_generation=origin, numerical_environment=environment,
-            input_view=ds.input_view, csi="raw receiver CSI",
+            input_view=ds.input_view,
+            reference_assisted=(ds.input_view == "reference_assisted"),
+            csi="reference-assisted CSI using full reference matrices" if ds.input_view == "reference_assisted" else "raw receiver CSI",
             equalizer="Banded LMMSE B=16 in physical FFT indices; all receive rows; full thermal covariance; estimated-pilot cancellation")
         publish_report(run, report)
         return report

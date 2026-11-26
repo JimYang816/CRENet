@@ -8,7 +8,7 @@ from data_generation.src.config import ROOT
 CHANNELS = ("NOF1", "NCS1")
 
 
-def target_curve(snr_db, start_db, end_db, decay_db=10):
+def target_curve(snr_db, start_db, end_db, decay_db=10, decimal_places=None):
     snr = np.asarray(snr_db, dtype=float)
     if (
         snr.ndim != 1
@@ -26,8 +26,21 @@ def target_curve(snr_db, start_db, end_db, decay_db=10):
         )
     progress = -np.expm1(-snr / decay_db) / (-np.expm1(-30 / decay_db))
     target = start_db + (end_db - start_db) * progress
+    if decimal_places is not None:
+        if type(decimal_places) is not int or not 1 <= decimal_places <= 8:
+            raise ValueError("Target decimal places must be an integer from 1 to 8")
+        target = np.round(target, decimal_places)
     target[0], target[-1] = start_db, end_db
     return target
+
+
+def channel_targets(options, channel):
+    return target_curve(
+        options["snr_db"],
+        **options["targets"][channel],
+        decay_db=options["decay_db"],
+        decimal_places=options.get("decimal_places"),
+    )
 
 
 def load_target_config(path=None):
@@ -48,11 +61,7 @@ def load_target_config(path=None):
             "Expected both channels and explicit reference-assisted mean-NMSE targets"
         )
     for channel in CHANNELS:
-        target_curve(
-            options["snr_db"],
-            **options["targets"][channel],
-            decay_db=options["decay_db"],
-        )
+        channel_targets(options, channel)
     return options
 
 

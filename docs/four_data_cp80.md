@@ -16,6 +16,9 @@ NOF1 和 NCS1 的 D-D-D-D 帧每个符号共 1024 个子载波，其中 512 个�
 
 当前均衡算法为 B=16 带状 LMMSE，评测入口为 `python -m scripts.evaluate.compare`，
 详见 `docs/equalizer_comparison.md`。
+当前参考辅助目标改为 NOF1 -11.41 → -15.77 dB、NCS1 -5.37 → -9.84 dB，
+每个 SNR 目标保留两位小数；重校准与完整 B16 测试记录位于
+`outputs/experiment/dddd_assisted_b16_20261127/`。下文旧端点为各历史生成版本当时的设置。
 下文的 Single-tap / Full-matrix LMMSE 结果及运行命令均为历史记录，旧入口源码见提交 `a08592b`。
 
 ## 256 导频的 CP80 实验记录

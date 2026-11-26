@@ -3,9 +3,10 @@
   "snr_db": [0, 5, 10, 15, 20, 25, 30],
   "curve": "normalized_exponential",
   "decay_db": 10,
+  "decimal_places": 2,
   "targets": {
-    "NOF1": {"start_db": -9.69, "end_db": -16.05},
-    "NCS1": {"start_db": -5.24, "end_db": -9.13}
+    "NOF1": {"start_db": -11.41, "end_db": -15.77},
+    "NCS1": {"start_db": -5.37, "end_db": -9.84}
   },
   "scope": "mean_full_matrix_nmse_per_snr",
   "reference_assisted": true

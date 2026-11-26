@@ -1,4 +1,4 @@
-"""Compare the LMMSE baselines on identical raw-CSI test splits."""
+"""Evaluate banded LMMSE on the explicitly selected test CSI view."""
 from __future__ import annotations
 from src.common.numerics import default_device
 
@@ -23,7 +23,7 @@ def main():
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--channel", choices=("NOF1", "NCS1"))
     parser.add_argument("--baselines-only", action="store_true", help="Ignore learned checkpoints in a historical configuration")
-    parser.add_argument("--input-view", choices=("raw",))
+    parser.add_argument("--input-view", choices=("raw", "reference_assisted"))
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--force", nargs="+", choices=(*IDENTIFIERS, "all"), default=[],
                        help="Recompute the selected LMMSE baselines")

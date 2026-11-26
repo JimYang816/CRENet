@@ -60,7 +60,7 @@ def ber_diagnostics(ds, backend, frame_limit):
                        for algorithm, value in algorithms.items()} for view, algorithms in errors.items()})
 
 
-def accept(directory, run, c, options, backend, *, hash_files=True):
+def accept(directory, run, c, options, backend, *, hash_files=True, diagnostic_ber=True):
     directory, run = Path(directory), Path(run)
     plan = validate_plan(c)
     masks = carrier_masks(c)
@@ -157,7 +157,10 @@ def accept(directory, run, c, options, backend, *, hash_files=True):
                 mean_raw_nmse_db=(10*np.log10(means)).tolist(), mean_assisted_nmse_db=(10*np.log10(assisted_mean)).tolist(),
                 target_nmse_db=target.tolist(), error_scales=alpha.tolist(),
                 target_max_error_db=float(np.max(abs(10*np.log10(assisted_mean)-target))),
-                ber=ber_diagnostics(ds, backend, min(options["ber_diagnostic_frames_per_split"], 1 if c.get("smoke") else 64)))
+                ber=ber_diagnostics(ds, backend, min(options["ber_diagnostic_frames_per_split"], 1 if c.get("smoke") else 64)) if diagnostic_ber else None)
+            if h.attrs.get("calibration_identity"):
+                report.setdefault("calibration", {})[split] = dict(identity=h.attrs["calibration_identity"],
+                    run_id=h.attrs["calibration_run_id"], source_generation_identity=h.attrs["model_identity"])
             report["basis_sha256"] = array_sha256(m["basis"][:])
             report["delay_indices"] = delays.tolist()
             report["model_identity"] = m.attrs["identity"]
@@ -168,6 +171,7 @@ def accept(directory, run, c, options, backend, *, hash_files=True):
             entry["sha256"] = file_sha256(path)
         files[path.name] = entry
     report.update(complete=True, files=files, total_file_bytes=sum(value["bytes"] for value in files.values()),
+        ber_diagnostics_performed=diagnostic_ber,
         checks=dict(independent_record_splits=True, nonoverlapping_windows=True, independent_repeats=True,
             every_reference_and_physical_fingerprint=True, every_frame_full_support_nmse=True,
             exact_target_calibration=True, explicit_raw_and_assisted_views=True, four_symbol_pilot_cancellation=True,
@@ -197,6 +201,15 @@ def plot_report(run, c, report):
     for ext in ("png", "pdf"):
         fig.savefig(run/f"nmse_snr.{ext}", dpi=170)
     plt.close(fig)
+    if not report.get("ber_diagnostics_performed", True):
+        with (run/"summary.csv").open("w", newline="", encoding="utf-8-sig") as stream:
+            writer = csv.writer(stream)
+            writer.writerow(["channel", "split", "snr_db", "frames_per_snr", "raw_nmse_db", "assisted_nmse_db", "target_nmse_db"])
+            for split, value in report["splits"].items():
+                for i, snr in enumerate(c["snr_db"]):
+                    writer.writerow([c["channel"], split, snr, value["frames_per_snr"], value["mean_raw_nmse_db"][i],
+                                     value["mean_assisted_nmse_db"][i], value["target_nmse_db"][i]])
+        return
     fig, axes = plt.subplots(1, 3, figsize=(16, 4.8), layout="constrained")
     for ax, split in zip(axes, SPLITS, strict=True):
         value = report["splits"][split]["ber"]

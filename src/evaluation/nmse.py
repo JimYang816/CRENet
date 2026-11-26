@@ -12,11 +12,16 @@ def manifest_values(dataset, files):
             (dataset.path.parent / "manifest.json").read_text(encoding="utf-8")
         )
         value = report["splits"]["test"]
-        measured = np.asarray(value["mean_raw_nmse_db"], float)
+        key = (
+            "mean_assisted_nmse_db"
+            if dataset.input_view == "reference_assisted"
+            else "mean_raw_nmse_db"
+        )
+        measured = np.asarray(value[key], float)
         if (
             report.get("complete")
             and report["schema"] == SCHEMA
-            and dataset.input_view == "raw"
+            and dataset.input_view in ("raw", "reference_assisted")
             and report["channel"] == dataset.channel
             and report["config_hash"] == dataset._h.attrs["config_hash"]
             and value["checked_all_frames"]
@@ -48,6 +53,8 @@ def mean_nmse_db(dataset, si):
             h["windows/reference_energy"][int(wi)],
         )
         total += float(values.sum())
+    if dataset.input_view == "reference_assisted":
+        total *= float(h["compensation/error_scales"][si]) ** 2
     return float(
         10 * np.log10(max(total / (dataset.frame_count * 4), np.finfo(float).tiny))
     )

@@ -1,10 +1,12 @@
 """Banded LMMSE evaluation uses all four symbols of the formal data reader."""
 
 import numpy as np
+import pytest
 from data_generation.src.dataset.four_data_protocol import channel_config
 
 
-def test_formal_reader_comparison_scores_all_four_symbols(tmp_path):
+@pytest.mark.parametrize("input_view", ["raw", "reference_assisted"])
+def test_formal_reader_comparison_scores_all_four_symbols(tmp_path, input_view):
     import json
     import h5py
     from threadpoolctl import threadpool_limits
@@ -65,10 +67,11 @@ def test_formal_reader_comparison_scores_all_four_symbols(tmp_path):
             config_hash="fixture",
             model_file="model.h5",
             model_identity="four-symbol-fixture",
-            default_input_view="raw",
+            default_input_view=input_view,
+            reference_assisted_csi_adjustment=(input_view == "reference_assisted"),
         )
         h["snr_db"] = [0, 30]
-        h["compensation/error_scales"] = np.ones(ns)
+        h["compensation/error_scales"] = np.full(ns, 0.5)
         h["samples/window_index"] = np.arange(count)
         h["samples/raw_coefficients"] = coefficients
         h["samples/bits"] = bits
@@ -79,6 +82,8 @@ def test_formal_reader_comparison_scores_all_four_symbols(tmp_path):
         h["windows/complete"] = np.ones(count, bool)
         h["windows/reference_cross"] = np.stack([cross] * count)
         h["windows/reference_energy"] = np.stack([energy] * count)
+        if input_view == "reference_assisted":
+            h["windows/reference_taps"] = np.stack([truth] * count)
     with threadpool_limits(2):
         report = evaluate(
             data_dir / "test.h5",
@@ -86,6 +91,7 @@ def test_formal_reader_comparison_scores_all_four_symbols(tmp_path):
             DenseBackend(),
             batch_size=2,
             cache_dir=tmp_path / "cache",
+            input_view=input_view,
         )
     assert report["complete"] and tuple(report["curves"]) == CURVES
     assert report["data_blocks_per_snr"] == 8
@@ -93,6 +99,10 @@ def test_formal_reader_comparison_scores_all_four_symbols(tmp_path):
     assert report["curves"][CURVES[0]]["errors"] == [0, 0]
     np.testing.assert_allclose(
         report["nmse"]["mean_nmse_db"],
-        10 * np.log10(abs(gains.astype(complex) - 1) ** 2),
+        10
+        * np.log10(
+            abs(gains.astype(complex) - 1) ** 2
+            * (0.25 if input_view == "reference_assisted" else 1)
+        ),
         atol=1e-10,
     )

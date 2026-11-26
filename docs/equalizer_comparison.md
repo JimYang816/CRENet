@@ -13,14 +13,37 @@
 
 正式数据由 `src.data.FourDataDataset` 读取，目录为
 `data/processed/dddd_pilot224/{nof1,ncs1}_dddd/`。
-默认数据视图 `reference_assisted` 使用完整参考 CSI；评测入口明确选择 `raw` 原始接收机 CSI。
+默认数据与评测视图 `reference_assisted` 使用完整参考 CSI；可显式选择 `raw` 原始接收机 CSI。
 每帧包含四个数据符号，正式测试划分每个 SNR 有 600 帧。
+
+当前目标按 0、5、…、30 dB 排列，保留两位小数：
+
+| 信道 | 各 SNR 的平均 NMSE 目标 / dB |
+| --- | --- |
+| NOF1 | -11.41, -13.22, -14.31, -14.97, -15.38, -15.62, -15.77 |
+| NCS1 | -5.37, -7.22, -8.34, -9.02, -9.44, -9.69, -9.84 |
+
+训练、验证和测试分别使用该划分的全量线性 NMSE 均值计算公共 SNR 系数，
+构造 `H_assisted = H_ref + alpha_s (H_raw - H_ref)`。
+完整参考包含未估计的物理时延，补偿完成后才构造频域带状数据通道。
+原始系数、发射标签、观测和参考不改变；原始生成身份与重校准身份分别保留。
+
+重新校准六份数据并进行完整测试：
+
+```bash
+python -m data_generation.scripts.recalibrate_four_data all --device cuda --threads 4 --batch-size 8
+```
+
+入口先核对旧验收文件哈希并保存旧补偿参数，重校准后逐帧验收全部划分，
+然后对每信道全部 600 帧/SNR、每帧四符号进行 B16 测试。
+输出为 `outputs/experiment/dddd_assisted_b16_20261127/`；每信道每 SNR 为 2,457,600 bit。
 
 已有正式测试数据的增量评测使用：
 
 ```bash
 python -m scripts.evaluate.compare --device cuda --threads 4
 python -m scripts.evaluate.compare --force banded_lmmse
+python -m scripts.evaluate.compare --input-view raw
 python -m scripts.evaluate.compare --plot-only
 ```
 

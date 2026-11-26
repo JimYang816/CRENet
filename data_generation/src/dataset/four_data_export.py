@@ -23,7 +23,7 @@ from data_generation.src.receiver.estimation import FrozenPrior
 from data_generation.src.receiver.pdd import JointEstimator, symbol_layout
 from data_generation.src.transmitter.ofdm import carrier_masks, make_frame
 from src.common.experiment import file_sha256, write_json
-from data_generation.src.dataset.four_data_targets import error_scales, target_curve
+from data_generation.src.dataset.four_data_targets import channel_targets, error_scales
 from data_generation.src.receiver.full_frame import model_basis
 
 LOG = logging.getLogger(__name__)
@@ -237,7 +237,7 @@ def calibrate(directory, c, options, targets):
             if not h.attrs.get("raw_complete"):
                 raise ValueError("Cannot calibrate an incomplete raw split")
             means[split] = h["samples/raw_nmse_linear"][:].mean(axis=(1, 2))
-    target = target_curve(c["snr_db"], **targets["targets"][c["channel"]], decay_db=targets["decay_db"])
+    target = channel_targets(dict(targets, snr_db=c["snr_db"]), c["channel"])
     mode = options["compensation_calibration"]
     for split in SPLITS:
         scale = (np.ones(len(target)) if mode == "none" else

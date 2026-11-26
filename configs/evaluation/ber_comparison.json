@@ -3,8 +3,8 @@
     "NOF1": "data/processed/dddd_pilot224/nof1_dddd/test.h5",
     "NCS1": "data/processed/dddd_pilot224/ncs1_dddd/test.h5"
   },
-  "output": "outputs/experiment/equalizer_comparison_dddd_banded16_raw",
-  "input_view": "raw",
+  "output": "outputs/experiment/dddd_assisted_b16_20261127/test",
+  "input_view": "reference_assisted",
   "batch_size": 8,
   "algorithms": {
     "banded_lmmse": {"half_bandwidth": 16}
