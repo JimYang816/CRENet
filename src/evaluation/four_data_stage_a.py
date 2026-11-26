@@ -19,13 +19,18 @@ from src.training.four_data_crenet import configure_stage, run_epoch
 
 
 # Rates are absolute Adam rates. All candidates use the same initial model and
-# the same randomly ordered training batches for each interval.
+# the same randomly ordered training batches for each interval. The optional
+# third value selects the smoothed-BER objective.
 VARIANTS = {
     "all_1e-3": (1e-3, 1e-3),
     "all_1e-4": (1e-4, 1e-4),
     "scalars_1e-3": (1e-3, 0.),
     "neural_1e-3": (0., 1e-3),
     "scaled_neural_1e-2": (1e-3, 1e-5),
+    "softber_all_1e-3": (1e-3, 1e-3, "softber"),
+    "softber_all_1e-4": (1e-4, 1e-4, "softber"),
+    "softber_scaled": (1e-3, 1e-4, "softber"),
+    "softber_neural_1e-4": (0., 1e-4, "softber"),
 }
 
 SOURCE_FILES = (
@@ -75,7 +80,25 @@ def detector_changes(model, initial):
     return result
 
 
-def train_interval(model, dataset, optimizer, *, batch_size, steps, seed):
+def soft_ber_loss(output, classes, data_mask, *, slope=4.):
+    """Smooth the two hard bit decisions, retaining the usual layer weights."""
+    if slope <= 0 or output.log_probabilities is None:
+        raise ValueError("A positive slope and layer log probabilities are required")
+    p = output.log_probabilities[:, :, data_mask].exp()
+    if classes.shape != (len(p), p.shape[-2]):
+        raise ValueError("Classes must cover data carriers in physical order")
+    margin0 = p[..., 0]+p[..., 1]-p[..., 2]-p[..., 3]
+    margin1 = p[..., 0]+p[..., 2]-p[..., 1]-p[..., 3]
+    signed0 = (1-2*(classes//2))[:, None, :] * margin0
+    signed1 = (1-2*(classes%2))[:, None, :] * margin1
+    terms = .5*(torch.sigmoid(-slope*signed0)+torch.sigmoid(-slope*signed1))
+    terms = terms.mean((0, 2))
+    weights = terms.new_full((len(terms),), .1/max(len(terms)-1, 1))
+    weights[-1] = .9 if len(terms) > 1 else 1.
+    return (terms*weights).sum()
+
+
+def train_interval(model, dataset, optimizer, *, batch_size, steps, seed, objective="bit_ce"):
     """Train on a seeded subset of batches; never read validation or test labels."""
     model.train()
     loss_sum, examples, used = 0., 0, 0
@@ -83,8 +106,15 @@ def train_interval(model, dataset, optimizer, *, batch_size, steps, seed):
     begin = time.monotonic()
     for inputs, targets, _ in islice(dataset.batches(batch_size, seed=seed), steps):
         result = model(**inputs, correction_enabled=False, return_diagnostics=False)
-        loss = layerwise_loss(result, targets["classes"], None, inputs["data_mask"],
-                              lambda_h=0., objective="bit_ce", final_weight=.9)
+        ce = layerwise_loss(result, targets["classes"], None, inputs["data_mask"],
+                            lambda_h=0., objective="bit_ce", final_weight=.9)
+        if objective == "bit_ce":
+            loss = ce
+        elif objective == "softber":
+            # CE still supplies gradients for confidently wrong decisions.
+            loss = soft_ber_loss(result, targets["classes"], inputs["data_mask"]) + .1*ce
+        else:
+            raise ValueError("Unknown diagnostic training objective")
         if not torch.isfinite(loss):
             raise FloatingPointError("Nonfinite detector diagnosis loss")
         optimizer.zero_grad(set_to_none=True)
@@ -104,7 +134,7 @@ def train_interval(model, dataset, optimizer, *, batch_size, steps, seed):
         used += 1
     if used != steps:
         raise ValueError(f"Requested {steps} batches, but the dataset supplied {used}")
-    return dict(loss=loss_sum/examples, examples=examples, steps=used,
+    return dict(loss=loss_sum/examples, objective=objective, examples=examples, steps=used,
                 first_gradient_l2=gradient, seconds=time.monotonic()-begin)
 
 
@@ -158,15 +188,17 @@ def run(config, directory, previous, output, *, device, variants, intervals, ste
     write_json(output/"summary.json", summary)
     print(f"{train.channel} baseline: BER={baseline['ber']:.8f}, loss={baseline['loss']:.6f}", flush=True)
     for variant in variants:
-        scalar_rate, neural_rate = VARIANTS[variant]
+        specification = VARIANTS[variant]
+        scalar_rate, neural_rate = specification[:2]
+        objective = specification[2] if len(specification) > 2 else "bit_ce"
         rates = dict(scalars=scalar_rate, neural=neural_rate)
         model.load_state_dict(checkpoint["model"])
         optimizer = detector_optimizer(model, rates)
-        record = dict(rates=rates, intervals=[], best_interval=None, best_validation=None)
+        record = dict(rates=rates, objective=objective, intervals=[], best_interval=None, best_validation=None)
         summary["variants"][variant] = record
         for index in range(1, intervals+1):
             train_metrics = train_interval(model, train, optimizer, batch_size=batch_size, steps=steps,
-                seed=config["training"]["seed"]+index)
+                seed=config["training"]["seed"]+index, objective=objective)
             metrics = run_epoch(model, validation, stage="A", batch_size=batch_size, lambda_h=0.)
             changes = detector_changes(model, initial)
             row = dict(interval=index, updates=index*steps, training=train_metrics,
