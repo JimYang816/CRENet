@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from src.algorithms.crenet.model import CRENet
 from src.evaluation.four_data_stage_a import detector_changes, detector_optimizer, run, soft_ber_loss, train_interval
-from src.training.four_data_crenet import run_epoch
+from src.training.four_data_crenet import run_epoch, selection_key
 
 
 class SmallPhysicalDataset:
@@ -126,3 +126,38 @@ def test_soft_ber_training_updates_detector_parameters():
     changes = detector_changes(model, initial)
     assert metrics["objective"] == "softber" and np.isfinite(metrics["loss"])
     assert changes["scalars"]["changed_tensors"] and changes["neural"]["changed_tensors"]
+
+
+def test_diagnosis_can_fine_tune_detector_after_csi_repair(monkeypatch, tmp_path):
+    torch.set_num_threads(1)
+    options = dict(layers=2, bandwidth=2, window_size=4, center_size=2, hidden_size=4,
+                   detector_mode="budgeted", noise_mode="diagonal", initial_soft_damping=.8)
+    config = dict(model=options, input_view="reference_assisted", training=dict(seed=9, lambda_h=.1))
+    model = CRENet(**options)
+    dataset = SmallPhysicalDataset()
+    dataset.targets["reference"] = dataset.targets["reference"]*1.05
+    checkpoint = dict(identity="identity", stage="B", epoch=10, model=model.state_dict(),
+        validation=run_epoch(model, dataset, stage="B", batch_size=8, lambda_h=.1))
+    provenance = dict(identity="identity", config=config, data=dict(manifest_sha256="manifest"))
+    monkeypatch.setattr("src.evaluation.four_data_stage_a._verified_source",
+                        lambda *_: (provenance, checkpoint))
+
+    def open_dataset(path, **_):
+        instance = SmallPhysicalDataset()
+        instance.channel = "NOF1"
+        instance.records = np.asarray([1] if path.stem == "train" else [2])
+        instance.targets["reference"] = instance.targets["reference"]*1.05
+        return instance
+
+    monkeypatch.setattr("src.evaluation.four_data_stage_a.FourDataTrainingSet", open_dataset)
+    previous = tmp_path/"previous"
+    previous.mkdir()
+    (previous/"best_B.pt").write_bytes(b"checkpoint")
+    result = run(config, tmp_path, previous, tmp_path/"result", device="cpu", start="B",
+                 variants=["scalars_1e-3"], intervals=1, steps=2, batch_size=8)
+    assert result["complete"] and result["source_checkpoint_stage"] == "B"
+    assert result["source_checkpoint_epoch"] == 10 and not result["test_used"]
+    variant = result["variants"]["scalars_1e-3"]
+    assert variant["intervals"][0]["changes"]["scalars"]["l2"] > 0
+    assert variant["beats_baseline"] == (selection_key("C", variant["best_validation"])
+                                          < selection_key("C", result["baseline"]))

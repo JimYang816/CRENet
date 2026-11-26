@@ -12,10 +12,11 @@ import numpy as np
 import torch
 
 from data_generation.src.config import ROOT
+from src.algorithms.crenet.metrics import full_matrix_nmse
 from src.algorithms.crenet.model import CRENet, layerwise_loss
 from src.common.experiment import file_sha256, write_json
 from src.data.four_data_training import FourDataTrainingSet
-from src.training.four_data_crenet import configure_stage, run_epoch
+from src.training.four_data_crenet import configure_stage, run_epoch, selection_key
 
 
 # Rates are absolute Adam rates. All candidates use the same initial model and
@@ -98,14 +99,15 @@ def soft_ber_loss(output, classes, data_mask, *, slope=4.):
     return (terms*weights).sum()
 
 
-def train_interval(model, dataset, optimizer, *, batch_size, steps, seed, objective="bit_ce"):
+def train_interval(model, dataset, optimizer, *, batch_size, steps, seed, objective="bit_ce",
+                   correction_enabled=False, lambda_h=0.):
     """Train on a seeded subset of batches; never read validation or test labels."""
     model.train()
     loss_sum, examples, used = 0., 0, 0
     gradient = {}
     begin = time.monotonic()
     for inputs, targets, _ in islice(dataset.batches(batch_size, seed=seed), steps):
-        result = model(**inputs, correction_enabled=False, return_diagnostics=False)
+        result = model(**inputs, correction_enabled=correction_enabled, return_diagnostics=False)
         ce = layerwise_loss(result, targets["classes"], None, inputs["data_mask"],
                             lambda_h=0., objective="bit_ce", final_weight=.9)
         if objective == "bit_ce":
@@ -115,6 +117,11 @@ def train_interval(model, dataset, optimizer, *, batch_size, steps, seed, object
             loss = soft_ber_loss(result, targets["classes"], inputs["data_mask"]) + .1*ce
         else:
             raise ValueError("Unknown diagnostic training objective")
+        if lambda_h:
+            _, nmse = full_matrix_nmse(result, targets["reference"])
+            weights = nmse.new_full((nmse.shape[1],), .1/max(nmse.shape[1]-1, 1))
+            weights[-1] = .9 if len(weights) > 1 else 1.
+            loss = loss+lambda_h*(nmse*weights).sum(1).mean()
         if not torch.isfinite(loss):
             raise FloatingPointError("Nonfinite detector diagnosis loss")
         optimizer.zero_grad(set_to_none=True)
@@ -138,7 +145,7 @@ def train_interval(model, dataset, optimizer, *, batch_size, steps, seed, object
                 first_gradient_l2=gradient, seconds=time.monotonic()-begin)
 
 
-def _verified_source(directory, previous):
+def _verified_source(directory, previous, start):
     provenance = json.loads((previous/"provenance.json").read_text(encoding="utf-8"))
     manifest = directory/"manifest.json"
     if file_sha256(manifest) != provenance["data"]["manifest_sha256"]:
@@ -149,20 +156,22 @@ def _verified_source(directory, previous):
         path = directory/name
         if path.stat().st_size != expected["bytes"] or file_sha256(path) != expected["sha256"]:
             raise ValueError(f"Dataset file differs from the original experiment: {name}")
-    checkpoint = torch.load(previous/"best_A.pt", map_location="cpu", weights_only=False)
-    if (checkpoint["identity"] != provenance["identity"] or checkpoint["stage"] != "A"
-            or checkpoint["epoch"] != 0):
-        raise ValueError("Expected the original stage-A epoch-0 checkpoint")
+    checkpoint = torch.load(previous/f"best_{start}.pt", map_location="cpu", weights_only=False)
+    if (checkpoint["identity"] != provenance["identity"] or checkpoint["stage"] != start
+            or (start == "A" and checkpoint["epoch"] != 0)):
+        raise ValueError("Original detector diagnosis checkpoint does not match its provenance")
     return provenance, checkpoint
 
 
-def run(config, directory, previous, output, *, device, variants, intervals, steps, batch_size):
-    """Compare paired stage-A updates against the frozen original initialization."""
+def run(config, directory, previous, output, *, device, variants, intervals, steps, batch_size, start="A"):
+    """Compare paired detector updates from original stage A or B weights."""
+    if start not in ("A", "B"):
+        raise ValueError("Detector diagnosis must start from stage A or B")
     directory, previous, output = map(Path, (directory, previous, output))
     if output.exists() and any(output.iterdir()):
         raise FileExistsError(f"Use a new empty diagnosis directory: {output}")
     output.mkdir(parents=True, exist_ok=True)
-    provenance, checkpoint = _verified_source(directory, previous)
+    provenance, checkpoint = _verified_source(directory, previous, start)
     if config["model"] != provenance["config"]["model"] or config["input_view"] != provenance["config"]["input_view"]:
         raise ValueError("Diagnostic model or input view differs from the original experiment")
     train = FourDataTrainingSet(directory/"train.h5", device=device, input_view=config["input_view"])
@@ -172,13 +181,16 @@ def run(config, directory, previous, output, *, device, variants, intervals, ste
     model = CRENet(**config["model"]).to(device)
     model.load_state_dict(checkpoint["model"])
     initial = {name: parameter.detach().cpu().clone() for name, parameter in model.named_parameters()}
-    baseline = run_epoch(model, validation, stage="A", batch_size=batch_size, lambda_h=0.)
+    eval_stage = "A" if start == "A" else "C"
+    lambda_h = 0. if start == "A" else config["training"]["lambda_h"]
+    baseline = run_epoch(model, validation, stage=eval_stage, batch_size=batch_size, lambda_h=lambda_h)
     recorded = checkpoint["validation"]
-    summary = dict(schema="four-data-stage-a-diagnosis-v1", complete=False,
+    summary = dict(schema="four-data-detector-diagnosis-v2", complete=False,
         channel=train.channel, input_view=config["input_view"], test_used=False,
-        original_identity=provenance["identity"], original_checkpoint_sha256=file_sha256(previous/"best_A.pt"),
+        original_identity=provenance["identity"], original_checkpoint_sha256=file_sha256(previous/f"best_{start}.pt"),
         manifest_sha256=provenance["data"]["manifest_sha256"],
-        source_checkpoint_epoch=checkpoint["epoch"], recorded_validation=recorded, baseline=baseline,
+        source_checkpoint_stage=start, source_checkpoint_epoch=checkpoint["epoch"],
+        recorded_validation=recorded, baseline=baseline,
         validation_error_count_difference=sum(x["errors"] for x in baseline["per_snr"])
                                           -sum(x["errors"] for x in recorded["per_snr"]),
         device=str(device), torch=torch.__version__, batch_size=batch_size, steps_per_interval=steps,
@@ -198,15 +210,17 @@ def run(config, directory, previous, output, *, device, variants, intervals, ste
         summary["variants"][variant] = record
         for index in range(1, intervals+1):
             train_metrics = train_interval(model, train, optimizer, batch_size=batch_size, steps=steps,
-                seed=config["training"]["seed"]+index, objective=objective)
-            metrics = run_epoch(model, validation, stage="A", batch_size=batch_size, lambda_h=0.)
+                seed=config["training"]["seed"]+index, objective=objective,
+                correction_enabled=start == "B", lambda_h=lambda_h)
+            metrics = run_epoch(model, validation, stage=eval_stage, batch_size=batch_size, lambda_h=lambda_h)
             changes = detector_changes(model, initial)
             row = dict(interval=index, updates=index*steps, training=train_metrics,
                        validation=metrics, changes=changes)
             record["intervals"].append(row)
-            if record["best_validation"] is None or (metrics["ber"], metrics["loss"]) < (
-                    record["best_validation"]["ber"], record["best_validation"]["loss"]):
+            if (record["best_validation"] is None or selection_key(eval_stage, metrics)
+                    < selection_key(eval_stage, record["best_validation"])):
                 record["best_interval"], record["best_validation"] = index, metrics
+                record["beats_baseline"] = selection_key(eval_stage, metrics) < selection_key(eval_stage, baseline)
                 torch.save(dict(variant=variant, interval=index, model={k:v.detach().cpu().clone()
                            for k,v in model.state_dict().items()}, validation=metrics,
                            source_identity=provenance["identity"]), output/f"{variant}.pt")
@@ -240,7 +254,7 @@ def plot(summary, output):
         if kind == "ber":
             axis.set_yscale("log")
         axis.set(xlabel="SNR (dB)", ylabel="BER" if kind == "ber" else "Mean full-matrix NMSE (dB)",
-                 title=f"{summary['channel']} validation: stage-A detector diagnosis")
+                 title=f"{summary['channel']} validation: detector diagnosis from stage {summary['source_checkpoint_stage']}")
         axis.grid(True, which="both", alpha=.25)
         axis.legend(fontsize=8)
         fig.tight_layout()

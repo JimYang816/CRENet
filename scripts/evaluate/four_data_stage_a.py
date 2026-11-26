@@ -1,4 +1,4 @@
-"""Compare stage-A detector updates on the original training/validation splits."""
+"""Compare detector updates on the original training/validation splits."""
 from __future__ import annotations
 
 import argparse
@@ -19,6 +19,8 @@ def main():
     parser.add_argument("--previous", type=Path, default=ROOT/"outputs/experiment/four_data_crenet_cp80_20261126")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--channel", choices=("NOF1", "NCS1", "all"), default="all")
+    parser.add_argument("--start", choices=("A", "B"), default="A",
+                        help="start from stage-A epoch 0, or the saved stage-B correction model")
     parser.add_argument("--device", choices=("cpu", "cuda"), default=default_device())
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--variants", nargs="+", choices=tuple(VARIANTS), default=list(VARIANTS))
@@ -42,7 +44,7 @@ def main():
             config[section].update(values)
         run(config, ROOT/config["datasets"][channel], args.previous/channel.lower(),
             args.output/channel.lower(), device=args.device, variants=args.variants,
-            intervals=args.intervals, steps=args.steps, batch_size=args.batch_size)
+            intervals=args.intervals, steps=args.steps, batch_size=args.batch_size, start=args.start)
 
 
 if __name__ == "__main__":
