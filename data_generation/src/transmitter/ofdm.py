@@ -30,10 +30,13 @@ def carrier_masks(c):
         raise ValueError("Unknown four-symbol frame layout")
     n = c["nfft"]
     middle = n-2*c["null_per_edge"]
-    if middle % 7:
-        raise ValueError("PDDP requires repeated seven-carrier groups")
-    group = [2, 1, 1, 2, 1, 1, 0] if c["frame_structure"] == "DDDD" else [1, 1, 0, 2, 0, 1, 1]
-    pattern = np.tile(group, middle//7)
+    if c["frame_structure"] == "DDDD":
+        group = [2, 1, 1] if middle == c["data_count"]+c["pilot_count"] else [2, 1, 1, 2, 1, 1, 0]
+    else:
+        group = [1, 1, 0, 2, 0, 1, 1]
+    if middle <= 0 or middle % len(group):
+        raise ValueError("The interior FFT bins must contain whole carrier groups")
+    pattern = np.tile(group, middle//len(group))
     layout = np.pad(pattern, c["null_per_edge"])
     data, pilot = layout == 1, layout == 2
     active = np.zeros(n, bool)

@@ -24,26 +24,46 @@ def initialize_worker(c, archive_path, threads):
     _CONTEXT = (c, WatermarkArchive(archive_path, c["channel"]), BlockedReceiver(c), limits)
 
 
-def compute_window(c, archive, receiver, job):
-    wi, split, record, start, repeats = job
-    begin = time.perf_counter()
+def sounding_window(c, archive, record, start):
     sounding = archive.load(record)
     origin = start-c["guard_samples"]/c["fs_baseband"]
     duration = (4*(c["nfft"]+c["cp"])+2*c["guard_samples"])/c["fs_baseband"]
     if origin < 0 or origin+duration >= sounding.duration:
         raise ValueError(f"Physical window crosses recording boundary: {record}@{start}")
+    return sounding, origin
+
+
+def replay_payload(c, receiver, sounding, origin, split, record, start, repeat):
+    frame = make_frame(c, record, start, SPLIT_CODES[split], payload_repeat=repeat)
+    clean_rf = receiver.replay(sounding, origin, frame)
+    clean = receive_symbols(receiver.chain.receive(clean_rf), c)
+    seed = (c["seed"], SPLIT_CODES[split], record, round(start*1000), 1, repeat)
+    rng = np.random.default_rng(np.random.SeedSequence(seed))
+    standard = receive_symbols(receiver.chain.receive(rng.standard_normal(len(clean_rf))), c)
+    variance = np.mean(abs(clean)**2)/receiver.chain.noise_gain/10**(np.asarray(c["snr_db"])/10)
+    return frame, clean, standard, variance, seed
+
+
+def replay_window(c, archive, receiver, job):
+    """Generate observations for another carrier layout on the same physical window."""
+    wi, split, record, start, repeats = job
+    sounding, origin = sounding_window(c, archive, record, start)
+    payloads = [replay_payload(c, receiver, sounding, origin, split, record, start, repeat) for repeat in range(repeats)]
+    frames, clean, standard, variance, _ = zip(*payloads, strict=True)
+    return wi, dict(clean=np.stack(clean), standard=np.stack(standard), variance=np.stack(variance, axis=1),
+                    bits=np.stack([frame.bits for frame in frames]))
+
+
+def compute_window(c, archive, receiver, job):
+    wi, split, record, start, repeats = job
+    begin = time.perf_counter()
+    sounding, origin = sounding_window(c, archive, record, start)
     refs = [receiver.reference(sounding, start, d) for d in range(4)]
     # Persisted reference precision defines reconstruction, residuals and scoring.
     truth = np.stack([value[0] for value in refs]).astype(np.complex64)
     samples = []
     for repeat in range(repeats):
-        frame = make_frame(c, record, start, SPLIT_CODES[split], payload_repeat=repeat)
-        clean_rf = receiver.replay(sounding, origin, frame)
-        clean = receive_symbols(receiver.chain.receive(clean_rf), c)
-        seed = (c["seed"], SPLIT_CODES[split], record, round(start*1000), 1, repeat)
-        rng = np.random.default_rng(np.random.SeedSequence(seed))
-        standard = receive_symbols(receiver.chain.receive(rng.standard_normal(len(clean_rf))), c)
-        variance = np.mean(abs(clean)**2)/receiver.chain.noise_gain/10**(np.asarray(c["snr_db"])/10)
+        frame, clean, standard, variance, seed = replay_payload(c, receiver, sounding, origin, split, record, start, repeat)
         prediction = fft(np.sum(truth*input_windows(frame.x, c["nfft"]), axis=-1))
         residual = clean-prediction
         samples.append(dict(repeat=repeat, clean=clean, standard=standard, bits=frame.bits,
@@ -56,27 +76,27 @@ def compute_window(c, archive, receiver, job):
             model_mismatch_policy=c["model_mismatch_policy"], seconds=time.perf_counter()-begin))
 
 
-def _worker(job):
+def _worker(compute, job):
     c, archive, receiver, limits = _CONTEXT
-    return compute_window(c, archive, receiver, job)
+    return compute(c, archive, receiver, job)
 
 
-def window_results(jobs, c, archive, receiver, *, pool=None, prefetch=1):
+def window_results(jobs, c, archive, receiver, *, pool=None, prefetch=1, compute=compute_window):
     if pool is None:
         for job in jobs:
-            yield compute_window(c, archive, receiver, job)
+            yield compute(c, archive, receiver, job)
         return
     source, pending = iter(jobs), deque()
     for _ in range(prefetch):
         job = next(source, None)
         if job is not None:
-            pending.append(pool.submit(_worker, job))
+            pending.append(pool.submit(_worker, compute, job))
     try:
         while pending:
             result = pending.popleft().result()
             job = next(source, None)
             if job is not None:
-                pending.append(pool.submit(_worker, job))
+                pending.append(pool.submit(_worker, compute, job))
             yield result
     finally:
         for future in pending:

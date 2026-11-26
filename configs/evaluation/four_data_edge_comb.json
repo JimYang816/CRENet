@@ -1,0 +1,10 @@
+{
+  "channels": ["NOF1", "NCS1"],
+  "null_per_edge": 128,
+  "bandwidth_hz": 12,
+  "q": 5,
+  "delay_count": 256,
+  "model_error_ratio": 0.01,
+  "ber_frames_per_channel": 16,
+  "baseline": "outputs/experiment/four_data_single_symbol_12hz_q5_k256_20261126"
+}
