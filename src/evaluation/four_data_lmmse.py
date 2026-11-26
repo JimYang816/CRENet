@@ -12,7 +12,7 @@ import numpy as np
 from scipy.signal.windows import dpss
 
 from data_generation.src.channel.watermark.replay import WatermarkArchive
-from data_generation.src.config import ROOT, FROZEN_SUPPORT_CONFIGS, digest, load_config
+from data_generation.src.config import ROOT, FROZEN_SUPPORT_CONFIGS, digest, load_legacy_dddd_config
 from data_generation.src.receiver.chain import relative_energy, taps_to_matrix
 from data_generation.src.receiver.dpss import DPSSModel
 from data_generation.src.receiver.estimation import FrozenPrior, input_windows
@@ -50,7 +50,7 @@ def load_run_config(path):
 
 
 def channel_config(channel):
-    c = load_config(ROOT/f"configs/data/{channel.lower()}/dddd.json")
+    c = load_legacy_dddd_config(channel)
     if (c["channel"] != channel or c["frame_structure"] != "DDDD"
             or (c["data_count"], c["pilot_count"], c["dpss_expected_count"], c["delay_length"]) != (512, 256, 24, 176)
             or c["dpss_half_bandwidth_hz"] != 12 or c["snr_db"] != list(range(0, 31, 5))):
@@ -356,9 +356,12 @@ def finish(output, metadata, reports):
         ax.set(title=channel, xlabel="SNR (dB)", ylabel="Mean full-matrix CSI NMSE (dB)", xticks=r["snr_db"])
         ax.grid(alpha=.25)
         ax.legend()
-    lengths = {metadata["configs"][channel]["delay_length"] for channel in reports}
+    configs = [metadata["configs"][channel] for channel in reports]
+    lengths = {c["delay_length"] for c in configs}
     length_label = str(next(iter(lengths))) if len(lengths) == 1 else "channel-specific"
-    fig.suptitle(f"4D, CP={cp}, 512 data + 256 pilots | 12 Hz / Q={order} / L={length_label}")
+    allocations = {f"{c['data_count']} data + {c['pilot_count']} pilots" for c in configs}
+    allocation_label = allocations.pop() if len(allocations) == 1 else "channel-specific allocation"
+    fig.suptitle(f"4D, CP={cp}, {allocation_label} | 12 Hz / Q={order} / L={length_label}")
     fig.savefig(output/"nmse_snr.png", dpi=180)
     fig.savefig(output/"nmse_snr.pdf")
     plt.close(fig)

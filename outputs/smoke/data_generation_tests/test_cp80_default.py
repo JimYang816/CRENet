@@ -5,9 +5,10 @@ import h5py
 import numpy as np
 import pytest
 
-from data_generation.src.config import ROOT, digest, frozen_support_matches_config, load_config
+from data_generation.src.config import ROOT, digest, frozen_support_matches_config, load_config, load_legacy_dddd_config
 from data_generation.src.dataset.four_data_export import load_prior
 from data_generation.src.dataset.four_data_protocol import channel_config, counts, load_options
+from data_generation.src.transmitter.ofdm import carrier_masks, make_frame, qpsk
 from scripts.run.four_data_experiment import preflight
 
 
@@ -32,6 +33,35 @@ def test_training_rejects_superseded_cp256_acceptance_before_loading_data(tmp_pa
     (tmp_path/"manifest.json").write_text(json.dumps(dict(complete=True, smoke=False,
         channel="NOF1", cp=256, cp_ms=256/6, files={})), encoding="utf-8")
     with pytest.raises(ValueError, match="CP80"):
+        preflight(tmp_path, "NOF1")
+
+
+@pytest.mark.parametrize("channel", ["NOF1", "NCS1"])
+def test_current_carrier_allocation_in_all_four_symbols(channel):
+    c = channel_config(channel)
+    masks = carrier_masks(c)
+    data, pilot, protection, edge = (masks[key] for key in ("data", "pilot", "protection", "edge"))
+    assert (data.sum(), pilot.sum(), protection.sum(), edge.sum()) == (512, 224, 224, 64)
+    np.testing.assert_array_equal(np.flatnonzero(edge), np.r_[0:32, 992:1024])
+    np.testing.assert_array_equal(np.sum([data, pilot, protection, edge], axis=0), np.ones(1024))
+    np.testing.assert_array_equal(masks["tracking"], pilot | protection)
+    pilot_positions = np.flatnonzero(pilot)
+    assert set(np.diff(pilot_positions)) == {4, 5}
+    np.testing.assert_array_equal(np.flatnonzero(protection), pilot_positions+1)
+
+    frame = make_frame(c, 11, 2)
+    np.testing.assert_array_equal(frame.x[:, data], qpsk(frame.bits))
+    np.testing.assert_array_equal(frame.x[:, pilot], frame.known[:, pilot])
+    np.testing.assert_allclose(abs(frame.known[:, pilot]), 1)
+    assert np.all(frame.known[:, ~pilot] == 0)
+    assert np.all(frame.x[:, protection | edge] == 0)
+
+
+def test_training_rejects_legacy_cp80_carriers(tmp_path):
+    legacy = dict(load_legacy_dddd_config("NOF1"), delay_length=192)
+    (tmp_path/"manifest.json").write_text(json.dumps(dict(complete=True, smoke=False,
+        channel="NOF1", cp=480, cp_ms=80, config_hash=digest(legacy), files={})), encoding="utf-8")
+    with pytest.raises(ValueError, match="224-pilot"):
         preflight(tmp_path, "NOF1")
 
 

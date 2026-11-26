@@ -10,6 +10,7 @@ import subprocess
 import torch
 
 from data_generation.src.config import ROOT, digest
+from data_generation.src.dataset.four_data_protocol import channel_config
 from src.common.experiment import file_sha256, write_json
 from src.common.numerics import default_device
 from src.training.four_data_crenet import train
@@ -31,6 +32,8 @@ def preflight(directory, channel):
     if (not manifest["complete"] or manifest["smoke"] or manifest["channel"] != channel
             or manifest.get("cp") != 480 or manifest.get("cp_ms") != 80):
         raise ValueError("Expected an accepted formal CP80 four-data dataset; regenerate superseded CP256 data")
+    if manifest.get("config_hash") != digest(channel_config(channel)):
+        raise ValueError("Training requires an accepted dataset with the current 224-pilot frame configuration")
     for name, expected in manifest["files"].items():
         path = directory/name
         if path.stat().st_size != expected["bytes"] or file_sha256(path) != expected["sha256"]:

@@ -12,7 +12,7 @@ import numpy as np
 from data_generation.src.config import digest
 from data_generation.src.dataset.four_data_math import array_sha256, coefficient_nmse, reference_statistics, sampled_grams
 from data_generation.src.dataset.four_data_protocol import SCHEMA, SPLITS, SPLIT_CODES, validate_plan, windows
-from data_generation.src.transmitter.ofdm import decisions, fft, make_frame
+from data_generation.src.transmitter.ofdm import carrier_masks, decisions, fft, make_frame
 from data_generation.src.receiver.estimation import input_windows
 from src.common.experiment import file_sha256, write_json
 from src.data.four_data import FourDataDataset, data_system
@@ -63,6 +63,7 @@ def ber_diagnostics(ds, backend, frame_limit):
 def accept(directory, run, c, options, backend, *, hash_files=True):
     directory, run = Path(directory), Path(run)
     plan = validate_plan(c)
+    masks = carrier_masks(c)
     report = dict(schema=SCHEMA, channel=c["channel"], complete=False, smoke=bool(c.get("smoke")),
         cp=c["cp"], cp_ms=1000*c["cp"]/c["fs_baseband"],
         default_input_view=options["default_input_view"], reference_assisted_csi_adjustment=(options["compensation_calibration"] != "none"),
@@ -74,6 +75,8 @@ def accept(directory, run, c, options, backend, *, hash_files=True):
             h, m = ds._h, ds._model
             if h.attrs["config_hash"] != digest(c) or ds.input_view != options["default_input_view"]:
                 raise ValueError("Dataset settings differ from the requested formal configuration")
+            if any(not np.array_equal(ds.masks.get(name), mask) for name, mask in masks.items()):
+                raise ValueError("Stored carrier masks differ from the configured allocation")
             expected_windows, repeats = windows(c, split), c["learning_dataset"]["repeats"][split]
             if list(zip(h["windows/record"][:], h["windows/start_seconds"][:])) != expected_windows:
                 raise ValueError("Physical record/time identities differ from the configured split")
