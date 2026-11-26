@@ -19,8 +19,7 @@ class Algorithm:
 MATRIX = ("src.algorithms.likelihood:make_whitener", "src.algorithms.likelihood:likelihood_batch",
           "src.algorithms.likelihood:batch_likelihood")
 ALGORITHMS = (
-    Algorithm("single_tap_mmse", "Single-tap LMMSE", "src.algorithms.single_tap_mmse.equalizer"),
-    Algorithm("full_matrix_lmmse", "Full-matrix LMMSE", "src.algorithms.full_matrix_lmmse.equalizer", MATRIX),
+    Algorithm("banded_lmmse", "Banded LMMSE (B=16)", "src.algorithms.banded_lmmse.equalizer", MATRIX),
 )
 AVAILABLE_ALGORITHMS = ALGORITHMS
 CURVES = tuple(a.label for a in ALGORITHMS)
@@ -29,7 +28,7 @@ IDENTIFIERS = tuple(a.identifier for a in AVAILABLE_ALGORITHMS)
 
 def normalize_report_labels(report):
     """Translate historical display names without changing numerical provenance."""
-    aliases = {"Single-tap MMSE": ALGORITHMS[0].label,
+    aliases = {"Single-tap MMSE": "Single-tap LMMSE",
                "ICR-MMSE-Net": "CRENet", "ICR-MMSE": "CRENet", "CRU-Net": "CRENet"}
     curves = {}
     for name, curve in report.get("curves", {}).items():
@@ -54,9 +53,10 @@ def resolve_parameters(algorithm_parameters=None):
     result = {}
     for algorithm in AVAILABLE_ALGORITHMS:
         override = supplied.get(algorithm.identifier, {})
-        if not isinstance(override, dict) or override:
+        if (not isinstance(override, dict) or set(override)-{"half_bandwidth"}
+                or type(override.get("half_bandwidth",16)) is not int or override.get("half_bandwidth",16) != 16):
             raise ValueError(f"Invalid parameters for {algorithm.identifier}")
-        result[algorithm.identifier] = {}
+        result[algorithm.identifier] = {"half_bandwidth":16}
     return result
 
 

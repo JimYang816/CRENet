@@ -16,7 +16,7 @@ import numpy as np
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", type=Path, default=Path(
-        "outputs/experiment/dddd_delay192_assisted_20261124"))
+        "outputs/experiment/dddd_cp80_delay192_pilot224_assisted_20261127"))
     args = parser.parse_args()
     available = {font.name for font in font_manager.fontManager.ttflist}
     fonts = [name for name in ("Microsoft YaHei", "SimHei", "Noto Sans CJK SC") if name in available]

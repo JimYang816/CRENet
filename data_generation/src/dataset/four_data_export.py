@@ -23,8 +23,8 @@ from data_generation.src.receiver.estimation import FrozenPrior
 from data_generation.src.receiver.pdd import JointEstimator, symbol_layout
 from data_generation.src.transmitter.ofdm import carrier_masks, make_frame
 from src.common.experiment import file_sha256, write_json
-from src.evaluation.four_data_delay192_compensation import error_scales, target_curve
-from src.evaluation.four_data_lmmse import model_basis
+from data_generation.src.dataset.four_data_targets import error_scales, target_curve
+from data_generation.src.receiver.full_frame import model_basis
 
 LOG = logging.getLogger(__name__)
 

@@ -1,13 +1,12 @@
 {
   "datasets": {
-    "NOF1": "data/processed/nof1_dddd/test.h5",
-    "NCS1": "data/processed/ncs1_dddd/test.h5"
+    "NOF1": "data/processed/dddd_pilot224/nof1_dddd/test.h5",
+    "NCS1": "data/processed/dddd_pilot224/ncs1_dddd/test.h5"
   },
-  "output": "outputs/experiment/equalizer_comparison_dddd_raw",
+  "output": "outputs/experiment/equalizer_comparison_dddd_banded16_raw",
   "input_view": "raw",
   "batch_size": 8,
   "algorithms": {
-    "single_tap_mmse": {},
-    "full_matrix_lmmse": {}
+    "banded_lmmse": {"half_bandwidth": 16}
   }
 }

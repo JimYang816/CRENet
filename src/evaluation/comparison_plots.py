@@ -68,7 +68,7 @@ def validate_report(report):
     report = normalize_report_labels(report)
     names = set(report.get("curves", {}))
     if not report.get("complete") or names != set(CURVES):
-        raise ValueError("Plotting requires a complete comparison report with both LMMSE baselines")
+        raise ValueError("Plotting requires a complete report with the configured banded LMMSE curve")
     snr = np.asarray(report["snr_db"], dtype=float)
     if snr.ndim != 1 or not len(snr) or not np.all(np.isfinite(snr)):
         raise ValueError("Invalid SNR values in comparison report")

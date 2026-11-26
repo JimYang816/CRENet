@@ -20,8 +20,8 @@ from data_generation.src.dataset.four_data_protocol import (
 )
 from src.common.experiment import file_sha256, write_json
 from src.common.numerics import DenseBackend, default_device
-from src.evaluation.four_data_cp80_compensation import CODE as SOURCE_CODE, verify_source
-from src.evaluation.four_data_delay192_compensation import load_target_config
+from data_generation.src.dataset.four_data_source import CODE as SOURCE_CODE, verify_source
+from data_generation.src.dataset.four_data_targets import load_target_config
 
 CODE = tuple(dict.fromkeys((*SOURCE_CODE, "data_generation/scripts/four_data.py",
     "data_generation/src/dataset/four_data_protocol.py", "data_generation/src/dataset/four_data_math.py",
@@ -106,7 +106,7 @@ def main(argv=None):
         from data_generation.src.channel.watermark.replay import WatermarkArchive
         from data_generation.src.dataset.four_data_acceptance import accept
         from data_generation.src.dataset.four_data_export import generate, load_prior
-        from src.evaluation.four_data_q_sweep import BlockedReceiver
+        from data_generation.src.receiver.blocked import BlockedReceiver
 
         needed = sum(max(0, estimated_max_bytes(c)-sum(path.stat().st_size for path in directories[ch].glob("*.h5")))
                      for ch, c in configurations.items())

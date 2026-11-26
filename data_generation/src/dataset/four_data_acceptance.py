@@ -16,7 +16,7 @@ from data_generation.src.transmitter.ofdm import carrier_masks, decisions, fft, 
 from data_generation.src.receiver.estimation import input_windows
 from src.common.experiment import file_sha256, write_json
 from src.data.four_data import FourDataDataset, data_system
-from src.evaluation.four_data_csi_compensation import tap_nmse
+from data_generation.src.dataset.four_data_math import tap_nmse
 from src.evaluation.four_data_lmmse import detect
 
 LOG = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ def ber_diagnostics(ds, backend, frame_limit):
     """Detectors see CSI/observations only; identities list the diagnostic subset."""
     h, n = ds._h, ds.config["nfft"]
     selected = np.unique(np.rint(np.linspace(0, ds.frame_count-1, min(frame_limit, ds.frame_count))).astype(int))
-    errors = {view: {algorithm: np.zeros(len(ds.snr_db), np.int64) for algorithm in ("single", "full")}
+    errors = {view: {algorithm: np.zeros(len(ds.snr_db), np.int64) for algorithm in ("banded",)}
               for view in ("raw", "reference_assisted", "reference")}
     noise = ds._model["unit_rf_noise_covariance"][:]
     alpha = h["compensation/error_scales"][:]
@@ -43,9 +43,9 @@ def ber_diagnostics(ds, backend, frame_limit):
         truth = ds.reference_taps(int(fi))
         for view in errors:
             taps = raw if view == "raw" else truth if view == "reference" else assisted_taps(raw, truth, alpha)
-            single, full = detect(taps, observation, ds.known, variance, noise, ds.masks["data"], backend)
+            symbols = detect(taps, observation, ds.known, variance, noise, ds.masks["data"], backend)
             bits = h["samples/bits"][fi]
-            for algorithm, symbols in (("single", single), ("full", full)):
+            for algorithm, symbols in (("banded", symbols),):
                 errors[view][algorithm] += np.count_nonzero(decisions(symbols) != bits[None], axis=(1, 2, 3))
             if view == "reference_assisted":
                 del taps
@@ -201,7 +201,7 @@ def plot_report(run, c, report):
     for ax, split in zip(axes, SPLITS, strict=True):
         value = report["splits"][split]["ber"]
         for view, line, label in (("raw", ":", "raw"), ("reference_assisted", "-", "assisted"), ("reference", "--", "reference")):
-            for algorithm, color, marker in (("single", "#D77A22", "o"), ("full", "#2166AC", "s")):
+            for algorithm, color, marker in (("banded", "#2166AC", "s"),):
                 measured = np.asarray(value["curves"][view][algorithm]["ber"])
                 floor = .5/value["bits_per_snr"]
                 ax.semilogy(c["snr_db"], np.maximum(measured, floor), linestyle=line, marker=marker,
@@ -212,18 +212,17 @@ def plot_report(run, c, report):
         ax.set(title=f"{split}: {len(value['frame_indices'])} diagnostic frames", xlabel="SNR (dB)", ylabel="BER", xticks=c["snr_db"])
         ax.grid(alpha=.25, which="both")
         ax.legend(fontsize=8)
-    fig.suptitle(f"{c['channel']} | bounded BER diagnostics | open markers: zero measured errors")
+    fig.suptitle(f"{c['channel']} | Banded LMMSE B=16 diagnostics | open markers: zero measured errors")
     for ext in ("png", "pdf"):
         fig.savefig(run/f"ber_snr.{ext}", dpi=170)
     plt.close(fig)
     with (run/"summary.csv").open("w", newline="", encoding="utf-8-sig") as stream:
         writer = csv.writer(stream)
         writer.writerow(["channel", "split", "snr_db", "frames_per_snr", "raw_nmse_db", "assisted_nmse_db", "target_nmse_db",
-            "diagnostic_bits", "diagnostic_raw_single_ber", "diagnostic_raw_full_ber", "diagnostic_assisted_single_ber", "diagnostic_assisted_full_ber"])
+            "diagnostic_bits", "diagnostic_raw_banded_ber", "diagnostic_assisted_banded_ber"])
         for split, value in report["splits"].items():
             for i, snr in enumerate(c["snr_db"]):
                 curves = value["ber"]["curves"]
                 writer.writerow([c["channel"], split, snr, value["frames_per_snr"], value["mean_raw_nmse_db"][i],
                     value["mean_assisted_nmse_db"][i], value["target_nmse_db"][i], value["ber"]["bits_per_snr"],
-                    curves["raw"]["single"]["ber"][i], curves["raw"]["full"]["ber"][i],
-                    curves["reference_assisted"]["single"]["ber"][i], curves["reference_assisted"]["full"]["ber"][i]])
+                    curves["raw"]["banded"]["ber"][i], curves["reference_assisted"]["banded"]["ber"][i]])

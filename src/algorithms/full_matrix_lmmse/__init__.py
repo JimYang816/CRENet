@@ -1,1 +1,0 @@
-"""Full-matrix LMMSE equalizer."""

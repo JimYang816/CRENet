@@ -1,36 +1,31 @@
-"""Reconstruct one label-free comparison batch on the requested device."""
-from __future__ import annotations
+"""Reconstruct raw four-symbol CSI batches without reading supervision."""
 
 import numpy as np
-
+from data_generation.src.dataset.four_data_math import reconstruct_taps
 from src.algorithms.interface import EqualizerBatch
+from src.evaluation.four_data_lmmse import channel_matrices
 
 
 def prepare_batch(dataset, si, frames, d, backend):
-    ds, b = dataset, backend
-    h, n = ds._h, ds._config["nfft"]
-    variances = h["samples/rf_noise_variance"][si, frames]
-    y = (h["samples/clean_observations"][frames, d+1]
-         +np.sqrt(variances[:, None])*h["samples/standard_noise"][frames, d+1])
-    coefficients = b.array(h["samples/raw_coefficients"][si, frames].astype(complex))
-    basis = b.array(ds._model.sampled_basis.reshape(4, n, -1)[d+1].astype(complex))
-    taps = basis @ coefficients
-    length = coefficients.shape[-1]
-    if b.torch:
-        t = b.torch
-        rows = t.arange(n, device=b.device)[:, None]
-        columns = (rows-t.arange(length, device=b.device)) % n
-        circular = t.zeros((len(frames), n, n), dtype=t.complex128, device=b.device)
-        circular[:, rows, columns] = taps
-        raw = t.fft.fftshift(t.fft.ifft(t.fft.fft(circular, dim=-2, norm="ortho"), dim=-1, norm="ortho"), dim=(-2, -1))
-    else:
-        rows = np.arange(n)[:, None]
-        columns = (rows-np.arange(length)) % n
-        circular = np.zeros((len(frames), n, n), complex)
-        circular[:, rows, columns] = taps
-        raw = np.fft.fftshift(np.fft.ifft(np.fft.fft(circular, axis=-2, norm="ortho"), axis=-1, norm="ortho"), axes=(-2, -1))
-    channel = raw
-    y = b.array(y)
-    residual = y-channel@b.array(ds._known[d+1])
-    return EqualizerBatch(channel, y, residual, variances, ds._indices,
-                          ds._shared["unit_rf_noise_covariance"][:])
+    h = dataset._h
+    variance = h["samples/rf_noise_variance"][si, frames]
+    observed = (
+        h["samples/clean_observations"][frames, d]
+        + np.sqrt(variance[:, None]) * h["samples/standard_noise"][frames, d]
+    )
+    taps = reconstruct_taps(
+        dataset.sampled_basis[d : d + 1],
+        h["samples/raw_coefficients"][si, frames],
+        dataset.delays,
+    )[:, 0]
+    channel = channel_matrices(taps, backend)
+    observed = backend.array(observed)
+    cancelled = observed - channel @ backend.array(dataset.known[d])
+    return EqualizerBatch(
+        channel,
+        observed,
+        cancelled,
+        variance,
+        np.flatnonzero(dataset.masks["data"]),
+        dataset._model["unit_rf_noise_covariance"][:],
+    )

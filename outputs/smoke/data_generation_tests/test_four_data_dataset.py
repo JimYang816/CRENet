@@ -9,7 +9,7 @@ from data_generation.src.dataset.four_data_math import (
     assisted_taps, coefficient_nmse, reconstruct_taps, reference_statistics, sampled_grams,
 )
 from data_generation.src.dataset.four_data_protocol import channel_config, counts, load_options, validate_plan
-from src.evaluation.four_data_delay192_compensation import error_scales, load_target_config, target_curve
+from data_generation.src.dataset.four_data_targets import error_scales, load_target_config, target_curve
 from data_generation.src.dataset.four_data_export import calibrate
 from src.common.experiment import file_sha256
 

@@ -1,4 +1,4 @@
-# CP=80 ms 的双信道 LMMSE 小实验
+# CP=80 ms 的正式数据与历史实验记录
 
 ## 当前载波分布
 
@@ -10,8 +10,13 @@ NOF1 和 NCS1 的 D-D-D-D 帧每个符号共 1024 个子载波，其中 512 个�
 `data/processed/dddd_pilot224/{nof1,ncs1}_dddd/`。物理先验使用原 CP80 独立记录的 DPSS 基和信道系数。
 正式数据验收汇总各划分的平均 NMSE，并抽样计算两种 LMMSE 的 BER。
 
-小样本原始 CSI 与完美 CSI 对照入口为 `python -m scripts.evaluate.four_data_cp80`，
-默认输出到 `outputs/smoke/four_data_cp80_pilot224/`。
+2026-11-27 的当前正式数据已全量生成和验收：NOF1 约 14.09 GiB，NCS1 约 5.70 GiB，
+每信道训练/验证/测试分别为 3,675 / 525 / 4,200 个帧样本，记录位于
+`outputs/experiment/dddd_cp80_delay192_pilot224_assisted_20261127/`。
+
+当前均衡算法为 B=16 带状 LMMSE，评测入口为 `python -m scripts.evaluate.compare`，
+详见 `docs/equalizer_comparison.md`。
+下文的 Single-tap / Full-matrix LMMSE 结果及运行命令均为历史记录，旧入口源码见提交 `a08592b`。
 
 ## 256 导频的 CP80 实验记录
 
@@ -34,7 +39,7 @@ NOF1 和 NCS1 的 D-D-D-D 帧每个符号共 1024 个子载波，其中 512 个�
 ## 正式 CP80 补偿数据
 
 生成代码为 `5ee9af5`，运行记录为 `outputs/experiment/dddd_cp80_delay192_assisted_20261126/`。
-本轮复用同配置完整文件并再次执行全量验收。完整数据保留在服务器：
+当时复用同配置完整文件并再次执行全量验收。下表所列旧数据已于 2026-11-27 删除，验收记录保留：
 
 | 信道 | 数据目录 | 训练帧样本 | 验证帧样本 | 测试帧样本 | HDF5 大小 |
 | --- | --- | ---: | ---: | ---: | ---: |

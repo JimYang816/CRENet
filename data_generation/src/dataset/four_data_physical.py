@@ -13,7 +13,7 @@ from data_generation.src.dataset.four_data_protocol import SPLIT_CODES
 from data_generation.src.receiver.chain import relative_energy
 from data_generation.src.receiver.estimation import input_windows
 from data_generation.src.transmitter.ofdm import fft, make_frame, receive_symbols
-from src.evaluation.four_data_q_sweep import BlockedReceiver
+from data_generation.src.receiver.blocked import BlockedReceiver
 
 _CONTEXT = None
 

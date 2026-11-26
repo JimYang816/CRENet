@@ -1,8 +1,0 @@
-{
-  "channels": ["NOF1", "NCS1"],
-  "prior_records": [51, 52, 53, 54, 55],
-  "test_records": [11, 15, 19, 23, 27],
-  "start_seconds": 2,
-  "input_view": "raw",
-  "algorithms": ["single_tap_mmse", "full_matrix_lmmse"]
-}

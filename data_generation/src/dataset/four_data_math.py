@@ -53,3 +53,12 @@ def assisted_taps(raw, reference, alpha):
     result = np.asarray((1-factor)*reference, np.complex128)
     result[..., :raw.shape[-1]] += factor*raw
     return result
+
+
+def tap_nmse(taps, reference):
+    if taps.ndim != 4 or taps.shape[1:] != reference.shape:
+        raise ValueError("Expected one full-support CSI per SNR")
+    energy = np.sum(abs(reference)**2,axis=(1,2))
+    if np.any(energy <= 0) or not np.isfinite(energy).all():
+        raise ValueError("Reference channel energy must be positive and finite")
+    return np.sum(abs(taps-reference[None])**2,axis=(2,3))/energy[None]
