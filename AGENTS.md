@@ -12,6 +12,7 @@
 - 现有正式数据的 CSI 重校准与完整 B16 测试入口为 `data_generation/scripts/recalibrate_four_data.py`；本次 NCS1 使用 `--channels NCS1`，记录保存到 `outputs/experiment/dddd_assisted_b16_ncs1_892_20261127/`，NOF1 沿用 `outputs/experiment/dddd_assisted_b16_20261127/`。重校准只修改补偿元数据，原始生成身份保留，并单独记录校准身份和旧补偿参数；完整测试使用参考辅助视图，每信道每 SNR 共 600 帧。
 - CRENet 已恢复 `38c1b00` 的原始网络结构和 A/B/C 三阶段训练方法；当前实验仅使用 NOF1 训练、验证和选择权重，再用同一冻结模型分别测试 NOF1、NCS1。入口为 `scripts/run/four_data_experiment.py`，配置为 `configs/training/four_data_crenet.json`，说明见 `docs/four_data_crenet.md`。本地历史备份为 `outputs/experiment/archive/crenet_before_redesign_20261127_38c1b00.zip`，历史权重和结果不能用于本次训练或选模。
 - 本轮 CRENet 训练和双信道全量测试已完成，记录为 `outputs/experiment/four_data_crenet_nof1_pilot224_20261127/`，最终使用 NOF1 B 第 10 轮的同一份权重。30 dB 的 NOF1 / NCS1 CRENet BER 分别为 0.00368693 / 0.03676717；NOF1 全部 SNR 优于 B16，NCS1 全部 SNR 出现退化，不能宣称本轮模型已实现跨信道性能提升。
+- 跨信道归因见 `docs/crenet_generalization.md` 和 `outputs/experiment/crenet_generalization_diagnosis_20261127/`。冻结模型、每划分均匀 40 帧诊断表明：CSI 修正自身损害 NCS1，并伴随明显的 ICI/CSI 质量分布差异与判决过度自信；NOF1 自身的 CSI 误差压力测试可提前暴露问题。此轮未更新模型或依据 NCS1 选模，所述改进方案尚未重训验收。
 - `README.md` 仅保留项目简要说明及文件目录结构；未经用户明确允许，不得修改。
 - NCS1 与 NOF1 使用两份 D-D-D-D 配置并共用同一实际 DPSS 时间基；各自冻结 192 个物理时延位置，保留真实索引。`pddp.json` 仅为历史帧配置。
 - 原始 WATERMARK 源包放在 `data/raw/watermark/`；生成数据、缓存和实验结果不得提交到 Git。
