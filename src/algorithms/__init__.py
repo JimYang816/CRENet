@@ -1,1 +1,1 @@
-"""Single-tap LMMSE, full-matrix LMMSE and CRENet equalizers."""
+"""Single-tap and full-matrix LMMSE equalizers."""

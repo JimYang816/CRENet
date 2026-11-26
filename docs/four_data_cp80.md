@@ -7,9 +7,8 @@ NOF1 和 NCS1 的 D-D-D-D 帧每个符号共 1024 个子载波，其中 512 个�
 每个导频的高频侧紧邻一个保护空载波。接收机使用每个符号的 448 个导频与带内空载波进行四符号联合 CSI 估计。
 
 正式数据入口为 `python -m data_generation.scripts.four_data`，默认写入
-`data/processed/dddd_pilot224/{nof1,ncs1}_dddd/`。`python -m scripts.run.four_data_experiment`
-使用该目录下验收后的数据，输出到 `outputs/experiment/four_data_crenet_cp80_pilot224/`。
-两种 CSI 视图、各划分及 NMSE 目标见下文。物理先验使用原 CP80 独立记录的 DPSS 基和信道系数。
+`data/processed/dddd_pilot224/{nof1,ncs1}_dddd/`。物理先验使用原 CP80 独立记录的 DPSS 基和信道系数。
+正式数据验收汇总各划分的平均 NMSE，并抽样计算两种 LMMSE 的 BER。
 
 小样本原始 CSI 与完美 CSI 对照入口为 `python -m scripts.evaluate.four_data_cp80`，
 默认输出到 `outputs/smoke/four_data_cp80_pilot224/`。
@@ -22,9 +21,8 @@ NOF1 和 NCS1 的 D-D-D-D 帧每个符号共 1024 个子载波，其中 512 个�
 默认参考辅助视图及其目标曲线保留，Q=24、192 个冻结物理位置和划分计划保持既定设置。
 
 正式生成的默认先验来源改为本次已验收的 CP80 原始物理实验。
-生成运行 ID 为 `dddd_cp80_delay192_assisted_20261126`，训练输出为
-`outputs/experiment/four_data_crenet_cp80_20261126/`，避免续用旧 CP256 缓存或权重。
-本轮双信道独立训练、全量测试及验收已完成，见 [CRENet 正式训练与完整测试](four_data_crenet.md#2026-11-26-cp80-正式训练与全量测试)。
+生成运行 ID 为 `dddd_cp80_delay192_assisted_20261126`。当时旧版 CRENet 的双信道训练与全量测试
+保存在 `outputs/experiment/four_data_crenet_cp80_20261126/`，实验说明见提交 `38c1b00` 的 `docs/four_data_crenet.md`。
 两信道原始 CP256 配置快照保存在 `configs/backups/dddd_cp256_20261125/`，
 仅用于核对冻结时延选择及历史实验来源，不作为新的运行默认。
 

@@ -4,9 +4,6 @@
 [CP80 实验](four_data_cp80.md)。本页下方为 CP=256 的历史实验及已删除数据的来源记录。
 旧训练、验证、测试 HDF5 与配套共享模型已删除；正式 CP80 补偿数据已重新生成并全量验收。
 
-正式四符号 CRENet 独立训练及全量三算法/完美 CSI 测试入口见
-[四符号双信道训练与测试](four_data_crenet.md)。旧两符号入口和检查点不用于该实验。
-
 ## 历史 CP256 配置与保留结果
 
 本页历史实验使用 D-D-D-D、FFT=1024、CP=256、512 数据与 256 梳状导频、12 Hz / Q=24，
@@ -84,7 +81,7 @@ OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 /home/fay/anaconda3/e
 并通过显式完整矩阵检查四个符号的载波/标签/导频消除。BER-SNR 对每个划分均匀抽取最多 16 帧做诊断，
 报告明确记录样本身份和比特数；NMSE-SNR 汇总该划分的全部帧。
 
-四符号读取接口与历史 P-D-D-P 接口分离，历史两数据符号训练器须适配后再用于本数据：
+四符号数据由 `FourDataDataset` 读取。
 
 ```python
 from src.data import FourDataDataset

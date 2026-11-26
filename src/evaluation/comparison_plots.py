@@ -1,6 +1,7 @@
 """Complete comparison reports and data-free plotting."""
 from __future__ import annotations
 
+import html
 import json
 from pathlib import Path
 import shutil
@@ -13,15 +14,13 @@ import numpy as np
 
 from src.common.experiment import write_json, file_sha256
 from src.evaluation.fingerprints import source_fingerprint
-from src.evaluation.registry import AVAILABLE_ALGORITHMS, CURVES, IDENTIFIERS, SUPPORTED_CURVES, normalize_report_labels
+from src.evaluation.registry import AVAILABLE_ALGORITHMS, CURVES, IDENTIFIERS, normalize_report_labels
 from src.evaluation.result_cache import FileLock
 
 
 def plot_ber(report, path):
     report = normalize_report_labels(report)
-    colors = ("#667085", "#2477b3", "#b42a55")
-    markers = ("o", "s", "*")
-    styles = dict(zip(SUPPORTED_CURVES, zip(colors, markers)))
+    styles = dict(zip(CURVES, (("#667085", "o"), ("#2477b3", "s"))))
     with plt.rc_context({"font.size": 11, "axes.spines.top": False, "axes.spines.right": False}):
         fig, ax = plt.subplots(figsize=(7.5, 5.2))
         zero_seen = False
@@ -56,9 +55,6 @@ def plot_ber(report, path):
 def plot_nmse(report, path):
     fig, ax = plt.subplots(figsize=(6.4, 4.2), layout="constrained")
     ax.plot(report["snr_db"], report["nmse"]["mean_nmse_db"], "o-", color="#2477b3", label="Test CSI")
-    if "corrected_mean_nmse_db" in report["nmse"]:
-        ax.plot(report["snr_db"], report["nmse"]["corrected_mean_nmse_db"], "s-",
-                color="#b42a55", label="CRENet corrected CSI")
     ax.set(xlabel="SNR (dB)", ylabel="Mean NMSE (dB)",
            title=f'{report["channel"]} | Test set | mean(linear per-D NMSE)')
     ax.set_xticks(report["snr_db"])
@@ -71,9 +67,8 @@ def plot_nmse(report, path):
 def validate_report(report):
     report = normalize_report_labels(report)
     names = set(report.get("curves", {}))
-    if (not report.get("complete") or not set(CURVES).issubset(names)
-            or names-set(SUPPORTED_CURVES)):
-        raise ValueError("Plotting requires a complete comparison report with both MMSE baselines")
+    if not report.get("complete") or names != set(CURVES):
+        raise ValueError("Plotting requires a complete comparison report with both LMMSE baselines")
     snr = np.asarray(report["snr_db"], dtype=float)
     if snr.ndim != 1 or not len(snr) or not np.all(np.isfinite(snr)):
         raise ValueError("Invalid SNR values in comparison report")
@@ -91,12 +86,6 @@ def validate_report(report):
     values = np.asarray(report["nmse"]["mean_nmse_db"])
     if report["nmse"].get("split") != "test" or values.shape != snr.shape or not np.all(np.isfinite(values)):
         raise ValueError("Invalid test NMSE values in report")
-    for field in ("corrected_mean_nmse_db",):
-        if field not in report["nmse"]:
-            continue
-        corrected = np.asarray(report["nmse"][field])
-        if corrected.shape != snr.shape or not np.all(np.isfinite(corrected)):
-            raise ValueError("Invalid corrected CSI NMSE values in report")
 
 
 def publish_report(run, report, *, redraw_nmse=False):
@@ -118,7 +107,6 @@ def publish_report(run, report, *, redraw_nmse=False):
             pass
         if (not redraw_nmse and previous is not None and (run/"nmse_snr.png").is_file()
                 and previous.get("nmse", {}).get("mean_nmse_db") == report["nmse"]["mean_nmse_db"]
-                and previous.get("nmse", {}).get("corrected_mean_nmse_db") == report["nmse"].get("corrected_mean_nmse_db")
                 and previous.get("nmse", {}).get("provenance", {}).get("cache_key") == report["nmse"]["provenance"]["cache_key"]
                 and previous.get("snr_db") == report["snr_db"]
                 and previous.get("channel") == report["channel"]
@@ -150,8 +138,26 @@ def publish_report(run, report, *, redraw_nmse=False):
             raise
 
 
+def _write_legacy_html(run, report):
+    channel = html.escape(report["channel"])
+    headings = "".join(f"<th>{s:g} dB</th>" for s in report["snr_db"])
+    ber_rows = "".join(
+        "<tr><th>"+html.escape(label)+"</th>"+"".join(f"<td>{value:.6g}</td>" for value in curve["ber"])+"</tr>"
+        for label, curve in report["curves"].items()
+    )
+    nmse_cells = "".join(f"<td>{value:.3f}</td>" for value in report["nmse"]["mean_nmse_db"])
+    body = f'''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>{channel} 均衡算法对比</title>
+<style>body{{font:16px/1.7 system-ui;max-width:1100px;margin:32px auto;padding:0 20px}}img{{max-width:100%}}table{{border-collapse:collapse;width:100%}}td,th{{border:1px solid #ccd5dc;padding:8px}}</style>
+<h1>{channel} LMMSE 评测</h1><p>每个 SNR 使用 {report['bits_per_snr']:,} 个测试比特。数据和评分来源见 metrics.json。</p>
+<table><tr><th>算法 BER</th>{headings}</tr>{ber_rows}</table><img src="ber_snr.png" alt="BER-SNR">
+<table><tr><th>输入 CSI 平均 NMSE (dB)</th>{headings}</tr><tr><th>输入 CSI</th>{nmse_cells}</tr></table>
+<img src="nmse_snr.png" alt="NMSE-SNR">
+<p>零误码以 0.5 / 测试比特数处的空心三角显示。</p></html>'''
+    (run/"report.html").write_text(body, encoding="utf-8")
+
+
 def replot(run, *, output=None, expected_channel=None, expected_view=None, required_algorithms=()):
-    """Redraw the retained curves from saved values, optionally in a new directory."""
+    """Redraw the LMMSE curves from saved values, optionally in a new directory."""
     report = json.loads((Path(run)/"metrics.json").read_text(encoding="utf-8"))
     if expected_channel is not None and report.get("channel") != expected_channel:
         raise ValueError(f"Saved report does not match channel {expected_channel}")
@@ -159,28 +165,28 @@ def replot(run, *, output=None, expected_channel=None, expected_view=None, requi
         raise ValueError(f"Saved report does not match CSI view {expected_view}")
     report = normalize_report_labels(report)
     retired = {curve.get("identifier") for label, curve in report["curves"].items()
-               if label not in SUPPORTED_CURVES}
-    report["curves"] = {label: report["curves"][label] for label in SUPPORTED_CURVES if label in report["curves"]}
+               if label not in CURVES}
+    report["curves"] = {label: report["curves"][label] for label in CURVES if label in report["curves"]}
     if "parameters" in report:
         report["parameters"] = {key: value for key, value in report["parameters"].items() if key in IDENTIFIERS}
     for identifier in retired:
         if identifier:
             report.pop(identifier, None)
     for field in ("checkpoint_paths", "checkpoints"):
-        if field in report:
-            report[field] = {key: value for key, value in report[field].items() if key == "crenet"}
+        report.pop(field, None)
     if "nmse" in report:
         report["nmse"] = {key: value for key, value in report["nmse"].items()
-                          if not key.endswith("mean_nmse_db") or key in ("mean_nmse_db", "corrected_mean_nmse_db")}
+                          if not key.endswith("_mean_nmse_db")}
+        if report.get("schema") == "watermark-unified-comparison-v1":
+            report["nmse"].pop("semantics", None)
     if "comparison_algorithms" in report:
         report["comparison_algorithms"] = list(report["curves"])
     required = {a.label for a in AVAILABLE_ALGORITHMS if a.identifier in required_algorithms}
-    missing = required-normalize_report_labels(report)["curves"].keys()
+    missing = required-report["curves"].keys()
     if missing:
         raise ValueError(f"Saved report lacks configured curves {sorted(missing)}. Run evaluation before plotting.")
     run = Path(run if output is None else output)
     publish_report(run, report, redraw_nmse=True)
     if report.get("schema") == "watermark-unified-comparison-v1":
-        from src.evaluation.unified import _write_html
-        _write_html(run, report)
+        _write_legacy_html(run, report)
     return report

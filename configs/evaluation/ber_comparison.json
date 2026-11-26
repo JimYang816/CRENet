@@ -9,6 +9,5 @@
   "algorithms": {
     "single_tap_mmse": {},
     "full_matrix_lmmse": {}
-  },
-  "checkpoints": {}
+  }
 }

@@ -25,7 +25,6 @@ ALGORITHMS = (
 AVAILABLE_ALGORITHMS = ALGORITHMS
 CURVES = tuple(a.label for a in ALGORITHMS)
 IDENTIFIERS = tuple(a.identifier for a in AVAILABLE_ALGORITHMS)
-SUPPORTED_CURVES = CURVES+("CRENet",)
 
 
 def normalize_report_labels(report):

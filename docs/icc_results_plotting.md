@@ -1,7 +1,7 @@
 # 指标图绘制
 
-绘图统一使用 Python。当前对比范围为 Single-tap LMMSE、Full-matrix LMMSE 和 CRENet，
-BER 图只显示保留的方法，NMSE 图显示输入 CSI 及可用的 CRENet 修正 CSI。
+绘图统一使用 Python。BER 图显示 Single-tap LMMSE 和 Full-matrix LMMSE，
+NMSE 图显示两种基线共享的输入 CSI。
 
 已保存的完整比较报告可通过下列入口重新绘图，不运行训练或推理：
 

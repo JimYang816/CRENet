@@ -1,15 +1,14 @@
-"""Verify current CP80 defaults and reject stale CP256 training/prior artifacts."""
+"""Verify current CP80 defaults and reject stale CP256 prior artifacts."""
 import json
 
 import h5py
 import numpy as np
 import pytest
 
-from data_generation.src.config import ROOT, digest, frozen_support_matches_config, load_config, load_legacy_dddd_config
+from data_generation.src.config import ROOT, digest, frozen_support_matches_config, load_config
 from data_generation.src.dataset.four_data_export import load_prior
 from data_generation.src.dataset.four_data_protocol import channel_config, counts, load_options
 from data_generation.src.transmitter.ofdm import carrier_masks, make_frame, qpsk
-from scripts.run.four_data_experiment import preflight
 
 
 @pytest.mark.parametrize("channel", ["NOF1", "NCS1"])
@@ -27,13 +26,6 @@ def test_cp80_is_the_formal_default_with_independent_existing_plan(channel):
     assert not frozen_support_matches_config(support, changed)
     assert load_options()["source_study"] == "outputs/smoke/four_data_cp80_20261125"
     assert load_options()["default_input_view"] == "reference_assisted"
-
-
-def test_training_rejects_superseded_cp256_acceptance_before_loading_data(tmp_path):
-    (tmp_path/"manifest.json").write_text(json.dumps(dict(complete=True, smoke=False,
-        channel="NOF1", cp=256, cp_ms=256/6, files={})), encoding="utf-8")
-    with pytest.raises(ValueError, match="CP80"):
-        preflight(tmp_path, "NOF1")
 
 
 @pytest.mark.parametrize("channel", ["NOF1", "NCS1"])
@@ -55,14 +47,6 @@ def test_current_carrier_allocation_in_all_four_symbols(channel):
     np.testing.assert_allclose(abs(frame.known[:, pilot]), 1)
     assert np.all(frame.known[:, ~pilot] == 0)
     assert np.all(frame.x[:, protection | edge] == 0)
-
-
-def test_training_rejects_legacy_cp80_carriers(tmp_path):
-    legacy = dict(load_legacy_dddd_config("NOF1"), delay_length=192)
-    (tmp_path/"manifest.json").write_text(json.dumps(dict(complete=True, smoke=False,
-        channel="NOF1", cp=480, cp_ms=80, config_hash=digest(legacy), files={})), encoding="utf-8")
-    with pytest.raises(ValueError, match="224-pilot"):
-        preflight(tmp_path, "NOF1")
 
 
 def test_formal_prior_rejects_a_cp256_time_basis(tmp_path):

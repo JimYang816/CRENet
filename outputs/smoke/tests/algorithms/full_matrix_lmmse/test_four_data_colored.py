@@ -1,24 +1,32 @@
 """Four-data scorer versus independent colored covariance normal equations."""
-import torch
+import numpy as np
 
-from src.evaluation.four_data_crenet import full_matrix_lmmse
+from data_generation.src.receiver.chain import taps_to_matrix
+from src.common.numerics import DenseBackend
+from src.evaluation.four_data_lmmse import detect
 
 
 def test_lmmse_matches_independent_colored_covariance_normal_equations():
-    torch.manual_seed(25)
-    h = torch.randn(2,10,10,dtype=torch.complex128)
-    y = torch.randn(2,10,dtype=torch.complex128)
-    known = torch.zeros_like(y)
-    known[:,1] = 1+1j
-    data = torch.arange(10)%2 == 0
-    a = torch.randn(10,10,dtype=torch.complex128)
-    covariance = a@a.mH+torch.eye(10,dtype=torch.complex128)*.4
-    variance = torch.tensor([.1,.001],dtype=torch.float64)
-    actual = full_matrix_lmmse(h,y,known,variance,data,torch.linalg.cholesky(covariance))
-    hd = h[:,:,data]
-    cancelled = y-(h@known[...,None])[...,0]
-    weighted = torch.linalg.solve(covariance,hd)
-    gram = hd.mH@weighted+variance[:,None,None]*torch.eye(int(data.sum()))
-    rhs = hd.mH@torch.linalg.solve(covariance,cancelled[...,None])
-    expected = torch.linalg.solve(gram,rhs)[...,0]
-    torch.testing.assert_close(actual,expected)
+    rng = np.random.default_rng(25)
+
+    def complex_normal(shape):
+        return rng.normal(size=shape) + 1j*rng.normal(size=shape)
+
+    taps = complex_normal((2, 4, 10, 5))
+    observations = complex_normal((2, 4, 10))
+    known = np.zeros((4, 10), dtype=complex)
+    known[:, 1] = 1+1j
+    data = np.arange(10) % 2 == 0
+    factor = complex_normal((10, 10))
+    covariance = factor@factor.conj().T + .4*np.eye(10)
+    variance = np.array([.1, .001])
+
+    _, actual = detect(taps, observations, known, variance, covariance, data, DenseBackend())
+    for si, noise in enumerate(variance):
+        for d in range(4):
+            channel = taps_to_matrix(taps[si, d])
+            data_channel = channel[:, data]
+            cancelled = observations[si, d] - channel@known[d]
+            gram = data_channel@data_channel.conj().T + noise*covariance
+            reference = data_channel.conj().T@np.linalg.solve(gram, cancelled)
+            np.testing.assert_allclose(actual[si, d], reference, rtol=2e-12, atol=2e-12)

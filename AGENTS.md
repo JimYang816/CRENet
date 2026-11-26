@@ -4,12 +4,12 @@
 
 ## 文档与当前实验范围
 
-- 当前只保留 Single-tap LMMSE、Full-matrix LMMSE 和 CRENet 三种均衡算法；新增评测、配置和图表均使用这三种算法，历史产物仅保留为来源记录。
+- 当前均衡算法为 Single-tap LMMSE 和 Full-matrix LMMSE。新增评测、配置和图表使用这两种基线，历史产物仅保留为来源记录。
 - 当前默认使用 D-D-D-D 帧、FFT=1024、循环前缀 80 ms（基带 6 kHz 下为 480 点）、12 Hz / Q=24、192 个物理时延抽头。每符号使用 512 个数据子载波、224 个梳状导频、224 个带内保护空载波和两端各 32 个边缘空载波。基础帧为 `configs/data/{nof1,ncs1}/dddd.json`，当前入口将 `delay_length` 设为 192。入口及结果定义见 `docs/four_data_cp80.md`。
 - `raw` 视图保留接收机原始 CSI。用户指定的正式数据默认使用 `reference_assisted` 视图：NOF1 平均 NMSE 从 -9.69 到 -16.05 dB，NCS1 从 -5.24 到 -9.13 dB，采用尺度 10 dB 的先陡后缓曲线；训练、验证、测试分别按全量线性 NMSE 均值校准。该视图明确使用完整参考矩阵，属于理想辅助数据，不能解释为真实接收机的无参考估计性能。
 - 正式数据生成入口为 `data_generation/scripts/four_data.py`，配置为 `configs/data/four_data_dataset.json`，默认输出到 `data/processed/dddd_pilot224/{nof1,ncs1}_dddd/`，读取器为 `src.data.FourDataDataset`。每信道的训练、验证和测试分别含 3,675、525 和 4,200 个帧样本（计入 7 个 SNR，每样本 4 个数据符号）。全帧 DPSS 基和物理通道先验系数来自独立记录，来源为已验收的 `outputs/smoke/four_data_cp80_20261125/`。
 - 256 导频的 CP80 正式数据及结果是历史记录。生成代码为 `5ee9af5`，双信道数据约 19.72 GiB，保存在服务器 `data/processed/{nof1,ncs1}_dddd/`。验收记录见 `outputs/experiment/dddd_cp80_delay192_assisted_20261126/`。旧 CP=256 数据已删除，历史权重及结果禁止用于新的默认实验。
-- CRENet 的原有8层残差 MMSE Unfolding 与论文消融方案可作为后续设计参考，但不得直接复用旧参数条件下的权重或结果。
+- 旧版 CRENet（8 层残差 MMSE 展开）的源码、训练与评测配置及消融记录见提交 `38c1b00`。本地备份为 `outputs/experiment/archive/crenet_before_redesign_20261127_38c1b00.zip`，旧权重和结果仅用于复核历史实验。
 - `README.md` 仅保留项目简要说明及文件目录结构；未经用户明确允许，不得修改。
 - NCS1 与 NOF1 使用两份 D-D-D-D 配置并共用同一实际 DPSS 时间基；各自冻结 192 个物理时延位置，保留真实索引。`pddp.json` 仅为历史帧配置。
 - 原始 WATERMARK 源包放在 `data/raw/watermark/`；生成数据、缓存和实验结果不得提交到 Git。
