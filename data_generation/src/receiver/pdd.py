@@ -38,7 +38,8 @@ def selected_noise_whitener(noise, backend):
 
 
 def observation_spectrum(covariance, cross, whitener, regularizer, backend):
-    whitened = whitener @ backend.array(covariance) @ whitener.conj().T
+    """Factor backend-native covariance and cross-covariance arrays."""
+    whitened = whitener @ covariance @ whitener.conj().T
     values, vectors = backend.eigh((whitened+whitened.conj().T)*.5)
     raw = backend.numpy(values)
     if raw.min() < -1e-8*max(raw.max(), 1e-30):
@@ -122,7 +123,7 @@ class JointEstimator:
         selected_noise = linalg.block_diag(*blocks)
         whitener = selected_noise_whitener(selected_noise, backend)
         self.values, self.projected, self.gain, self.ridge, diagnostics = observation_spectrum(
-            covariance, backend.array(cross), whitener, prior.regularizer, backend)
+            backend.array(covariance), backend.array(cross), whitener, prior.regularizer, backend)
         self.diagnostics = [diagnostics]
 
     def effective_noise_variances(self, observations, noise_variances):

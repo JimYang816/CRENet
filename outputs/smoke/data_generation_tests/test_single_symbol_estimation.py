@@ -9,12 +9,15 @@ from data_generation.src.receiver.dpss import SINGLE_SYMBOL_DOMAIN
 from data_generation.src.receiver.estimation import FrozenPrior, input_windows
 from data_generation.src.receiver.single_symbol import SymbolDPSSModel, SymbolPilotDesign, symbol_basis
 from data_generation.src.transmitter.ofdm import fft
-from src.common.numerics import DenseBackend
+from src.common.numerics import DenseBackend, default_device
 from src.evaluation.four_data_single_symbol import estimate_frames, projection_nmse
 from src.evaluation.ncs1_delay_support import full_nmse
 
 
-def test_single_symbol_lmmse_matches_a_dense_selected_frequency_solve():
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_single_symbol_lmmse_matches_a_dense_selected_frequency_solve(device):
+    if device == "cuda" and default_device() != "cuda":
+        pytest.skip("CUDA is unavailable for this test")
     rng = np.random.default_rng(71)
     n, q = 8, 2
     delays = np.array([0, 2, 5])
@@ -30,7 +33,7 @@ def test_single_symbol_lmmse_matches_a_dense_selected_frequency_solve():
     factor = rng.standard_normal((n, n))+1j*rng.standard_normal((n, n))
     noise = np.eye(n)+factor @ factor.conj().T/n
     masks = dict(pilot=pilot, data=data, tracking=tracking)
-    estimators = SymbolPilotDesign(basis, delays, known, masks, noise, DenseBackend()).build(prior)
+    estimators = SymbolPilotDesign(basis, delays, known, masks, noise, DenseBackend(device)).build(prior)
 
     def observation_matrix(values):
         x = input_windows(values[None], len(delays), delay_indices=delays)[0]
