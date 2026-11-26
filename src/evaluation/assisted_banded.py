@@ -134,7 +134,7 @@ def finish(run, reports, targets):
         "DDDD / CP80 ms / Q24 / 192 raw delays | complete test splits"
     )
     for extension in ("png", "pdf"):
-        fig.savefig(run / f"comparison.{extension}", dpi=180)
+        fig.savefig(run / f"comparison.{extension}", dpi=180, bbox_inches="tight")
     plt.close(fig)
     for kind in ("ber", "nmse"):
         fig, axes = plt.subplots(
@@ -169,5 +169,5 @@ def finish(run, reports, targets):
             ax.legend()
         fig.suptitle("Full test splits | reference-assisted CSI | Banded LMMSE B=16")
         for extension in ("png", "pdf"):
-            fig.savefig(run / f"{kind}_snr.{extension}", dpi=180)
+            fig.savefig(run / f"{kind}_snr.{extension}", dpi=180, bbox_inches="tight")
         plt.close(fig)
