@@ -1,4 +1,4 @@
-"""Independent physical-delay profiling and selected-delay BEM coefficients."""
+"""Independent physical-delay profiling and compressed DPSS coefficient models."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,10 +10,9 @@ from data_generation.src.receiver.dpss import DPSSModel
 
 
 @dataclass
-class SelectedDelayBEM(DPSSModel):
+class SelectedDelayDPSSModel(DPSSModel):
     """Store K coefficients while retaining each tap's actual circular delay."""
 
-    tail_ratio: float | None
     delay_indices: np.ndarray
 
     def __post_init__(self):
@@ -53,24 +52,17 @@ class SelectedDelayBEM(DPSSModel):
         return self.expand_taps(super().reconstruct(coefficients, symbol))
 
 
-SelectedDelayDPSSModel = SelectedDelayBEM
-
-
 def profile_full_frame(receiver, sounding, start, basis):
     """Fit every circular-delay column and profile unprojected physical energy.
 
     Only independent prior recordings should enter this function when selecting
     a receiver support. The receiver retains its actual RF and FIR operators.
     """
-    return project_full_frame(receiver, sounding, start, linalg.pinv(basis))
-
-
-def project_full_frame(receiver, sounding, start, projection):
-    """Apply one or more stacked basis pseudoinverses to the same physical kernel."""
     c = receiver.chain.c
-    n, total = c["nfft"], projection.shape[1]
+    n, total = c["nfft"], len(basis)
     origin = start-c["guard_samples"]/c["fs_baseband"]
-    coefficients, power = np.zeros((projection.shape[0], n), complex), np.zeros(n)
+    projection = linalg.pinv(basis)
+    coefficients, power = np.zeros((basis.shape[1], n), complex), np.zeros(n)
     for begin in range(0, total, receiver.block):
         end = min(begin+receiver.block, total)
         indices = c["guard_samples"]+np.arange(begin, end)

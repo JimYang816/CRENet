@@ -11,11 +11,11 @@ from src.evaluation.four_data_csi_compensation import tap_nmse
 from src.evaluation.four_data_delay192_compensation import compensate, error_scales, load_target_config, target_curve
 
 
-def source_protocol(legacy_comb=False):
+def source_protocol():
     archive = "3cf9e3a9b116b525f9b52c098018383665ca24f3a9ab05bc53b7716b1b3c5cc1"
     options, metas, configs, reports = load_options(), {}, {}, {}
     for channel in options["channels"]:
-        c, study, priors, tests = channel_settings(channel, options, archive, legacy_comb=legacy_comb)
+        c, study, priors, tests = channel_settings(channel, options, archive)
         configs[channel] = c
         metas[channel] = dict(config=c, study=study, archive_sha256=archive, smoke=False,
             raw_csi=True, csi_compensation=False, prior_windows=priors, test_windows=tests)
@@ -26,9 +26,8 @@ def source_protocol(legacy_comb=False):
         csi_compensation=False, options=options, configs=configs, channel_manifests=metas), reports
 
 
-@pytest.mark.parametrize("legacy_comb", [False, True])
-def test_accepts_verified_cp80_frozen_support_and_split(legacy_comb):
-    validate_protocol(*source_protocol(legacy_comb))
+def test_accepts_current_cp80_frozen_support_and_split():
+    validate_protocol(*source_protocol())
 
 
 @pytest.mark.parametrize("change", ["cp", "frame", "view"])

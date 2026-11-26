@@ -12,7 +12,7 @@ import time
 import h5py
 import numpy as np
 
-from data_generation.src.config import carrier_independent_config, digest
+from data_generation.src.config import digest
 from data_generation.src.dataset.four_data_math import (
     array_sha256, coefficient_nmse, reference_statistics, sampled_grams,
 )
@@ -45,8 +45,7 @@ def load_prior(c, source, archive, receiver, smoke=False):
     else:
         meta = json.loads((source/"manifest.json").read_text(encoding="utf-8"))
         with h5py.File(source/"physical.h5", "r") as h:
-            if (carrier_independent_config(meta["config"]) != carrier_independent_config(c)
-                    or not h.attrs.get("complete") or h.attrs.get("identity") != digest(meta)
+            if (meta["config"] != c or not h.attrs.get("complete") or h.attrs.get("identity") != digest(meta)
                     or h["basis"].shape != (4*(c["nfft"]+c["cp"]), c["dpss_expected_count"])):
                 raise ValueError("Independent prior must match the current CP80 physical frame and time basis")
             basis, coefficients = h["basis"][:], h["prior"][:][..., delays]

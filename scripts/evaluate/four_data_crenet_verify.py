@@ -74,21 +74,15 @@ def verify_channel(directory, run, *, device="cpu"):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output",type=Path)
+    parser.add_argument("--output",type=Path,default=ROOT/"outputs/experiment/four_data_crenet_cp80_20261126")
     parser.add_argument("--channel",choices=("NOF1","NCS1","all"),default="all")
     parser.add_argument("--device",choices=("cpu","cuda"),default=default_device())
     args = parser.parse_args()
     torch.set_num_threads(4)
-    config = json.loads((ROOT/"configs/training/four_data_crenet.json").read_text(encoding="utf-8"))
-    output = args.output or ROOT/config["output"]
     channels = ("NOF1","NCS1") if args.channel == "all" else (args.channel,)
-    reports = []
-    for channel in channels:
-        run = output/channel.lower()
-        provenance = json.loads((run/"provenance.json").read_text(encoding="utf-8"))
-        dataset = ROOT/provenance["config"]["datasets"][channel]
-        reports.append(verify_channel(dataset, run, device=args.device))
-    write_json(output/"verification.json",dict(complete=True,channels=reports))
+    reports = [verify_channel(ROOT/f"data/processed/{channel.lower()}_dddd",
+                args.output/channel.lower(),device=args.device) for channel in channels]
+    write_json(args.output/"verification.json",dict(complete=True,channels=reports))
     print(json.dumps(reports,indent=2))
 
 

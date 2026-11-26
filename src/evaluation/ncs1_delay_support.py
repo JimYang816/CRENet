@@ -9,11 +9,12 @@ import time
 
 import h5py
 import numpy as np
-from scipy import linalg
 
 from data_generation.src.channel.watermark.replay import WatermarkArchive
-from data_generation.src.config import ROOT, digest, frozen_support_matches_config, load_legacy_dddd_config
-from data_generation.src.receiver.delay_support import SelectedDelayBEM, project_full_frame
+from data_generation.src.config import ROOT, digest, frozen_support_matches_config, load_config
+from data_generation.src.receiver.delay_support import (
+    SelectedDelayDPSSModel, profile_full_frame,
+)
 from data_generation.src.receiver.estimation import FrozenPrior, input_windows
 from data_generation.src.receiver.pdd import JointEstimator
 from data_generation.src.transmitter.ofdm import carrier_masks, decisions, fft, receive_symbols
@@ -56,7 +57,7 @@ def metadata(archive_path, backend, smoke, study, *, code_files=CODE):
     channel = study["channel"]
     if channel not in ("NOF1", "NCS1"):
         raise ValueError("Unknown WATERMARK channel")
-    c = load_legacy_dddd_config(channel)
+    c = load_config(ROOT/f"configs/data/{channel.lower()}/dddd.json")
     if (c["frame_structure"], c["dpss_expected_count"], c["dpss_half_bandwidth_hz"]) != ("DDDD", 24, 12):
         raise ValueError("This receiver requires DDDD / Q24 / 12 Hz")
     prior_records = c["prior_records"][:2] if smoke else c["prior_records"]
@@ -93,7 +94,7 @@ def metadata(archive_path, backend, smoke, study, *, code_files=CODE):
                 delay_convention="zero-based receiver delay; physical excess delay = (index - fft_advance) / fs_baseband")
 
 
-def prepare(output, archive_path, meta, *, extra_bases=None):
+def prepare(output, archive_path, meta):
     path = output/"physical.h5"
     identity = digest(meta)
     if path.exists():
@@ -104,11 +105,10 @@ def prepare(output, archive_path, meta, *, extra_bases=None):
     c = meta["config"]
     archive, receiver = WatermarkArchive(archive_path, c["channel"]), BlockedReceiver(c)
     basis, concentration = model_basis(c)
-    bases = {"/": basis, **{f"bem/{name}": value for name, value in (extra_bases or {}).items()}}
-    projection = np.concatenate([linalg.pinv(value) for value in bases.values()], axis=0)
     partial = output/"physical.partial.h5"
     with h5py.File(partial, "w") as h:
         h.attrs.update(identity=identity, complete=False)
+        h.create_dataset("basis", data=basis)
         h.create_dataset("concentration", data=concentration)
         h.create_dataset("unit_noise", data=receiver.chain.noise_covariance)
         known = make_frame(c, *meta["test_windows"][0], 2).known
@@ -117,20 +117,13 @@ def prepare(output, archive_path, meta, *, extra_bases=None):
         for i, (record, start) in enumerate(meta["prior_windows"]):
             begin = time.perf_counter()
             sounding = archive.load(record)
-            coeff, power = project_full_frame(receiver, sounding, start, projection)
+            coeff, power = profile_full_frame(receiver, sounding, start, basis)
             coefficients.append(coeff)
             powers.append(power)
             if start == meta["prior_windows"][0][1]:
                 native_powers.append(np.mean(abs(sounding.h)**2, axis=0))
             print(f"prior {i+1}/{len(meta['prior_windows'])}: {record}@{start}s, {time.perf_counter()-begin:.2f}s", flush=True)
-        coefficients = np.stack(coefficients)
-        offset = 0
-        for name, temporal_basis in bases.items():
-            group = h if name == "/" else h.create_group(name)
-            end = offset+temporal_basis.shape[1]
-            group.create_dataset("basis", data=temporal_basis)
-            group.create_dataset("prior", data=coefficients[:, offset:end])
-            offset = end
+        h.create_dataset("prior", data=coefficients)
         h.create_dataset("prior_power", data=powers)
         h.create_dataset("native_power", data=np.mean(native_powers, axis=0))
         for i, (record, start) in enumerate(meta["test_windows"]):
@@ -187,13 +180,13 @@ def full_nmse(selected_taps, truth, delays):
 
 def evaluate(path, output, meta, supports, backend):
     c = meta["config"]
-    bem_models = meta.get("bem_models", {})
     layout, results = carrier_masks(c), {}
     with h5py.File(path, "r") as h:
-        known, noise = h["known"][:], h["unit_noise"][:]
+        known, noise, basis = h["known"][:], h["unit_noise"][:], h["basis"][:]
         groups = list(h["test"].values())
         observations = np.stack([g["clean"][:][None]+np.sqrt(g["variance"][:])[:, None, None]*g["standard"][:][None] for g in groups])
         variances = np.stack([g["variance"][:] for g in groups])
+        prior_coefficients = h["prior"][:]
         for name, delays in supports.items():
             result_path = output/f"{name}_metrics.json"
             if result_path.exists():
@@ -202,12 +195,7 @@ def evaluate(path, output, meta, supports, backend):
                     raise ValueError("Saved metrics do not match this support study")
                 results[name] = saved
                 continue
-            settings = bem_models.get(name, {})
-            source = h[settings.get("prior_group", "/")]
-            basis = source["basis"][:]
-            model = SelectedDelayBEM(basis, settings.get("half_bandwidth_hz", c["dpss_half_bandwidth_hz"]),
-                settings.get("tail_ratio", c["dpss_tail_ratio"]), len(delays), c, delays)
-            prior_coefficients = source["prior"][:]
+            model = SelectedDelayDPSSModel(basis, 12, c["dpss_tail_ratio"], len(delays), c, delays)
             prior = FrozenPrior.fit_coefficients(model, prior_coefficients[..., delays], 0, 1,
                 sorted({r for r, _ in meta["prior_windows"]}), regularizer=c["relative_regularizer"],
                 delay_block_size=c["delay_block_size"], interference_scale=1)
@@ -230,9 +218,7 @@ def evaluate(path, output, meta, supports, backend):
             if backend.torch:
                 backend.torch.cuda.empty_cache()
             frames = []
-            sampled = model.sampled_basis
-            projection = linalg.pinv(sampled) if bem_models else None
-            sampled = sampled.reshape(4, c["nfft"], model.count)
+            sampled = model.sampled_basis.reshape(4, c["nfft"], model.count)
             for i, group in enumerate(groups):
                 selected = np.einsum("dnq,sql->sdnl", sampled, coeff[i], optimize=True)
                 taps = model.expand_taps(selected)
@@ -248,10 +234,6 @@ def evaluate(path, output, meta, supports, backend):
                     single_errors=errors[0], full_errors=errors[1],
                     model_error=json.loads(group.attrs["model_error"]),
                     intersymbol_leakage=json.loads(group.attrs["intersymbol_leakage"])))
-                if projection is not None:
-                    fitted = projection @ truth[..., delays].reshape(-1, model.length)
-                    projected = (sampled @ fitted)[None]
-                    frames[-1]["projection_nmse_linear"] = full_nmse(projected, truth, delays)[0].tolist()
                 print(f"{name}: detected {i+1}/{len(groups)}", flush=True)
             bits_per_snr = len(groups)*4*c["data_count"]*2
             nmse = np.mean([frame["nmse_linear"] for frame in frames], axis=(0, 2))

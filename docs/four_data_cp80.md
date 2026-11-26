@@ -1,34 +1,6 @@
 # CP=80 ms 的双信道 LMMSE 小实验
 
-## 当前载波分布
-
-NOF1 和 NCS1 的 D-D-D-D 帧每个符号共 1024 个子载波，其中 512 个数据子载波、224 个梳状导频、
-224 个带内保护空载波和两端各 32 个边缘空载波。导频相隔 4 或 5 个 FFT 索引，
-每个导频的高频侧紧邻一个保护空载波。接收机使用每个符号的 448 个导频与带内空载波进行四符号联合 CSI 估计。
-
-正式数据入口为 `python -m data_generation.scripts.four_data`，默认写入
-`data/processed/dddd_pilot224/{nof1,ncs1}_dddd/`。`python -m scripts.run.four_data_experiment`
-使用该目录下验收后的数据，输出到 `outputs/experiment/four_data_crenet_cp80_pilot224/`。
-两种 CSI 视图、各划分及 NMSE 目标见下文。物理先验使用原 CP80 独立记录的 DPSS 基和信道系数。
-
-小样本原始 CSI 与完美 CSI 对照入口为 `python -m scripts.evaluate.four_data_cp80`，
-默认输出到 `outputs/smoke/four_data_cp80_pilot224/`。
-
-### DPSS-BEM 与 CE-BEM 配对小实验
-
-`python -m scripts.evaluate.four_data_bem_comparison` 在同一联合估计器中比较两种时间基。
-DPSS-BEM 使用半带宽 12 Hz 和 24 项基。CE-BEM 用 `exp(2πjkn/1024)` 的归一化基，
-整数频移 `k` 从 −16 到 16（半带宽 93.75 Hz，33 项），以 1024 点为周期延拓到含 CP 的整帧。
-每种模型均为每帧每个时延位置估计一组系数。指数基定义见 [Tang 等的 OFDM 信道估计论文](https://sps.ewi.tudelft.nl/pubs/leus07tsp1.pdf)。
-
-每条信道在相同的 25 个独立窗口重新拟合各自先验，使用 5 个配对测试帧及 0、5、…、30 dB。
-两种模型共享公开导频、接收波形、噪声和冻结物理时延位置。指标包括原始 CSI 的平均完整矩阵 NMSE，
-以及 Single-tap LMMSE 和 Full-matrix LMMSE 的 BER。另以测试参考 CSI 在接收 FFT 窗上做最小二乘投影，
-测量模型近似的 NMSE 下限。正式输出含 BER-SNR、平均 NMSE-SNR 和逐帧来源，使用 `--smoke --device cpu` 验证流程。
-
-## 256 导频的 CP80 实验记录
-
-2026-11-26 起 **CP=80 ms / 480 点为项目默认值**。当时 NOF1、NCS1 的 `dddd.json`、
+2026-11-26 起 **CP=80 ms / 480 点为项目默认值**。NOF1、NCS1 的 `dddd.json`、
 配置校验、正式数据入口、训练预检及后续指标图均使用该值。
 旧 CP256 训练/验证/测试数据和配套共享模型已删除，服务器释放约 18.07 GiB；正式 CP80 补偿数据已生成并全量验收。
 默认参考辅助视图及其目标曲线保留，Q=24、192 个冻结物理位置和划分计划保持既定设置。
@@ -79,11 +51,11 @@ with FourDataDataset("data/processed/nof1_dddd/train.h5") as dataset:
     inputs, labels = dataset[0]  # 默认补偿后的 reference_assisted CSI
 ```
 
-本轮主对比使用**参考辅助补偿后的 CSI**，对应版本的入口为
+当前主对比使用**参考辅助补偿后的 CSI**，入口为
 `scripts/evaluate/four_data_cp80_compensation.py`，输出到
 `outputs/smoke/four_data_cp80_assisted_20261125/`。下文原始 CSI 实验保留为补偿来源和审计对照。
 
-原始 CSI 实验在记录版本中的入口为 `scripts/evaluate/four_data_cp80.py`，配置为
+入口为 `scripts/evaluate/four_data_cp80.py`，配置为
 `configs/evaluation/four_data_cp80.json`。CP 按基带 6 kHz 换算为 **480 点**，
 从发射波形、接收 FFT 窗口到全帧 DPSS 先验均按新 CP 重新构造。
 不读取 CP=256 的物理数据、估计 CSI 或已校准的参考辅助输入。

@@ -28,29 +28,16 @@ def decisions(symbols):
 def carrier_masks(c):
     if c.get("frame_structure") not in (FRAME_STRUCTURE, "DDDD"):
         raise ValueError("Unknown four-symbol frame layout")
-    n, edge = c["nfft"], c["null_per_edge"]
-    middle = n-2*edge
-    if not 0 <= 2*edge < n:
-        raise ValueError("The edge nulls must leave interior FFT bins")
-    dddd = c["frame_structure"] == "DDDD"
-    if dddd and "protection_count" in c:
-        pilots = c["pilot_count"]
-        if type(pilots) is not int or pilots != c["protection_count"] or not 0 < 2*pilots <= middle:
-            raise ValueError("The DDDD comb requires room for one protection null per pilot")
-        # Space the pilots across the interior in FFT-shift order.
-        positions = np.arange(pilots)*middle//pilots
-        pattern = np.ones(middle, dtype=np.uint8)
-        pattern[positions] = 2
-        pattern[positions+1] = 0
-    else:
-        group = [2, 1, 1, 2, 1, 1, 0] if dddd else [1, 1, 0, 2, 0, 1, 1]
-        if middle % len(group):
-            raise ValueError("The interior FFT bins must contain whole carrier groups")
-        pattern = np.tile(group, middle//len(group))
-    layout = np.pad(pattern, edge)
+    n = c["nfft"]
+    middle = n-2*c["null_per_edge"]
+    if middle % 7:
+        raise ValueError("PDDP requires repeated seven-carrier groups")
+    group = [2, 1, 1, 2, 1, 1, 0] if c["frame_structure"] == "DDDD" else [1, 1, 0, 2, 0, 1, 1]
+    pattern = np.tile(group, middle//7)
+    layout = np.pad(pattern, c["null_per_edge"])
     data, pilot = layout == 1, layout == 2
     active = np.zeros(n, bool)
-    active[edge:n-edge] = True
+    active[c["null_per_edge"]:n-c["null_per_edge"]] = True
     if data.sum() != c["data_count"] or pilot.sum() != c["pilot_count"]:
         raise ValueError("Frame carrier counts do not match")
     protection = active & ~(data | pilot)

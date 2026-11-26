@@ -28,12 +28,10 @@ def validate_protocol(original, reports):
             or original.get("cp_ms") != 80 or original.get("input_view") != "raw"
             or original.get("csi_compensation") is not False or set(reports) != set(CHANNELS)):
         raise ValueError("Source must be the completed raw CP80 dual-channel experiment")
-    options = load_options()
-    legacy_comb = all("protection_count" not in original["configs"][channel] for channel in CHANNELS)
     for channel in CHANNELS:
         meta, report = original["channel_manifests"][channel], reports[channel]
-        c, study, priors, tests = channel_settings(channel, options, meta["archive_sha256"], legacy_comb=legacy_comb)
-        if (original["options"] != options or original["configs"][channel] != c
+        c, study, priors, tests = channel_settings(channel, load_options(), meta["archive_sha256"])
+        if (original["options"] != load_options() or original["configs"][channel] != c
                 or meta["config"] != c or meta["study"] != study or meta.get("smoke") is not False
                 or meta.get("raw_csi") is not True or meta.get("csi_compensation") is not False
                 or meta["prior_windows"] != priors or meta["test_windows"] != tests
@@ -49,16 +47,12 @@ def verify_source(source):
     saved = json.loads((source/"metrics.json").read_text(encoding="utf-8"))
     original = json.loads((source/"manifest.json").read_text(encoding="utf-8"))
     acceptance = json.loads((source/"verification.json").read_text(encoding="utf-8"))
+    transfer = json.loads((source/"transfer_manifest.json").read_text(encoding="utf-8"))
     if (saved.get("complete") is not True or saved.get("metadata") != original
-            or acceptance.get("complete") is not True or acceptance.get("shared_dpss_basis") is not True):
+            or acceptance.get("complete") is not True or acceptance.get("shared_dpss_basis") is not True
+            or transfer.get("complete") is not True):
         raise ValueError("Expected accepted, matching CP80 source manifests and reports")
     validate_protocol(original, saved["channels"])
-    accepted_files = {ch: acceptance["channels"][ch].get("physical_file") for ch in CHANNELS}
-    if not all(accepted_files.values()):
-        transfer = json.loads((source/"transfer_manifest.json").read_text(encoding="utf-8"))
-        if transfer.get("complete") is not True:
-            raise ValueError("Expected a complete CP80 transfer manifest")
-        accepted_files = {ch: transfer["physical_data_remain_on_server"][ch.lower()] for ch in CHANNELS}
     physical = {}
     for channel in CHANNELS:
         directory = source/channel.lower()
@@ -77,7 +71,7 @@ def verify_source(source):
                 raise ValueError(f"Recorded CP80 source code does not match its committed revision: {name}")
         path = directory/"physical.h5"
         identity, checksum = digest(meta), file_sha256(path)
-        expected = accepted_files[channel]
+        expected = transfer["physical_data_remain_on_server"][channel.lower()]
         if checksum != expected["sha256"] or path.stat().st_size != expected["bytes"] or identity != expected["identity"]:
             raise ValueError(f"{channel}: physical source differs from the accepted CP80 file hash")
         with h5py.File(path, "r") as h:

@@ -19,7 +19,7 @@ def main():
                         help="diagnosis root containing the chosen channel directory")
     parser.add_argument("--variant", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--previous", type=Path)
+    parser.add_argument("--previous", type=Path, default=ROOT/"outputs/experiment/four_data_crenet_cp80_20261126")
     parser.add_argument("--device", choices=("cpu", "cuda"), default=default_device())
     parser.add_argument("--threads", type=int, default=4)
     args = parser.parse_args()
@@ -30,10 +30,7 @@ def main():
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
     ch = args.channel.lower()
-    config = json.loads((ROOT/"configs/training/four_data_crenet.json").read_text(encoding="utf-8"))
-    source = (args.previous or ROOT/config["output"])/ch
-    provenance = json.loads((source/"provenance.json").read_text(encoding="utf-8"))
-    report = run(ROOT/provenance["config"]["datasets"][args.channel], source, args.diagnosis/ch,
+    report = run(ROOT/f"data/processed/{ch}_dddd", args.previous/ch, args.diagnosis/ch,
                  args.output/ch, variant=args.variant, device=args.device)
     print(json.dumps(dict(channel=args.channel, error_change_total=report["error_change_total"],
                           error_change_by_snr=report["error_change_by_snr"]), indent=2), flush=True)
