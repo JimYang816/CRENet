@@ -16,6 +16,8 @@ NOF1 和 NCS1 的 D-D-D-D 帧每个符号共 1024 个子载波，其中 512 个�
 
 当前均衡算法为 B=16 带状 LMMSE，评测入口为 `python -m scripts.evaluate.compare`，
 详见 `docs/equalizer_comparison.md`。
+原版八层 CRENet 已恢复；当前使用 NOF1 训练验证、同一模型测试 NOF1/NCS1，
+入口和数据划分见 [CRENet 实验说明](four_data_crenet.md)。
 当前参考辅助目标改为 NOF1 -11.41 → -15.77 dB、NCS1 -5.37 → -8.92 dB，
 每个 SNR 目标保留两位小数；重校准与完整 B16 测试记录位于
 `outputs/experiment/dddd_assisted_b16_ncs1_892_20261127/`（本次仅 NCS1）；NOF1 沿用

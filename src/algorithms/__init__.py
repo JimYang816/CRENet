@@ -1,1 +1,1 @@
-"""Banded LMMSE equalization."""
+"""Banded LMMSE equalization and CRENet CSI correction/MMSE unfolding."""
