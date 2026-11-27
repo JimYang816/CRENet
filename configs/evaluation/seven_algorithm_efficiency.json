@@ -1,0 +1,20 @@
+{
+  "source_commit": "fe873ac5bb3a57d0e6d8e6ed042e97de655e19f4",
+  "input_view": "reference_assisted",
+  "datasets": {
+    "NOF1": "data/processed/dddd_pilot224/nof1_dddd/test.h5",
+    "NCS1": "data/processed/dddd_pilot224/ncs1_dddd/test.h5"
+  },
+  "checkpoints": {
+    "udnet": "outputs/experiment/icr_full_20261031_095549/udnet/{channel}/best.pt",
+    "oamp_net2": "outputs/experiment/oamp_net2_compensated/{channel}/best.pt",
+    "crenet": "outputs/experiment/icr_full_20261031_095549/joint/{channel}/icr_mmse.pt"
+  },
+  "samples_per_snr": 4,
+  "repeats": 7,
+  "warmup": 5,
+  "threads": 4,
+  "seed": 20261127,
+  "dd_rank": 32,
+  "dd_prior_scale": 0.03
+}
