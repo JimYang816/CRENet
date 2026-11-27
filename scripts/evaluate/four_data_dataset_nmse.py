@@ -24,7 +24,7 @@ def plot_overlay(output, provenance, reports):
         nmse = np.asarray(values["mean_assisted_nmse_db"]["test"])
         ax.plot(snr, nmse, marker=marker, color=colors[channel],
                 linewidth=2, markersize=6, label=channel)
-    ax.set(title="Compensated CSI: NMSE–SNR", xlabel="SNR (dB)",
+    ax.set(xlabel="SNR (dB)",
            ylabel="Mean NMSE (dB)", xticks=snr, xlim=(-1, 31), ylim=(-17, -4))
     ax.grid(alpha=.3)
     ax.legend(loc="upper right")
