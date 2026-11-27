@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 from pathlib import Path
@@ -13,11 +14,77 @@ from matplotlib import font_manager
 import numpy as np
 
 
+def plot_overlay(output, provenance, reports):
+    """Compare the current measured test statistics on common axes."""
+    fig, ax = plt.subplots(figsize=(8, 5), layout="constrained")
+    colors = {"NOF1": "#2563A6", "NCS1": "#D97706"}
+    for channel, marker in (("NOF1", "o"), ("NCS1", "s")):
+        values = provenance["channels"][channel]
+        snr = np.asarray(values["snr_db"])
+        nmse = np.asarray(values["mean_assisted_nmse_db"]["test"])
+        ax.plot(snr, nmse, marker=marker, color=colors[channel],
+                linewidth=2, markersize=6, label=channel)
+        for index, offset, align in ((0, (8, 10), "left"), (-1, (-8, -18), "right")):
+            ax.annotate(f"{nmse[index]:.2f} dB", (snr[index], nmse[index]),
+                        xytext=offset, textcoords="offset points", ha=align,
+                        color=colors[channel], fontsize=10)
+    ax.set(title="Compensated CSI: NMSE–SNR", xlabel="SNR (dB)",
+           ylabel="Mean NMSE (dB)", xticks=snr, xlim=(-1, 31), ylim=(-17, -4))
+    ax.grid(alpha=.3)
+    ax.legend(loc="upper right")
+    fig.get_layout_engine().set(rect=(0, .065, 1, 1))
+    counts = {values["test_frames_per_snr"] for values in provenance["channels"].values()}
+    frame_note = f"{next(iter(counts))} frames/SNR" if len(counts) == 1 else "full test splits"
+    fig.text(.5, .025,
+             f"Full-reference-assisted CSI | Test split: {frame_note}, 4 data symbols/frame",
+             ha="center", fontsize=9, color="#536171")
+    for extension in ("png", "pdf", "svg"):
+        path = output / f"nmse_snr_overlay.{extension}"
+        fig.savefig(path, dpi=220, facecolor="white", bbox_inches="tight")
+        print(path.resolve())
+    plt.close(fig)
+    with (output / "nmse_snr_overlay.csv").open("w", encoding="utf-8-sig", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(["snr_db", "NOF1_nmse_db", "NCS1_nmse_db"])
+        curves = provenance["channels"]
+        np.testing.assert_array_equal(curves["NOF1"]["snr_db"], curves["NCS1"]["snr_db"])
+        for index, value in enumerate(snr):
+            writer.writerow([f"{value:g}"] + [f"{curves[ch]['mean_assisted_nmse_db']['test'][index]:.2f}"
+                                              for ch in ("NOF1", "NCS1")])
+    if len(reports) == 2:
+        fig, ax = plt.subplots(figsize=(8, 5), layout="constrained")
+        for channel, report in reports.items():
+            np.testing.assert_allclose(
+                report["nmse"]["mean_nmse_db"],
+                provenance["channels"][channel]["mean_assisted_nmse_db"]["test"],
+                rtol=0, atol=1e-12,
+            )
+            curve = next(value for value in report["curves"].values()
+                         if value["identifier"] == "banded_lmmse")
+            ax.semilogy(report["snr_db"], curve["ber"], "o-", color=colors[channel], label=channel)
+        ax.set(title="Banded LMMSE (B=16): BER–SNR", xlabel="SNR (dB)", ylabel="BER", xticks=snr)
+        ax.grid(alpha=.3, which="both")
+        ax.legend()
+        for extension in ("png", "pdf"):
+            fig.savefig(output / f"ber_snr.{extension}", dpi=220, facecolor="white", bbox_inches="tight")
+        plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--run-dir", type=Path, default=Path(
-        "outputs/experiment/dddd_assisted_b16_20261127"))
+    parser.add_argument("--run-dir", type=Path, help="Use one historical run for both channels")
+    parser.add_argument("--nof1-run-dir", type=Path)
+    parser.add_argument("--ncs1-run-dir", type=Path)
+    parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args()
+    run_dirs = {
+        "NOF1": args.nof1_run_dir or args.run_dir or Path(
+            "outputs/experiment/dddd_assisted_b16_20261127"),
+        "NCS1": args.ncs1_run_dir or args.run_dir or Path(
+            "outputs/experiment/dddd_assisted_b16_ncs1_892_20261127"),
+    }
+    output = args.output_dir or args.run_dir or Path("outputs/smoke/compensated_csi_nmse_20261127")
+    output.mkdir(parents=True, exist_ok=True)
     available = {font.name for font in font_manager.fontManager.ttflist}
     fonts = [name for name in ("Microsoft YaHei", "SimHei", "Noto Sans CJK SC") if name in available]
     plt.rcParams.update({
@@ -36,11 +103,13 @@ def main():
         ("test", "测试集", "#27805A", ":", "x", 5),
     )
     provenance = {"input_view": "reference_assisted", "channels": {}}
+    reports = {}
     for ax, channel in zip(axes, ("NOF1", "NCS1")):
-        source = args.run_dir / channel.lower() / "acceptance.json"
+        source = run_dirs[channel] / channel.lower() / "acceptance.json"
         content = source.read_bytes()
         report = json.loads(content)
-        if not report["complete"] or report["default_input_view"] != "reference_assisted":
+        if (not report["complete"] or report["channel"] != channel
+                or report["default_input_view"] != "reference_assisted"):
             raise ValueError(f"Expected an accepted reference-assisted dataset: {source}")
         snr = np.asarray(report["snr_db"], dtype=float)
         curves = {}
@@ -75,18 +144,30 @@ def main():
             "acceptance_file": str(source.resolve()),
             "acceptance_sha256": hashlib.sha256(content).hexdigest(),
             "snr_db": snr.tolist(), "mean_assisted_nmse_db": curves,
+            "test_frames_per_snr": report["splits"]["test"]["frames_per_snr"],
         }
+        metrics = run_dirs[channel] / "test" / channel.lower() / "metrics.json"
+        if metrics.exists():
+            measured = json.loads(metrics.read_bytes())
+            if not measured["complete"] or measured["input_view"] != "reference_assisted":
+                raise ValueError(f"Expected complete reference-assisted test metrics: {metrics}")
+            reports[channel] = measured
+            provenance["channels"][channel].update(
+                test_metrics_file=str(metrics.resolve()),
+                test_metrics_sha256=hashlib.sha256(metrics.read_bytes()).hexdigest(),
+            )
     axes[0].set_ylabel("平均 NMSE (dB)", labelpad=10)
     fig.text(.5, .105, "训练、验证、测试分别按相同目标校准，三条曲线重合。",
              ha="center", fontsize=10.5, color="#435266")
     fig.text(.5, .055, "统计口径：先对各帧、各数据符号的线性 NMSE 求均值，再转换为 dB；使用全量验收统计。",
              ha="center", fontsize=9.5, color="#667387")
     for extension in ("png", "pdf", "svg"):
-        path = args.run_dir / f"nmse_snr_combined.{extension}"
+        path = output / f"nmse_snr_combined.{extension}"
         fig.savefig(path, dpi=220, facecolor="white")
         print(path.resolve())
     plt.close(fig)
-    (args.run_dir / "nmse_snr_combined.json").write_text(
+    plot_overlay(output, provenance, reports)
+    (output / "nmse_snr_combined.json").write_text(
         json.dumps(provenance, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
