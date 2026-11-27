@@ -1,0 +1,11 @@
+{
+  "kind": "approximate_points_digitized_from_reference_image",
+  "description": "Only the NOF1 and NCS1 Estimate CSI curves from the supplied figure; these are reference readings, not new experimental measurements.",
+  "source_image_sha256": "379e28c9490ee0eb120a8c57fd0d28494fb23cf4c79272de94eac6c7863d5f71",
+  "reading_precision_db": 0.1,
+  "snr_db": [0, 5, 10, 15, 20, 25, 30],
+  "nmse_db": {
+    "NOF1": [-12.7, -15.0, -16.4, -17.3, -17.8, -18.1, -18.3],
+    "NCS1": [-6.1, -8.0, -9.1, -9.8, -10.2, -10.4, -10.6]
+  }
+}
