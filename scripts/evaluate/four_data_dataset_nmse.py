@@ -24,10 +24,6 @@ def plot_overlay(output, provenance, reports):
         nmse = np.asarray(values["mean_assisted_nmse_db"]["test"])
         ax.plot(snr, nmse, marker=marker, color=colors[channel],
                 linewidth=2, markersize=6, label=channel)
-        for index, offset, align in ((0, (8, 10), "left"), (-1, (-8, -18), "right")):
-            ax.annotate(f"{nmse[index]:.2f} dB", (snr[index], nmse[index]),
-                        xytext=offset, textcoords="offset points", ha=align,
-                        color=colors[channel], fontsize=10)
     ax.set(title="Compensated CSI: NMSE–SNR", xlabel="SNR (dB)",
            ylabel="Mean NMSE (dB)", xticks=snr, xlim=(-1, 31), ylim=(-17, -4))
     ax.grid(alpha=.3)
@@ -140,10 +136,6 @@ def main():
         ax.set_axisbelow(True)
         ax.legend(loc="lower left", fontsize=9, frameon=True, framealpha=.96,
                   edgecolor="#DDE3E9")
-        endpoints = np.asarray(curves["test"])[[0, -1]]
-        for x, y, offset, align in zip(snr[[0, -1]], endpoints, ((9, 14), (-9, 14)), ("left", "right")):
-            ax.annotate(f"{y:.2f} dB", (x, y), xytext=offset, textcoords="offset points",
-                        ha=align, fontsize=11, fontweight="bold", color="#233348")
         provenance["channels"][channel] = {
             "acceptance_file": str(source.resolve()),
             "acceptance_sha256": hashlib.sha256(content).hexdigest(),
