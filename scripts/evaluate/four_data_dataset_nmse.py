@@ -94,13 +94,16 @@ def main():
     })
     fig, axes = plt.subplots(1, 2, figsize=(11.6, 5.8), sharex=True, sharey=True)
     fig.subplots_adjust(left=.085, right=.975, top=.77, bottom=.22, wspace=.10)
-    fig.suptitle("正式数据集：平均 NMSE–SNR", y=.965, fontsize=19, fontweight="bold")
-    fig.text(.5, .89, "参考矩阵辅助补偿 CSI  ·  192 个估计时延抽头  ·  每帧 4 个数据 OFDM 符号",
+    title = "正式数据集：平均 NMSE–SNR" if fonts else "Formal datasets: mean NMSE–SNR"
+    subtitle = ("参考矩阵辅助补偿 CSI  ·  192 个估计时延抽头  ·  每帧 4 个数据 OFDM 符号" if fonts else
+                "Full-reference-assisted CSI | 192 estimated delays | 4 data symbols/frame")
+    fig.suptitle(title, y=.965, fontsize=19, fontweight="bold")
+    fig.text(.5, .89, subtitle,
              ha="center", fontsize=11, color="#536171")
     styles = (
-        ("train", "训练集", "#2563A6", "-", "o", 10),
-        ("validation", "验证集", "#D97706", "--", "s", 7),
-        ("test", "测试集", "#27805A", ":", "x", 5),
+        ("train", "训练集" if fonts else "Train", "#2563A6", "-", "o", 10),
+        ("validation", "验证集" if fonts else "Validation", "#D97706", "--", "s", 7),
+        ("test", "测试集" if fonts else "Test", "#27805A", ":", "x", 5),
     )
     provenance = {"input_view": "reference_assisted", "channels": {}}
     reports = {}
@@ -120,7 +123,8 @@ def main():
                 raise ValueError(f"Invalid measured NMSE values: {channel}/{split}")
             curves[split] = values.tolist()
             count = split_report["frames_per_snr"]
-            ax.plot(snr, values, label=f"{label}（{count} 帧/SNR）", color=color,
+            curve_label = f"{label}（{count} 帧/SNR）" if fonts else f"{label} ({count} frames/SNR)"
+            ax.plot(snr, values, label=curve_label, color=color,
                     linestyle=linestyle, linewidth=1.8, marker=marker, markersize=size,
                     markerfacecolor="none", markeredgewidth=1.5)
         for values in curves.values():
@@ -156,10 +160,14 @@ def main():
                 test_metrics_file=str(metrics.resolve()),
                 test_metrics_sha256=hashlib.sha256(metrics.read_bytes()).hexdigest(),
             )
-    axes[0].set_ylabel("平均 NMSE (dB)", labelpad=10)
-    fig.text(.5, .105, "训练、验证、测试分别按相同目标校准，三条曲线重合。",
+    axes[0].set_ylabel("平均 NMSE (dB)" if fonts else "Mean NMSE (dB)", labelpad=10)
+    overlap = ("训练、验证、测试分别按相同目标校准，三条曲线重合。" if fonts else
+               "Train, validation and test curves overlap after independent calibration.")
+    definition = ("统计口径：先对各帧、各数据符号的线性 NMSE 求均值，再转换为 dB；使用全量验收统计。" if fonts else
+                  "Average linear NMSE over frames and symbols, then convert to dB; complete acceptance statistics.")
+    fig.text(.5, .105, overlap,
              ha="center", fontsize=10.5, color="#435266")
-    fig.text(.5, .055, "统计口径：先对各帧、各数据符号的线性 NMSE 求均值，再转换为 dB；使用全量验收统计。",
+    fig.text(.5, .055, definition,
              ha="center", fontsize=9.5, color="#667387")
     for extension in ("png", "pdf", "svg"):
         path = output / f"nmse_snr_combined.{extension}"
